@@ -1,0 +1,167 @@
+import React from 'react';
+import Navbar from '../Components/UI/Navbar';
+import clientList from '../assets/client.png';
+import report from '../assets/report.png';
+import product from '../assets/product.png';
+import bank from '../assets/ATM.png';
+import cash from '../assets/cash.png';
+import purchase from '../assets/purchase.png';
+import { useNavigate } from 'react-router-dom';
+
+const Dashboard = () => {
+   const navigate = useNavigate();
+   return (
+      <div className="w-full">
+         <div className="overflow-y-auto h-screen customScrollbar">
+            <div className="sticky top-0 z-10">
+               <Navbar />
+            </div>
+            <div>
+               <div className="grid grid-cols-12 gap-2 p-6 bg-gray-50 min-h-[500px] font-poppins">
+                  {/* Profile Card */}
+                  <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4"
+                  >
+                     <img
+                        src={product}
+                        alt="product"
+                        className="w-24 h-24 object-cover"
+                     />
+                     <button
+                        className="mt-4 bg-black text-white px-16 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
+                        onClick={() => navigate('/products')}>
+                        Add Products
+                     </button>
+                  </div>
+
+                  {/* Progress */}
+                  {/* <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
+                     <h3 className="font-semibold text-gray-700">Progress</h3>
+                     <p className="text-2xl font-bold">6.1h</p>
+                     <p className="text-sm text-gray-500">
+                        Work Time this week
+                     </p>
+                     {/* Placeholder bar chart *
+                     <div className="flex justify-between mt-4">
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                           <div key={i} className="flex flex-col items-center">
+                              <div
+                                 className="w-3 bg-yellow-400 rounded"
+                                 style={{ height: `${(i + 2) * 10}px` }}></div>
+                              <span className="text-xs mt-1">{d}</span>
+                           </div>
+                        ))}
+                     </div>
+                  </div> */}
+                  <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4">
+                     <img
+                        src={clientList}
+                        alt="product"
+                        className="w-24 h-24 object-cover"
+                     />
+                     <button
+                        className="mt-4 bg-black text-white px-16 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
+                        onClick={() => navigate('/clients')}>
+                        Add Clients
+                     </button>
+                  </div>
+
+                  {/* Time Tracker */}
+                  <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4"
+                  onClick={() => navigate('/purchase')}>
+                     <img
+                        src={purchase}
+                        alt="product"
+                        className="w-24 h-24 object-cover"
+                     />
+                     <button className="mt-4 bg-black text-white px-18 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80">
+                        Purchase
+                     </button>
+                  </div>
+
+                  {/* Onboarding Progress */}
+                  <div className="col-span-3 row-span-2 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex  flex-col items-center justify-center gap-5">
+                     <div className="flex flex-col bg-gray-900 rounded-4xl p-3 items-center justify-center gap-5">
+                        <img
+                           src={bank}
+                           alt="product"
+                           className="w-24 h-24 object-cover"
+                        />
+                        <button className="mt-4 bg-white text-black px-20 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-white/80">
+                           Bank
+                        </button>
+                     </div>
+
+                     <div className="flex flex-col bg-gray-900 rounded-4xl p-3 items-center justify-center gap-3">
+                        <img
+                           src={cash}
+                           alt="product"
+                           className="w-24 h-24 object-cover"
+                        />
+                        <button className="mt-4 bg-white text-black px-20 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-white/80">
+                           Cash
+                        </button>
+                     </div>
+                  </div>
+
+                  <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4">
+                     <img
+                        src={report}
+                        alt="product"
+                        className="w-24 h-24 object-cover"
+                     />
+                     <button className="mt-4 bg-black text-white px-10 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80">
+                        Reports & Analytics
+                     </button>
+                  </div>
+
+                  {/* Pension Contributions */}
+                  {/* <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
+                     <h3 className="font-semibold text-gray-700">
+                        Pension contributions
+                     </h3>
+                     <ul className="mt-3 space-y-2">
+                        <li className="flex justify-between">
+                           <span>Devices</span>
+                           <span className="text-gray-500">MacBook Air</span>
+                        </li>
+                        <li className="flex justify-between">
+                           <span>Compensation</span>
+                           <span className="text-gray-500">Summary</span>
+                        </li>
+                        <li className="flex justify-between">
+                           <span>Benefits</span>
+                           <span className="text-gray-500">Employee</span>
+                        </li>
+                     </ul>
+                  </div> */}
+
+                  {/* Calendar */}
+                  <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
+                     <h3 className="font-semibold text-gray-700">
+                        September 2024
+                     </h3>
+                     <div className="mt-4 flex flex-col space-y-3">
+                        <div className="flex items-center justify-between">
+                           <span className="font-medium">Weekly Team Sync</span>
+                           <span className="text-gray-500 text-sm">
+                              Sep 13, 10:00 AM
+                           </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                           <span className="font-medium">
+                              Onboarding Session
+                           </span>
+                           <span className="text-gray-500 text-sm">
+                              Sep 15, 09:00 AM
+                           </span>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+      </div>
+   );
+};
+
+export default Dashboard;
