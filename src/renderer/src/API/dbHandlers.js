@@ -1,5 +1,3 @@
-/* eslint-disable prettier/prettier */
-
 import db from './db.js'
 import { ipcMain } from 'electron'
 

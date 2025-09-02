@@ -1,18 +1,19 @@
-/* eslint-disable prettier/prettier */
-import Database from 'better-sqlite3';
-import path from 'path';
-import { app } from 'electron';
+import Database from 'better-sqlite3'
+import path from 'path'
+import { app } from 'electron'
 
 // Use app.getPath('userData') for a writable directory
-const dbPath = path.join(app.getPath('userData'), 'data.db');
+const dbPath = path.join(app.getPath('userData'), 'data.db')
 
 // Initialize database
-const db = new Database(dbPath);
+const db = new Database(dbPath)
 
 // Enable foreign key constraints
-db.pragma('foreign_keys = ON');
+db.pragma('foreign_keys = ON')
 
-// db.prepare('DROP TABLE products;').run();
+// db.prepare('DROP TABLE products;').run()
+// db.prepare('DROP TABLE clients;').run()
+// db.prepare('DROP TABLE transactions;').run()
 // Execute SQL statements one by one
 db.prepare(
   `CREATE TABLE IF NOT EXISTS products (
@@ -26,9 +27,8 @@ db.prepare(
     assetsType TEXT NOT NULL CHECK (assetsType IN ('Raw Material', 'Finished Goods', 'Assets')),
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`,
-).run();
-
+  )`
+).run()
 
 db.prepare(
   `CREATE TABLE IF NOT EXISTS clients (
@@ -40,9 +40,8 @@ db.prepare(
     pendingFromOurs REAL DEFAULT 0,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`,
+  )`
 ).run()
-
 
 db.prepare(
   `CREATE TABLE IF NOT EXISTS transactions (
@@ -60,11 +59,10 @@ db.prepare(
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE,
     FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
-  )`,
+  )`
 ).run()
 
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_clientId ON transactions(clientId)`).run();
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_productId ON transactions(productId)`).run();
+db.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_clientId ON transactions(clientId)`).run()
+db.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_productId ON transactions(productId)`).run()
 
-
-export default db;
+export default db

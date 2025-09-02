@@ -1,101 +1,101 @@
 @import 'tailwindcss';
 
 body {
-   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
 .my-picker-search input {
-   background-color: #e6f7ff;
-   color: #1a1a1a;
- }
+  background-color: #e6f7ff;
+  color: #1a1a1a;
+}
 
 .customScrollbar {
-   overflow-y: auto;
-   overflow-x: auto;
+  overflow-y: auto;
+  overflow-x: auto;
 }
 
 .customScrollbar::-webkit-scrollbar {
-   width: 0px;
-   height: 0px;
+  width: 0px;
+  height: 0px;
 }
 
 .customScrollbar::-webkit-scrollbar-track {
-   background: white;
-   border-radius: 9999px;
+  background: white;
+  border-radius: 9999px;
 }
 
 .customScrollbar::-webkit-scrollbar-thumb {
-   background: #566dff;
-   border-radius: 9999px;
+  background: #566dff;
+  border-radius: 9999px;
 }
 
 :root {
-   scroll-padding-top: 100px;
+  scroll-padding-top: 100px;
 }
 
 html {
-   scroll-behavior: smooth;
-   overflow: hidden;
+  scroll-behavior: smooth;
+  overflow: hidden;
 }
 
 @keyframes fadeIn {
-   0% {
-      opacity: 0;
-   }
-   100% {
-      opacity: 1;
-   }
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 @keyframes slideIn {
-   0% {
-      transform: translateX(50px);
-      opacity: 0;
-   }
-   100% {
-      transform: translateX(0);
-      opacity: 1;
-   }
+  0% {
+    transform: translateX(50px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 @keyframes appear {
-   from {
-      opacity: 0;
-      scale: 0.5;
-   }
-   to {
-      opacity: 1;
-      scale: 1;
-   }
+  from {
+    opacity: 0;
+    scale: 0.5;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
 }
 
 .blocks {
-   animation: appear linear;
-   animation-delay: 4ms;
-   animation-timeline: view();
-   animation-range: entry 0;
+  animation: appear linear;
+  animation-delay: 4ms;
+  animation-timeline: view();
+  animation-range: entry 0;
 }
 
 .fade-in {
-   animation: fadeIn 0.5s ease-in-out;
+  animation: fadeIn 0.5s ease-in-out;
 }
 
 .slide-in {
-   animation: slideIn 0.4s ease-out;
+  animation: slideIn 0.4s ease-out;
 }
 
 .perspective {
-   perspective: 1000px;
+  perspective: 1000px;
 }
 
 .transform-style-3d {
-   transform-style: preserve-3d;
+  transform-style: preserve-3d;
 }
 
 .backface-hidden {
-   backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .rotate-y-180 {
-   transform: rotateY(180deg);
+  transform: rotateY(180deg);
 }

@@ -1,21 +1,21 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 function KeyBind({ children }) {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
 
   useEffect(() => {
     const handleEsc = (event) => {
-      if (event.key === "Escape") {
-        navigate("/"); // go to homepage
+      if (event.key === 'Escape') {
+        navigate('/') // go to homepage
       }
-    };
+    }
 
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, [navigate]);
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [navigate])
 
-  return <>{children}</>;
+  return <>{children}</>
 }
 
-export default KeyBind;
+export default KeyBind

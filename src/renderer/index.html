@@ -1,21 +1,22 @@
 <!doctype html>
 <html>
-
-<head>
-  <meta charset="UTF-8" />
-  <title>Electron</title>
-  <link href="./index.css" rel="stylesheet">
-  <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self';
+  <head>
+    <meta charset="UTF-8" />
+    <title>Electron</title>
+    <link href="./index.css" rel="stylesheet" />
+    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self';
            img-src 'self' data: https://flagsapi.com;
            connect-src 'self' https://cdn.jsdelivr.net;
            style-src 'self' 'unsafe-inline';
-           script-src 'self';">
-</head>
+           script-src 'self';"
+    />
+  </head>
 
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
-</body>
-
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>

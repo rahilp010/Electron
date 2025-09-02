@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "An Electron application with React",
   "main": "./out/main/index.js",
-  "author": "example.com",
+  "author": "Rahil Patel",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
@@ -16,14 +16,6 @@
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux"
-  },
-  "build": {
-    "appId": "com.electron.app",
-    "productName": "Electron",
-    "directories": {
-      "buildResources": "resources"
-    },
-    "icon": "resources/icon"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

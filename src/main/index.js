@@ -2,10 +2,11 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join, dirname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { fileURLToPath } from 'url'
+import icon from '../../resources/icon.png?asset'
 
 // Get directory name in ES module
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
+const currentFilename = fileURLToPath(import.meta.url)
+const currentDirname = dirname(currentFilename)
 
 import '../renderer/src/API/dbHandlers.js'
 
@@ -14,16 +15,11 @@ function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    minWidth: 1000,
-    minHeight: 600,
-    icon: join(__dirname, '../resources/icons/icon.ico'),
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon: join(__dirname, '../resources/icon.jpg') } : {}),
+    ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
+      preload: join(currentDirname, '../preload/index.js'),
       sandbox: false
     }
   })
@@ -43,7 +39,7 @@ function createWindow() {
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(join(currentDirname, '../renderer/index.html'))
   }
 }
 

@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 import { useEffect, useState } from 'react'
 
 const useCurrencyInfo = (currency) => {
