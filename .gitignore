@@ -6,3 +6,5 @@ out
 *.log*
 build
 .vscode
+.env
+data.db
