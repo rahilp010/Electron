@@ -263,11 +263,11 @@ const Products = () => {
                         {new Date(product?.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-3 tracking-wide">
-                        {product.clientId === null ||
-                        product.clientId === 0 ||
-                        product.clientId === ''
+                        {product?.clientId === null ||
+                        product?.clientId === 0 ||
+                        product?.clientId === ''
                           ? '-'
-                          : clients.find((client) => client.id === product.clientId)?.clientName}
+                          : clients.find((client) => client?.id === product?.clientId)?.clientName}
                       </td>
                       <td className="px-4 py-3 tracking-wide">
                         {String(product?.name).toUpperCase()}
@@ -283,15 +283,15 @@ const Products = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 tracking-wide">
-                        {product.assetsType === 'Raw Material' ? (
+                        {product?.assetsType === 'Raw Material' ? (
                           <p className="text-[#166534] font-medium border-1 border-[#8ffab5] p-1 rounded-4xl">
                             {product?.assetsType}
                           </p>
-                        ) : product.assetsType === 'Finished Goods' ? (
+                        ) : product?.assetsType === 'Finished Goods' ? (
                           <p className="flex items-center border border-[#fef08a] text-[#854d0e] p-1 rounded-4xl justify-center gap-1 font-medium">
                             {product?.assetsType}
                           </p>
-                        ) : product.assetsType === 'Assets' ? (
+                        ) : product?.assetsType === 'Assets' ? (
                           <p className="flex items-center border border-[#8a94fe] text-[#0e1a85] p-1 rounded-4xl justify-center gap-1 font-medium">
                             {product?.assetsType}
                           </p>

@@ -3,7 +3,9 @@ import path from 'path'
 import { app } from 'electron'
 
 // Use app.getPath('userData') for a writable directory
-const dbPath = path.join(app.getPath('userData'), 'data.db')
+const dbPath = app.isPackaged
+  ? path.join(process.resourcesPath, 'data.db')
+  : path.join(process.cwd(), 'data.db')
 
 // Initialize database
 const db = new Database(dbPath)
@@ -14,6 +16,7 @@ db.pragma('foreign_keys = ON')
 // db.prepare('DROP TABLE products;').run()
 // db.prepare('DROP TABLE clients;').run()
 // db.prepare('DROP TABLE transactions;').run()
+// db.prepare('DROP TABLE bankReceipts;').run()
 // Execute SQL statements one by one
 db.prepare(
   `CREATE TABLE IF NOT EXISTS products (
@@ -54,7 +57,7 @@ db.prepare(
     paymentType TEXT NOT NULL DEFAULT 'full' CHECK (paymentType IN ('full', 'partial')),
     pendingAmount REAL NOT NULL DEFAULT 0,
     paidAmount REAL NOT NULL DEFAULT 0,
-    transactionType TEXT CHECK (transactionType IN ('purchase', 'sale')),
+    transactionType TEXT CHECK (transactionType IN ('purchase', 'sales')),
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE,
@@ -62,7 +65,43 @@ db.prepare(
   )`
 ).run()
 
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS bankReceipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    srNo TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('Receipt', 'Payment')),
+    bank TEXT NOT NULL,
+    date DATETIME NOT NULL,
+    party TEXT NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`
+).run()
+
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS cashReceipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    srNo TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('Receipt', 'Payment')),
+    cash TEXT NOT NULL,
+    date DATETIME NOT NULL,
+    party TEXT NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`
+).run()
+
 db.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_clientId ON transactions(clientId)`).run()
 db.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_productId ON transactions(productId)`).run()
+db.prepare(`CREATE INDEX IF NOT EXISTS idx_bankReceipts_bank ON bankReceipts(bank)`).run()
+db.prepare(`CREATE INDEX IF NOT EXISTS idx_cashReceipts_cash ON cashReceipts(cash)`).run()
 
 export default db

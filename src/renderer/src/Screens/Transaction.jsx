@@ -1,6 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable no-unused-vars */
 import { useEffect, useState, useMemo } from 'react'
 import { FileUp, Import, PenLine, Plus, Trash } from 'lucide-react'
-import Loader from '../Components/Loader'
+import Loader from '../components/Loader'
 import SearchIcon from '@mui/icons-material/Search'
 import { DateRangePicker, SelectPicker, Whisper, Tooltip, InputGroup, Input } from 'rsuite'
 import 'rsuite/dist/rsuite-no-reset.min.css'
@@ -12,10 +14,11 @@ import {
 } from '../app/features/electronSlice'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
-import TransactionModal from '../Components/Modal/TransactionModal'
+import TransactionModal from '../components/Modal/TransactionModal'
 import HistoryToggleOffIcon from '@mui/icons-material/HistoryToggleOff'
 import CreditScoreIcon from '@mui/icons-material/CreditScore'
-import Navbar from '../Components/UI/Navbar'
+import Navbar from '../components/UI/Navbar'
+import { useLocation } from 'react-router-dom'
 
 const Transaction = () => {
   const [showLoader, setShowLoader] = useState(false)
@@ -28,6 +31,7 @@ const Transaction = () => {
   const [productFilter, setProductFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const dispatch = useDispatch()
+  const location = useLocation()
 
   const fetchAllProducts = async () => {
     try {
@@ -272,7 +276,11 @@ const Transaction = () => {
                     <th className="px-4 py-3 border-r border-gray-300 w-[200px]">Client Name</th>
                     <th className="px-4 py-3 border-r border-gray-300 w-[230px]">Product Name</th>
                     <th className="px-4 py-3 border-r border-gray-300 w-[150px]">Quantity</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[170px]">Selling Price</th>
+                    {location.pathname === '/purchase' && (
+                      <th className="px-4 py-3 border-r border-gray-300 w-[170px]">
+                        Selling Price
+                      </th>
+                    )}
                     <th className="px-4 py-3 border-r border-gray-300 w-[200px]">Total Amount</th>
                     <th className="px-4 py-3 border-r border-gray-300 w-[200px]">Pending Amount</th>
                     <th className="px-4 py-3 border-r border-gray-300 w-[200px]">Paid Amount</th>
@@ -281,6 +289,7 @@ const Transaction = () => {
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-200">
+                  {console.log(transaction)}
                   {filteredData && filteredData.length === 0 && (
                     <tr className="text-center h-80">
                       <td
@@ -291,133 +300,138 @@ const Transaction = () => {
                       </td>
                     </tr>
                   )}
-                  {filteredData.map((transaction, index) => (
-                    <tr
-                      key={transaction?.id}
-                      className={`text-sm text-center  ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-[#f0f0f0]'
-                      }`}
-                    >
-                      <td
-                        className={`px-4 py-3 w-[80px] sticky left-0 ${
+                  {filteredData
+                    .filter((data) => data?.transactionType === 'sales')
+                    .map((transaction, index) => (
+                      <tr
+                        key={transaction?.id}
+                        className={`text-sm text-center  ${
                           index % 2 === 0 ? 'bg-white' : 'bg-[#f0f0f0]'
-                        } z-10 text-xs`}
-                      >
-                        {transaction?.id
-                          ? `RO${String(transaction.id).slice(-3).toUpperCase()}`
-                          : 'RO---'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {new Date(transaction?.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 px-6">
-                          <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center border border-blue-300 justify-center text-xs font-medium text-blue-600 mr-3">
-                            {getClientName(transaction?.clientId)
-                              .split(' ')
-                              .map((n) => n[0])
-                              .join('')
-                              .toUpperCase()}
-                          </div>
-                          {getClientName(transaction?.clientId)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 tracking-wide">
-                        {String(getProductName(transaction?.productId)).toUpperCase()}
-                      </td>
-                      <td className={`px-4 py-3`}>
-                        <span className="bg-gray-300 px-2 py-1 rounded-full">
-                          {transaction?.quantity}
-                        </span>
-                      </td>
-                      <td
-                        className={`px-4 py-3 font-bold ${
-                          transaction?.sellAmount > getProductName(transaction?.productId)?.price
-                            ? 'text-indigo-500'
-                            : 'text-[#568F87]'
                         }`}
                       >
-                        ₹ {toThousands(Number(transaction?.sellAmount).toFixed(0))}
-                      </td>
-                      <td className={`px-4 py-3 `}>
-                        ₹{' '}
-                        {toThousands(
-                          Number(transaction?.sellAmount * transaction?.quantity).toFixed(0)
-                        )}
-                      </td>
-                      <td className={`px-4 py-3 `}>
-                        <Whisper
-                          trigger="hover"
-                          placement="rightStart"
-                          speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
+                        <td
+                          className={`px-4 py-3 w-[80px] sticky left-0 ${
+                            index % 2 === 0 ? 'bg-white' : 'bg-[#f0f0f0]'
+                          } z-10 text-xs`}
                         >
-                          {transaction?.statusOfTransaction === 'pending' &&
-                          transaction?.paymentType === 'partial' ? (
-                            '₹ ' + toThousands(Number(transaction?.pendingAmount).toFixed(0))
-                          ) : transaction?.statusOfTransaction === 'completed' ? (
-                            '-'
-                          ) : (
-                            <HistoryToggleOffIcon />
-                          )}
-                        </Whisper>
-                      </td>
-                      <td className={`px-4 py-3 `}>
-                        <Whisper
-                          trigger="hover"
-                          placement="rightStart"
-                          speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
-                        >
-                          {transaction?.paymentType === 'partial' ? (
-                            '₹ ' + toThousands(Number(transaction?.paidAmount).toFixed(0))
-                          ) : transaction?.statusOfTransaction === 'pending' ? (
-                            '-'
-                          ) : (
-                            <CreditScoreIcon />
-                          )}
-                        </Whisper>
-                      </td>
-                      <td className="px-4 py-3 tracking-wide">
-                        <div className={`font-bold text-white`}>
-                          {transaction?.statusOfTransaction === 'completed' ? (
-                            <p className="flex items-center text-[#166534] bg-[#dcfce7] border-1 border-[#8ffab5] p-1 rounded-4xl justify-center gap-1 text-xs">
-                              {/* <CircleCheck size={16} /> */}
-                              {String(transaction?.statusOfTransaction).charAt(0).toUpperCase() +
-                                String(transaction?.statusOfTransaction).slice(1)}
-                            </p>
-                          ) : transaction?.statusOfTransaction === 'pending' &&
-                            transaction?.paymentType === 'partial' ? (
-                            <p className="flex items-center border border-[#8a94fe] text-[#0e1a85] bg-[#c3d3fe] p-1 rounded-4xl justify-center gap-1 text-xs">
-                              Partial
-                            </p>
-                          ) : transaction?.statusOfTransaction === 'pending' ? (
-                            <p className="flex items-center border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] p-1 rounded-4xl justify-center gap-1 text-xs">
-                              {/* <ClockArrowUp size={16} /> */}
-                              {String(transaction?.statusOfTransaction).charAt(0).toUpperCase() +
-                                String(transaction?.statusOfTransaction).slice(1)}
-                            </p>
-                          ) : (
-                            ''
-                          )}
-                        </div>
-                      </td>
-                      <td className="w-28 ">
-                        <div>
-                          <div className="flex gap-3 justify-center relative transition cursor-pointer items-center">
-                            <PenLine
-                              className="text-purple-500 text-sm p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-120"
-                              onClick={() => handleEditTransaction(transaction)}
-                              size={28}
-                            />
-                            <Trash
-                              className="text-red-500 text-sm p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-120"
-                              onClick={() => handleDeleteTransaction(transaction?.id)}
-                              size={28}
-                            />
+                          {transaction?.id
+                            ? `RO${String(transaction.id).slice(-3).toUpperCase()}`
+                            : 'RO---'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {new Date(transaction?.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 px-6">
+                            <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center border border-blue-300 justify-center text-xs font-medium text-blue-600 mr-3">
+                              {getClientName(transaction?.clientId)
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')
+                                .toUpperCase()}
+                            </div>
+                            {getClientName(transaction?.clientId)}
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3 tracking-wide">
+                          {String(getProductName(transaction?.productId)).toUpperCase()}
+                        </td>
+                        <td className={`px-4 py-3`}>
+                          <span className="bg-gray-300 px-2 py-1 rounded-full">
+                            {transaction?.quantity}
+                          </span>
+                        </td>
+                        {location.pathname === '/purchase' && (
+                          <td
+                            className={`px-4 py-3 font-bold ${
+                              transaction?.sellAmount >
+                              getProductName(transaction?.productId)?.price
+                                ? 'text-indigo-500'
+                                : 'text-[#568F87]'
+                            }`}
+                          >
+                            ₹ {toThousands(Number(transaction?.sellAmount).toFixed(0))}
+                          </td>
+                        )}
+                        <td className={`px-4 py-3 `}>
+                          ₹{' '}
+                          {toThousands(
+                            Number(transaction?.sellAmount * transaction?.quantity).toFixed(0)
+                          )}
+                        </td>
+                        <td className={`px-4 py-3 `}>
+                          <Whisper
+                            trigger="hover"
+                            placement="rightStart"
+                            speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
+                          >
+                            {transaction?.statusOfTransaction === 'pending' &&
+                            transaction?.paymentType === 'partial' ? (
+                              '₹ ' + toThousands(Number(transaction?.pendingAmount).toFixed(0))
+                            ) : transaction?.statusOfTransaction === 'completed' ? (
+                              '-'
+                            ) : (
+                              <HistoryToggleOffIcon />
+                            )}
+                          </Whisper>
+                        </td>
+                        <td className={`px-4 py-3 `}>
+                          <Whisper
+                            trigger="hover"
+                            placement="rightStart"
+                            speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
+                          >
+                            {transaction?.paymentType === 'partial' ? (
+                              '₹ ' + toThousands(Number(transaction?.paidAmount).toFixed(0))
+                            ) : transaction?.statusOfTransaction === 'pending' ? (
+                              '-'
+                            ) : (
+                              <CreditScoreIcon />
+                            )}
+                          </Whisper>
+                        </td>
+                        <td className="px-4 py-3 tracking-wide">
+                          <div className={`font-bold text-white`}>
+                            {transaction?.statusOfTransaction === 'completed' ? (
+                              <p className="flex items-center text-[#166534] bg-[#dcfce7] border-1 border-[#8ffab5] p-1 rounded-4xl justify-center gap-1 text-xs">
+                                {/* <CircleCheck size={16} /> */}
+                                {String(transaction?.statusOfTransaction).charAt(0).toUpperCase() +
+                                  String(transaction?.statusOfTransaction).slice(1)}
+                              </p>
+                            ) : transaction?.statusOfTransaction === 'pending' &&
+                              transaction?.paymentType === 'partial' ? (
+                              <p className="flex items-center border border-[#8a94fe] text-[#0e1a85] bg-[#c3d3fe] p-1 rounded-4xl justify-center gap-1 text-xs">
+                                Partial
+                              </p>
+                            ) : transaction?.statusOfTransaction === 'pending' ? (
+                              <p className="flex items-center border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] p-1 rounded-4xl justify-center gap-1 text-xs">
+                                {/* <ClockArrowUp size={16} /> */}
+                                {String(transaction?.statusOfTransaction).charAt(0).toUpperCase() +
+                                  String(transaction?.statusOfTransaction).slice(1)}
+                              </p>
+                            ) : (
+                              ''
+                            )}
+                          </div>
+                        </td>
+                        <td className="w-28 ">
+                          <div>
+                            <div className="flex gap-3 justify-center relative transition cursor-pointer items-center">
+                              <PenLine
+                                className="text-purple-500 text-sm p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-120"
+                                onClick={() => handleEditTransaction(transaction)}
+                                size={28}
+                              />
+                              <Trash
+                                className="text-red-500 text-sm p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-120"
+                                onClick={() => handleDeleteTransaction(transaction?.id)}
+                                size={28}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

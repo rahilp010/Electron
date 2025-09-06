@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-case-declarations */
 /* eslint-disable react/prop-types */
@@ -17,7 +18,7 @@ import ClientModal from './ClientModal'
 import ProductModal from './ProductModal'
 import { useLocation } from 'react-router-dom'
 
-const TransactionModal = ({
+const PurchaseModal = ({
   setShowModal,
   existingTransaction = null,
   isUpdateExpense = false,
@@ -520,4 +521,4 @@ const TransactionModal = ({
   )
 }
 
-export default TransactionModal
+export default PurchaseModal

@@ -1,14 +1,15 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Trash, PenLine, Plus, Import, FileUp } from 'lucide-react'
-import Loader from '../Components/Loader'
+import Loader from '../components/Loader'
 import { useDispatch, useSelector } from 'react-redux'
 import { deleteClient, setClients } from '../app/features/electronSlice'
 import SearchIcon from '@mui/icons-material/Search'
 import { toast } from 'react-toastify'
 import { DateRangePicker, SelectPicker, InputGroup, Input } from 'rsuite'
-import ClientModal from '../Components/Modal/ClientModal'
-import Navbar from '../Components/UI/Navbar'
+import ClientModal from '../components/Modal/ClientModal'
+import Navbar from '../components/UI/Navbar'
 
 const ClientList = () => {
   const dispatch = useDispatch()
@@ -17,7 +18,6 @@ const ClientList = () => {
   const [showModal, setShowModal] = useState(false)
   const [selectedClient, setSelectedClient] = useState(null)
   const [isUpdateExpense, setIsUpdateExpense] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
   const [dateRange, setDateRange] = useState([])
   const [clientFilter, setClientFilter] = useState('')
 

@@ -41,6 +41,32 @@ export const electronSlice = createSlice({
         }
       })(),
       isLoading: false
+    },
+    bankReceipt: {
+      data: (() => {
+        try {
+          const stored = localStorage.getItem('bankReceipt')
+          return stored ? JSON.parse(stored) : []
+        } catch (error) {
+          console.error('Error parsing bankReceipt from localStorage:', error)
+          localStorage.removeItem('bankReceipt') // Clear corrupted data
+          return []
+        }
+      })(),
+      isLoading: false
+    },
+    cashReceipt: {
+      data: (() => {
+        try {
+          const stored = localStorage.getItem('cashReceipt')
+          return stored ? JSON.parse(stored) : []
+        } catch (error) {
+          console.error('Error parsing cashReceipt from localStorage:', error)
+          localStorage.removeItem('cashReceipt') // Clear corrupted data
+          return []
+        }
+      })(),
+      isLoading: false
     }
   },
   reducers: {
@@ -239,6 +265,66 @@ export const electronSlice = createSlice({
         state.transaction.data = []
         localStorage.removeItem('transaction')
       }
+    },
+    createBankReceipt: (state, action) => {
+      // Ensure state.products.data is always an array
+      if (!Array.isArray(state.bankReceipt.data)) {
+        state.bankReceipt.data = []
+      }
+      state.bankReceipt.data.push(action.payload)
+      state.bankReceipt.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      localStorage.setItem('bankReceipt', JSON.stringify(state.bankReceipt.data))
+    },
+    getBankReceipt: (state) => {
+      try {
+        const data = localStorage.getItem('bankReceipt')
+        if (data) {
+          const parsed = JSON.parse(data)
+          if (Array.isArray(parsed)) {
+            state.bankReceipt.data = parsed
+          } else {
+            console.warn(
+              'bankReceipt data in localStorage is not an array, resetting to empty array'
+            )
+            state.bankReceipt.data = []
+            localStorage.setItem('bankReceipt', JSON.stringify([]))
+          }
+        }
+      } catch (error) {
+        console.error('Error loading bankReceipt from localStorage:', error)
+        state.bankReceipt.data = []
+        localStorage.removeItem('bankReceipt')
+      }
+    },
+    createCashReceipt: (state, action) => {
+      // Ensure state.products.data is always an array
+      if (!Array.isArray(state.cashReceipt.data)) {
+        state.cashReceipt.data = []
+      }
+      state.cashReceipt.data.push(action.payload)
+      state.cashReceipt.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
+    },
+    getCashReceipt: (state) => {
+      try {
+        const data = localStorage.getItem('cashReceipt')
+        if (data) {
+          const parsed = JSON.parse(data)
+          if (Array.isArray(parsed)) {
+            state.cashReceipt.data = parsed
+          } else {
+            console.warn(
+              'cashReceipt data in localStorage is not an array, resetting to empty array'
+            )
+            state.cashReceipt.data = []
+            localStorage.setItem('cashReceipt', JSON.stringify([]))
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cashReceipt from localStorage:', error)
+        state.cashReceipt.data = []
+        localStorage.removeItem('cashReceipt')
+      }
     }
   }
 })
@@ -258,6 +344,10 @@ export const {
   updateTransaction,
   deleteTransaction,
   setTransactions,
-  getTransaction
+  getTransaction,
+  createBankReceipt,
+  getBankReceipt,
+  createCashReceipt,
+  getCashReceipt
 } = electronSlice.actions
 export default electronSlice.reducer

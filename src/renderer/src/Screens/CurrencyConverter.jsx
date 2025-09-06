@@ -1,17 +1,15 @@
-import React, { useEffect, useState } from 'react'
-import { ArrowUpDown, ChevronLeft } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import CurrencyCard from '../Components/currency/CurrencyCard'
-import useCurrencyInfo from '../Components/currency/useCurrencyInfo'
-import Navbar from '../Components/UI/Navbar'
+/* eslint-disable no-unused-vars */
+import React, { useState } from 'react'
+import { ArrowUpDown } from 'lucide-react'
+import CurrencyCard from '../components/currency/CurrencyCard'
+import useCurrencyInfo from '../components/currency/useCurrencyInfo'
+import Navbar from '../components/UI/Navbar'
 
 const CurrencyConvertor = () => {
-  const navigate = useNavigate()
-  const [amount, setAmount] = useState(1)
+  const [amount, setAmount] = useState()
   const [from, setFrom] = useState('inr')
   const [to, setTo] = useState('usd')
-  const [convertedAmount, setConvertedAmount] = useState('')
-  const [showLoader, setShowLoader] = useState(false)
+  const [convertedAmount, setConvertedAmount] = useState()
 
   const currencyInfo = useCurrencyInfo(from)
 
@@ -36,7 +34,6 @@ const CurrencyConvertor = () => {
       <div className="flex justify-between mt-5 pb-2 items-center">
         <p className="text-3xl font-light mx-7">Currency Converter</p>
       </div>
-      <div>{showLoader && <Loader />}</div>
       <div className="flex justify-center items-center">
         <div className="w-full m-10 mx-40 bg-white rounded-4xl border-2 border-gray-100 shadow-lg p-4 relative">
           <CurrencyCard

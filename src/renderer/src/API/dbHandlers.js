@@ -211,7 +211,6 @@ ipcMain.handle('getAllTransactions', () => {
 })
 
 // ✅ Create transaction
-// ✅ Create transaction
 ipcMain.handle('createTransaction', (event, transaction) => {
   const {
     clientId,
@@ -221,7 +220,8 @@ ipcMain.handle('createTransaction', (event, transaction) => {
     statusOfTransaction,
     paymentType,
     pendingAmount,
-    paidAmount
+    paidAmount,
+    transactionType
   } = transaction
 
   // Check if product exists and has sufficient quantity
@@ -251,8 +251,8 @@ ipcMain.handle('createTransaction', (event, transaction) => {
   const dbTransaction = db.transaction(() => {
     // 1. Create the transaction record
     const stmt = db.prepare(`
-            INSERT INTO transactions (clientId, productId, quantity, sellAmount, statusOfTransaction, paymentType, pendingAmount, paidAmount)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (clientId, productId, quantity, sellAmount, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
     const result = stmt.run(
       clientId,
@@ -262,7 +262,8 @@ ipcMain.handle('createTransaction', (event, transaction) => {
       statusOfTransaction || 'pending',
       paymentType || 'cash',
       pendingAmount || 0,
-      paidAmount || 0
+      paidAmount || 0,
+      transactionType
     )
 
     // 2. Update product quantity (reduce by sold quantity)
@@ -319,7 +320,8 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
       statusOfTransaction,
       paymentType,
       pendingAmount,
-      paidAmount
+      paidAmount,
+      transactionType
     } = updatedTransaction
 
     const dbTransaction = db.transaction(() => {
@@ -380,7 +382,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
           UPDATE transactions
           SET clientId = ?, productId = ?, quantity = ?, sellAmount = ?, 
               statusOfTransaction = ?, paymentType = ?, 
-              pendingAmount = ?, paidAmount = ?, updatedAt = CURRENT_TIMESTAMP
+              pendingAmount = ?, paidAmount = ?, transactionType = ?, updatedAt = CURRENT_TIMESTAMP
           WHERE id = ?
         `
       ).run(
@@ -392,6 +394,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
         paymentType,
         pendingAmount,
         paidAmount,
+        transactionType,
         id
       )
 
@@ -515,7 +518,61 @@ ipcMain.handle('getTransactionById', (event, id) => {
   return db.prepare('SELECT * FROM transactions WHERE id = ?').get(id)
 })
 
+// -------- Bank Receipts --------
+
+ipcMain.handle('getRecentBankReceipts', async () => {
+  return db.prepare('SELECT * FROM bankReceipts ORDER BY createdAt DESC').all()
+})
+
+// ✅ Create bank receipt
+ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
+  const { srNo, type, bank, date, party, amount, description } = bankReceipt
+
+  const formattedDate =
+    typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
+
+  const tx = db.transaction(() => {
+    const res = db
+      .prepare(
+        `
+      INSERT INTO bankReceipts (srNo, type, bank, date, party, amount, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?) `
+      )
+      .run(srNo, type, bank, formattedDate, party, amount, description)
+    return res
+  })
+  return tx()
+})
+
+// -------- Cash Receipts --------
+
+ipcMain.handle('getRecentCashReceipts', async () => {
+  return db.prepare('SELECT * FROM cashReceipts ORDER BY createdAt DESC').all()
+})
+
+// ✅ Create bank receipt
+ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
+  const { srNo, type, cash, date, party, amount, description } = cashReceipt
+
+  const formattedDate =
+    typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
+
+  const tx = db.transaction(() => {
+    const res = db
+      .prepare(
+        `
+      INSERT INTO cashReceipts (srNo, type, cash, date, party, amount, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?) `
+      )
+      .run(srNo, type, cash, formattedDate, party, amount, description)
+    return res
+  })
+  return tx()
+})
+
 db.exec(`
     CREATE INDEX IF NOT EXISTS idx_transactions_clientId ON transactions(clientId);
     CREATE INDEX IF NOT EXISTS idx_transactions_productId ON transactions(productId);
+    CREATE INDEX IF NOT EXISTS idx_bankReceipts_bank ON bankReceipts(bank);
+    CREATE INDEX IF NOT EXISTS idx_cashReceipts_cash ON cashReceipts(cash);
   `)

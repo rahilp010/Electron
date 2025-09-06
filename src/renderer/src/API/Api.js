@@ -6,13 +6,6 @@ const productApi = {
   getProductById: (id) => window.api.getProductById(id)
 }
 
-const productPartApi = {
-  createProductParts: (productParts) => window.api.createProductParts(productParts),
-  updateProductParts: (productParts) => window.api.updateProductParts(productParts),
-  deleteProductParts: (id) => window.api.deleteProductParts(id),
-  getProductPartsById: (id) => window.api.getProductPartsById(id)
-}
-
 const clientApi = {
   getAllClients: () => window.api.getAllClients(),
   createClient: (client) => window.api.createClient(client),
@@ -29,4 +22,14 @@ const transactionApi = {
   getTransactionById: (id) => window.api.getTransactionById(id)
 }
 
-export { productApi, productPartApi, clientApi, transactionApi }
+const bankReceiptApi = {
+  getAllBankReceipts: () => window.api.getAllBankReceipts(),
+  createBankReceipt: (bankReceipt) => window.api.createBankReceipt(bankReceipt)
+}
+
+const cashReceiptApi = {
+  getAllCashReceipts: () => window.api.getAllCashReceipts(),
+  createCashReceipt: (cashReceipt) => window.api.createCashReceipt(cashReceipt)
+}
+
+export { productApi, clientApi, transactionApi, bankReceiptApi, cashReceiptApi }

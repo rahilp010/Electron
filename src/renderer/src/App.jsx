@@ -12,6 +12,8 @@ import Dashboard from './Screens/Dashboard'
 import Purchase from './Screens/Purchase'
 import KeyBind from './components/Shortcuts/KeyBind'
 import Products from './Screens/Products'
+import Bank from './Screens/Bank.jsx'
+import Cash from './Screens/Cash.jsx'
 
 function App() {
   return (
@@ -42,6 +44,8 @@ function App() {
               <Route path="/yearlyaudit" element={<YearlyAudit />} />
               <Route path="/purchase" element={<Purchase />} />
               <Route path="/currencyConverter" element={<CurrencyConvertor />} />
+              <Route path="/bank" element={<Bank />} />
+              <Route path="/cash" element={<Cash />} />
             </Routes>
           </KeyBind>
         </HashRouter>
