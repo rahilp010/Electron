@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable prettier/prettier */
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Info } from 'lucide-react'
+import { Plus, Info, Import, FileUp } from 'lucide-react'
 import Loader from '../components/Loader'
 import { useNavigate } from 'react-router-dom'
 import 'rsuite/dist/rsuite-no-reset.min.css'
@@ -110,14 +110,20 @@ const Bank = () => {
     fetchRecentReceipts()
   }, [])
 
-  console.log('recentReceipts', recentReceipts)
-
   const getClientName = (id) => {
     const client = clients.find((c) => c?.id === id)
     return client ? client.clientName : ''
   }
 
-  console.log(recentReceipts.map((receipt) => Number(receipt.party)))
+  const getAmount = (type, amount) => {
+    if (!amount) return 0
+    return type === 'Receipt' ? amount : -amount
+  }
+
+  const bookAmount = recentReceipts.reduce((acc, receipt) => {
+    const amount = getAmount(receipt.type, receipt.amount)
+    return acc + amount
+  }, 0)
 
   // Helper functions
   const toThousands = (value) => {
@@ -128,10 +134,6 @@ const Bank = () => {
   // Form validation
   const validateForm = () => {
     const newErrors = {}
-
-    if (!bankReceipt.srNo.trim()) {
-      newErrors.srNo = 'Serial number is required'
-    }
 
     if (!bankReceipt.type) {
       newErrors.type = 'Type is required'
@@ -151,10 +153,6 @@ const Bank = () => {
 
     if (!bankReceipt.amount || parseFloat(bankReceipt.amount) <= 0) {
       newErrors.amount = 'Valid amount is required'
-    }
-
-    if (!bankReceipt.description.trim()) {
-      newErrors.description = 'Description is required'
     }
 
     setErrors(newErrors)
@@ -256,6 +254,14 @@ const Bank = () => {
       <div className="flex justify-between mt-5 pb-2 items-center">
         <p className="text-3xl font-light mx-7">Bank Receipt</p>
         <div className="mx-7 flex gap-2">
+          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm">
+            <Import size={16} />
+            <p className="text-sm">Import</p>
+          </div>
+          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm">
+            <FileUp size={16} />
+            <p className="text-sm">Export</p>
+          </div>
           <div
             className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
             onClick={() => navigate('/ledger')}
@@ -325,7 +331,7 @@ const Bank = () => {
                 <Tooltip className="!bg-white !text-black !shadow-lg rounded-xl p-4 border border-gray-100">
                   <div>
                     <p className="font-thin text-sm">Book Amount</p>
-                    <p className="font-bold text-2xl">₹ {toThousands(1468835.93)}</p>
+                    <p className="font-bold text-2xl">₹ {toThousands(bookAmount)}</p>
                   </div>
                 </Tooltip>
               }
@@ -472,22 +478,29 @@ const Bank = () => {
                 recentReceipts.slice(0, 3).map((receipt, idx) => (
                   <tr
                     key={idx}
-                    className={`transition ${idx === recentReceipts.length - 1 ? 'border-b-0' : ''} ${receipt.type === 'Receipt' ? 'bg-blue-100' : 'bg-red-100'}`}
+                    className={`transition ${idx === recentReceipts.length - 1 ? 'border-b-0' : ''} ${receipt.type === 'Receipt' ? 'bg-blue-50' : 'bg-red-50'}`}
                   >
                     <td
-                      className={`px-6 py-3 w-[100px] sticky left-0 z-8 ${receipt.type === 'Receipt' ? 'bg-blue-100' : 'bg-red-100'}`}
+                      className={`px-6 py-3 w-[100px] sticky left-0 z-8 ${receipt.type === 'Receipt' ? 'bg-blue-50 text-blue-500 font-bold' : 'bg-red-50 text-red-500 font-bold'}`}
                     >
                       {receipt.srNo}
                     </td>
-                    <td className="px-6 py-3 w-[100px]">
-                      {receipt.date}
-                      {console.log(receipt.date)}
+                    <td className="px-6 py-3 w-[100px]">{receipt.date}</td>
+                    <td className="px-6 py-3">{receipt.bank} Bank</td>
+                    <td className="px-6 py-3 tracking-wider uppercase">
+                      {getClientName(Number(receipt.party))}
                     </td>
-                    <td className="px-6 py-3">{receipt.bank}</td>
-                    <td className="px-6 py-3">{getClientName(Number(receipt.party))}</td>
-                    <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
-                    <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
-                    <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
+                    {receipt.type === 'Payment' ? (
+                      <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
+                    ) : (
+                      <td className="px-6 py-3"> - </td>
+                    )}
+                    {receipt.type === 'Receipt' ? (
+                      <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
+                    ) : (
+                      <td className="px-6 py-3"> - </td>
+                    )}
+                    <td className="px-6 py-3">₹ {toThousands(bookAmount)}</td>
                     <td className="px-6 py-3">{receipt.description}</td>
                   </tr>
                 ))

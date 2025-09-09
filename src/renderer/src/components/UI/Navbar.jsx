@@ -1,17 +1,15 @@
-import React, { useState } from 'react'
-import { Settings, BadgeIndianRupeeIcon, Home, LayoutDashboard } from 'lucide-react'
+import { Settings, BadgeIndianRupeeIcon, LayoutDashboard } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 
 const Navbar = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const [showSelection, setShowSelection] = useState(false)
   const navItems = [
     { name: 'Dashboard', active: true, path: '/' },
     { name: 'Purchase', active: false, path: '/purchase' },
     { name: 'Sales', active: false, path: '/sales' },
-    { name: 'Bank & Cash', active: false, path: '/bank-cash' },
+    { name: 'Ledger', active: false, path: '/ledger' },
     { name: 'Analytics', active: false, path: '/analytics' }
   ]
 
@@ -20,7 +18,7 @@ const Navbar = () => {
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         {/* Logo */}
         <div>
-          <div className="flex items-center">
+          <div className="flex items-center" onClick={() => navigate('/auth')}>
             <div className="bg-white rounded-full px-6 py-2 border border-gray-400">
               <span className="text-lg font-medium text-gray-900">Electron</span>
             </div>

@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -8,6 +9,9 @@ function KeyBind({ children }) {
     const handleEsc = (event) => {
       if (event.key === 'Escape') {
         navigate('/') // go to homepage
+      } else if (event.ctrlKey && event.key.toLowerCase() === 'l') {
+        event.preventDefault()
+        navigate('/ledger')
       }
     }
 

@@ -100,14 +100,20 @@ const Cash = () => {
     fetchRecentReceipts()
   }, [])
 
-  console.log('recentReceipts', recentReceipts)
-
   const getClientName = (id) => {
     const client = clients.find((c) => c?.id === id)
     return client ? client.clientName : ''
   }
 
-  console.log(recentReceipts.map((receipt) => Number(receipt.party)))
+  const getAmount = (type, amount) => {
+    if (!amount) return 0
+    return type === 'Receipt' ? amount : -amount
+  }
+
+  const bookAmount = recentReceipts.reduce((acc, receipt) => {
+    const amount = getAmount(receipt.type, receipt.amount)
+    return acc + amount
+  }, 0)
 
   // Helper functions
   const toThousands = (value) => {
@@ -137,10 +143,6 @@ const Cash = () => {
 
     if (!cashReceipt.amount || parseFloat(cashReceipt.amount) <= 0) {
       newErrors.amount = 'Valid amount is required'
-    }
-
-    if (!cashReceipt.description.trim()) {
-      newErrors.description = 'Description is required'
     }
 
     setErrors(newErrors)
@@ -311,7 +313,7 @@ const Cash = () => {
                 <Tooltip className="!bg-white !text-black !shadow-lg rounded-xl p-4 border border-gray-100">
                   <div>
                     <p className="font-thin text-sm">Book Amount</p>
-                    <p className="font-bold text-2xl">₹ {toThousands(1468835.93)}</p>
+                    <p className="font-bold text-2xl">₹ {toThousands(bookAmount)}</p>
                   </div>
                 </Tooltip>
               }

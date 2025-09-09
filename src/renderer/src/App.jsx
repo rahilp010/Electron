@@ -7,13 +7,14 @@ import ClientList from './Screens/ClientList'
 import Transaction from './Screens/Transaction'
 import CurrencyConvertor from './Screens/CurrencyConverter'
 import { HashRouter, Route, Routes } from 'react-router-dom'
-import YearlyAudit from './Screens/YearlyAudit'
 import Dashboard from './Screens/Dashboard'
 import Purchase from './Screens/Purchase'
 import KeyBind from './components/Shortcuts/KeyBind'
 import Products from './Screens/Products'
 import Bank from './Screens/Bank.jsx'
 import Cash from './Screens/Cash.jsx'
+import LedgerReport from './Screens/LedgerReport.jsx'
+import Authentication from './components/UI/Authentication.jsx'
 
 function App() {
   return (
@@ -41,11 +42,12 @@ function App() {
               <Route path="/products" element={<Products />} />
               <Route path="/clients" element={<ClientList />} />
               <Route path="/sales" element={<Transaction />} />
-              <Route path="/yearlyaudit" element={<YearlyAudit />} />
               <Route path="/purchase" element={<Purchase />} />
               <Route path="/currencyConverter" element={<CurrencyConvertor />} />
               <Route path="/bank" element={<Bank />} />
               <Route path="/cash" element={<Cash />} />
+              <Route path="/ledger" element={<LedgerReport />} />
+              <Route path="/auth" element={<Authentication />} />
             </Routes>
           </KeyBind>
         </HashRouter>
