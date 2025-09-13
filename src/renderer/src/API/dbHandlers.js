@@ -1,5 +1,6 @@
 import db from './db.js'
 import { ipcMain } from 'electron'
+import * as XLSX from 'xlsx'
 
 const toInt = (val, fallback = 0) => {
   const n = parseInt(val, 10)
@@ -568,6 +569,100 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
     return res
   })
   return tx()
+})
+
+// -------- Excel Import --------
+ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
+  try {
+    const workbook = XLSX.readFile(filePath)
+    const sheet = workbook.Sheets[workbook.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json(sheet)
+
+    let stmt
+    let count = 0
+
+    if (tableName === 'clients') {
+      stmt = db.prepare(`
+        INSERT INTO clients (clientName, phoneNo, pendingAmount, paidAmount, pendingFromOurs)
+        VALUES (@clientName, @phoneNo, @pendingAmount, @paidAmount, @pendingFromOurs)
+      `)
+
+      const insertMany = db.transaction((rows) => {
+        for (const row of rows) {
+          stmt.run({
+            clientName: row.clientName || '',
+            phoneNo: row.phoneNo || '',
+            pendingAmount: row.pendingAmount || 0,
+            paidAmount: row.paidAmount || 0,
+            pendingFromOurs: row.pendingFromOurs || 0
+          })
+          count++
+        }
+      })
+      insertMany(rows)
+    } else if (tableName === 'products') {
+      stmt = db.prepare(`
+        INSERT INTO products (productName, quantity, price)
+        VALUES (@productName, @quantity, @price)
+      `)
+
+      const insertMany = db.transaction((rows) => {
+        for (const row of rows) {
+          stmt.run({
+            productName: row.productName || '',
+            quantity: row.quantity || 0,
+            price: row.price || 0
+          })
+          count++
+        }
+      })
+      insertMany(rows)
+    } else if (tableName === 'transactions') {
+      stmt = db.prepare(`
+        INSERT INTO transactions (clientId, productId, quantity, sellAmount, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType)
+        VALUES (@clientId, @productId, @quantity, @sellAmount, @statusOfTransaction, @paymentType, @pendingAmount, @paidAmount, @transactionType)
+      `)
+
+      const insertMany = db.transaction((rows) => {
+        for (const row of rows) {
+          stmt.run({
+            clientId: row.clientId || 0,
+            productId: row.productId || 0,
+            quantity: row.quantity || 0,
+            sellAmount: row.sellAmount || 0,
+            statusOfTransaction: row.statusOfTransaction || '',
+            paymentType: row.paymentType || '',
+            pendingAmount: row.pendingAmount || 0,
+            paidAmount: row.paidAmount || 0,
+            transactionType: row.transactionType || ''
+          })
+          count++
+        }
+      })
+      insertMany(rows)
+    }
+
+    return { success: true, tableName, count }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('exportExcel', async (_, { tableName, savePath }) => {
+  try {
+    let rows = []
+    if (tableName === 'clients') {
+      rows = db.prepare(`SELECT * FROM clients`).all()
+    }
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, tableName)
+
+    XLSX.writeFile(workbook, savePath)
+    return { success: true, savePath }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
 })
 
 db.exec(`

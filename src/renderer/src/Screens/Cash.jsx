@@ -1,6 +1,6 @@
 /* eslint-disable prettier/prettier */
+/* eslint-disable no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable prettier/prettier */
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Info } from 'lucide-react'
 import Loader from '../components/Loader'

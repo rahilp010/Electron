@@ -1,6 +1,6 @@
 /* eslint-disable prettier/prettier */
+/* eslint-disable no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable prettier/prettier */
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Info, Import, FileUp } from 'lucide-react'
 import Loader from '../components/Loader'
@@ -254,13 +254,9 @@ const Bank = () => {
       <div className="flex justify-between mt-5 pb-2 items-center">
         <p className="text-3xl font-light mx-7">Bank Receipt</p>
         <div className="mx-7 flex gap-2">
-          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm">
+          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105 cursor-pointer">
             <Import size={16} />
             <p className="text-sm">Import</p>
-          </div>
-          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm">
-            <FileUp size={16} />
-            <p className="text-sm">Export</p>
           </div>
           <div
             className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"

@@ -1,4 +1,5 @@
 /* eslint-disable prettier/prettier */
+/* eslint-disable no-unused-vars */
 import 'rsuite/dist/rsuite-no-reset.min.css'
 import scanner from '../../assets/scanner.png'
 import { useRef, useState, useEffect } from 'react'
@@ -130,7 +131,7 @@ const Authentication = () => {
             </div>
           ) : (
             <div className="flex flex-col items-center">
-              <img src={scanner} alt="scanner" className="w-48 h-48 object-cover" />
+              <img src={scanner} alt="scanner" className="w-48 h-48 object-cover bg-blend-screen" />
               <p className="text-xl font-light mt-5 text-shadow-2xs">Tap to Show QR Code</p>
             </div>
           )}
@@ -140,7 +141,11 @@ const Authentication = () => {
           onClick={!showQRCode ? generateChallenge : undefined}
         >
           <div className="flex flex-col items-center">
-            <img src={passcode} alt="passcode" className="w-[184px] h-[188px] object-cover rounded-4xl" />
+            <img
+              src={passcode}
+              alt="passcode"
+              className="w-[184px] h-[188px] object-cover rounded-4xl"
+            />
             <p className="text-xl font-light mt-5 text-shadow-2xs">Tap to Add PassCode</p>
           </div>
         </div>

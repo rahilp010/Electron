@@ -3,12 +3,11 @@ import { join, dirname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { fileURLToPath } from 'url'
 import icon from '../../resources/icon.png?asset'
+import '../renderer/src/API/dbHandlers.js'
 
 // Get directory name in ES module
 const currentFilename = fileURLToPath(import.meta.url)
 const currentDirname = dirname(currentFilename)
-
-import '../renderer/src/API/dbHandlers.js'
 
 function createWindow() {
   // Create the browser window.

@@ -15,6 +15,7 @@ import Bank from './Screens/Bank.jsx'
 import Cash from './Screens/Cash.jsx'
 import LedgerReport from './Screens/LedgerReport.jsx'
 import Authentication from './components/UI/Authentication.jsx'
+import Analytics from './Screens/Analytics.jsx'
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
               <Route path="/bank" element={<Bank />} />
               <Route path="/cash" element={<Cash />} />
               <Route path="/ledger" element={<LedgerReport />} />
+              <Route path="/analytics" element={<Analytics />} />
               <Route path="/auth" element={<Authentication />} />
             </Routes>
           </KeyBind>

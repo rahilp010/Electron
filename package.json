@@ -23,8 +23,9 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.1",
-    "@mui/material": "^7.3.1",
+    "@mui/material": "^7.3.2",
     "@mui/styled-engine-sc": "^7.3.1",
+    "@mui/x-charts": "^8.11.1",
     "@reduxjs/toolkit": "^2.8.2",
     "@tailwindcss/vite": "^4.1.12",
     "axios": "^1.11.0",
@@ -33,13 +34,15 @@
     "lucide": "^0.542.0",
     "lucide-react": "^0.542.0",
     "motion": "^12.23.12",
+    "node-cron": "^4.2.1",
     "qr-code-styling": "^1.9.2",
     "react-redux": "^9.2.0",
     "react-router-dom": "^7.8.2",
     "react-toastify": "^11.0.5",
     "rsuite": "^5.83.3",
     "styled-components": "^6.1.19",
-    "toastify": "^2.0.1"
+    "toastify": "^2.0.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config": "^2.0.0",

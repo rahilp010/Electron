@@ -29,7 +29,13 @@ contextBridge.exposeInMainWorld('api', {
 
   // Cash receipt methods
   getRecentCashReceipts: () => ipcRenderer.invoke('getRecentCashReceipts'),
-  createCashReceipt: (cashReceipt) => ipcRenderer.invoke('createCashReceipt', cashReceipt)
+  createCashReceipt: (cashReceipt) => ipcRenderer.invoke('createCashReceipt', cashReceipt),
+
+  // Excel Import
+  importExcel: (filePath, tableName) => ipcRenderer.invoke('importExcel', filePath, tableName),
+
+  // (Optional) Excel Export
+  exportExcel: (tableName, savePath) => ipcRenderer.invoke('exportExcel', tableName, savePath)
 })
 
 // Version information

@@ -1,3 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react/prop-types */
+/* eslint-disable no-unused-vars */
 import React, { useCallback, useEffect, useState } from 'react'
 import { setClients, updateClient } from '../../app/features/electronSlice'
 import { CircleX } from 'lucide-react'
@@ -74,8 +77,8 @@ const ClientModal = ({
 
       try {
         // Validation
-        if (!client.clientName || !client.phoneNo) {
-          toast.error('Please enter details')
+        if (!client.clientName) {
+          toast.error('Please enter client name')
           return
         }
 
