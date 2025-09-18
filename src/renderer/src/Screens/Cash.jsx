@@ -2,7 +2,7 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useState, useCallback } from 'react'
-import { Plus, Info } from 'lucide-react'
+import { Plus, Info, Trash, Edit, Import, X } from 'lucide-react'
 import Loader from '../components/Loader'
 import { useNavigate } from 'react-router-dom'
 import 'rsuite/dist/rsuite-no-reset.min.css'
@@ -21,6 +21,8 @@ const Cash = () => {
   // Loading states
   const [showLoader, setShowLoader] = useState(false)
   const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false)
+  const [isUpdatingReceipt, setIsUpdatingReceipt] = useState(false)
+  const [selectedReceiptId, setSelectedReceiptId] = useState(null)
 
   // Form state
   const [cashReceipt, setCashReceipt] = useState({
@@ -80,10 +82,11 @@ const Cash = () => {
       const receipts = await window.api.getRecentCashReceipts()
       setRecentReceipts(receipts)
 
-      if (receipts.length > 0) {
+      // Only set next srNo if we're not updating
+      if (!isUpdatingReceipt && receipts.length > 0) {
         const maxSrNo = Math.max(...receipts.map((r) => Number(r.srNo) || 0))
         setCashReceipt((prev) => ({ ...prev, srNo: String(maxSrNo + 1) }))
-      } else {
+      } else if (!isUpdatingReceipt) {
         // If no receipts exist, start with 1
         setCashReceipt((prev) => ({ ...prev, srNo: '1' }))
       }
@@ -183,7 +186,7 @@ const Cash = () => {
           srNo: cashReceipt.srNo,
           type: cashReceipt.type,
           cash: cashReceipt.cash,
-          date: new Date(cashReceipt.date).toLocaleDateString(),
+          date: new Date(cashReceipt.date).toISOString(),
           party: Number(cashReceipt.party),
           amount: parseFloat(cashReceipt.amount) || 0,
           description: cashReceipt.description
@@ -191,18 +194,28 @@ const Cash = () => {
 
         // Use the window.api if available, otherwise use a fallback API call
         let response
-        if (window.api && window.api.createCashReceipt) {
-          response = await window.api.createCashReceipt(cashReceiptData)
-          dispatch(createCashReceipt(cashReceiptData))
+        if (isUpdatingReceipt && selectedReceiptId) {
+          // Update existing receipt
+          if (window.api && window.api.updateCashReceipt) {
+            response = await window.api.updateCashReceipt({
+              id: selectedReceiptId,
+              ...cashReceiptData
+            })
+          } else {
+            toast.error('Failed to update cash receipt')
+          }
+          toast.success('Cash receipt updated successfully')
         } else {
-          // Fallback API call - you'll need to implement this based on your API structure
-          // response = await bankReceiptApi.create(bankReceiptData)
-          console.log('Cash receipt data:', cashReceiptData)
-          // Simulate success for now
-          response = { success: true, data: cashReceiptData }
+          // Create new receipt
+          if (window.api && window.api.createCashReceipt) {
+            response = await window.api.createCashReceipt(cashReceiptData)
+            dispatch(createCashReceipt(cashReceiptData))
+          } else {
+            toast.error('Failed to create cash receipt')
+          }
+          toast.success('Cash receipt added successfully')
         }
 
-        toast.success('Cash receipt added successfully')
         fetchRecentReceipts()
         // Clear form after successful submission
         handleClearForm()
@@ -213,20 +226,33 @@ const Cash = () => {
         setIsSubmittingTransaction(false)
       }
     },
-    [cashReceipt, isSubmittingTransaction]
+    [cashReceipt, isSubmittingTransaction, isUpdatingReceipt, selectedReceiptId]
   )
 
   const handleClearForm = () => {
-    setCashReceipt((prev) => ({
-      srNo: String(Number(prev.srNo) + 1),
+    // Reset to create mode
+    setIsUpdatingReceipt(false)
+    setSelectedReceiptId(null)
+
+    // Get next serial number
+    const maxSrNo =
+      recentReceipts.length > 0 ? Math.max(...recentReceipts.map((r) => Number(r.srNo) || 0)) : 0
+
+    setCashReceipt({
+      srNo: String(maxSrNo + 1),
       type: 'Receipt',
       cash: 'Cash Account',
       date: new Date(),
       party: '',
       amount: '',
       description: ''
-    }))
+    })
     setErrors({})
+  }
+
+  const handleCancelUpdate = () => {
+    handleClearForm()
+    toast.info('Update cancelled')
   }
 
   // Prepare client options for SelectPicker
@@ -235,6 +261,59 @@ const Cash = () => {
     value: client.id
   }))
 
+  const calculateRunningBalances = (receipts) => {
+    let balance = 0
+    const balances = []
+
+    for (let i = receipts.length - 1; i >= 0; i--) {
+      const receipt = receipts[i]
+      const amount = getAmount(receipt.type, receipt.amount)
+      balance += amount
+      balances[i] = balance
+    }
+
+    return balances
+  }
+
+  const receipts = recentReceipts
+  const balances = calculateRunningBalances(receipts)
+
+  const handleUpdateReceipt = (receipt) => {
+    setCashReceipt({
+      srNo: receipt.srNo || '',
+      type: receipt.type || 'Receipt',
+      cash: receipt.cash || 'Cash Account',
+      date: receipt.date ? new Date(receipt.date) : new Date(),
+      party: receipt.party ? Number(receipt.party) : '',
+      amount: receipt.amount ? String(receipt.amount) : '',
+      description: receipt.description || ''
+    })
+
+    setIsUpdatingReceipt(true)
+    setSelectedReceiptId(receipt.id)
+    setErrors({})
+
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    toast.info(`Receipt #${receipt.srNo} loaded for editing`)
+  }
+
+  const handleDeleteReceipt = useCallback(
+    async (id) => {
+      if (!window.confirm('Are you sure you want to delete this purchase?')) return
+
+      try {
+        const response = await window.api.deleteCashReceipt(id)
+        console.log(response)
+        await fetchRecentReceipts()
+        toast.success('Purchase deleted successfully')
+      } catch (error) {
+        toast.error('Failed to delete purchase: ' + error.message)
+      }
+    },
+    [fetchRecentReceipts]
+  )
+
   return (
     <div className="select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-auto customScrollbar">
       <div className="w-full sticky top-0 z-10">
@@ -242,8 +321,20 @@ const Cash = () => {
       </div>
 
       <div className="flex justify-between mt-5 pb-2 items-center">
-        <p className="text-3xl font-light mx-7">Cash Receipt</p>
+        <div className="flex items-center">
+          <p className="text-3xl font-light mx-7">Cash Receipt</p>
+          {isUpdatingReceipt && (
+            <div className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-2 rounded-full text-sm">
+              <Edit size={14} />
+              <span>Editing Receipt #{cashReceipt.srNo}</span>
+            </div>
+          )}
+        </div>
         <div className="mx-7 flex gap-2">
+          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105 cursor-pointer">
+            <Import size={16} />
+            <p className="text-sm">Import</p>
+          </div>
           <div
             className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
             onClick={() => navigate('/ledger')}
@@ -346,6 +437,8 @@ const Cash = () => {
                 style={{ width: 250 }}
                 value={cashReceipt.date}
                 onChange={(value) => handleInputChange('date', value)}
+                oneTap
+                format="dd-MM-yyyy"
               />
               {errors.date && <p className="text-red-500 text-xs mt-1">{errors.date}</p>}
             </div>
@@ -398,19 +491,30 @@ const Cash = () => {
           </div>
 
           <div className="flex justify-end gap-3 mx-5 my-5">
+            {isUpdatingReceipt && (
+              <button
+                type="button"
+                onClick={handleCancelUpdate}
+                className="text-gray-600 bg-gray-200 px-6 py-2 rounded-lg hover:bg-gray-300 transition-all duration-300 cursor-pointer flex items-center gap-2"
+              >
+                <X size={16} />
+                Cancel
+              </button>
+            )}
             <button
               type="button"
               onClick={handleClearForm}
               className="text-white bg-gray-600 px-8 py-2 rounded-lg hover:bg-gray-700 transition-all duration-300 cursor-pointer"
             >
-              Clear
+              {isUpdatingReceipt ? 'Reset' : 'Clear'}
             </button>
             <button
               type="submit"
               disabled={isSubmittingTransaction}
-              className="text-white bg-black px-8 py-2 rounded-lg hover:bg-black/80 transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-white bg-black px-8 py-2 rounded-lg hover:bg-black/80 transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isSubmittingTransaction ? 'Saving...' : 'Save'}
+              {isUpdatingReceipt && <Edit size={16} />}
+              {isSubmittingTransaction ? 'Saving...' : isUpdatingReceipt ? 'Updating...' : 'Save'}
             </button>
           </div>
         </div>
@@ -418,7 +522,12 @@ const Cash = () => {
 
       {/* Recent Receipts Section */}
       <div className="mx-7 my-10">
-        <h2 className="text-xl font-light mb-4">Last 3 Receipts</h2>
+        <h2 className="text-xl font-light mb-4">
+          Last 3 Receipts{' '}
+          {isUpdatingReceipt && (
+            <span className="text-sm text-blue-600">(Click any row to edit)</span>
+          )}
+        </h2>
         <div className="bg-gray-50 rounded-xl shadow-sm overflow-x-auto customScrollbar max-h-screen ">
           <table className="min-w-max border-collapse text-sm text-center">
             <thead className="bg-gray-100 border-b">
@@ -447,6 +556,9 @@ const Cash = () => {
                 <th className="px-6 py-3 font-medium border-r border-gray-300 w-[350px] text-gray-600">
                   Description
                 </th>
+                <th className="px-6 py-3 font-medium border-r border-gray-300 w-[100px] text-gray-600">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody className={`text-sm divide-y divide-gray-200`}>
@@ -459,23 +571,42 @@ const Cash = () => {
               ) : (
                 recentReceipts.slice(0, 3).map((receipt, idx) => (
                   <tr
-                    key={idx}
-                    className={`transition ${idx === recentReceipts.length - 1 ? 'border-b-0' : ''} ${receipt.type === 'Receipt' ? 'bg-blue-100' : 'bg-red-100'}`}
+                    key={receipt.id || idx}
+                    className={`transition cursor-pointer hover:shadow-md ${
+                      idx === recentReceipts.length - 1 ? 'border-b-0' : ''
+                    } ${
+                      receipt.type === 'Receipt'
+                        ? 'bg-blue-50 hover:bg-blue-100'
+                        : 'bg-red-50 hover:bg-red-100'
+                    } ${selectedReceiptId === receipt.id ? 'ring-2 ring-blue-500' : ''}`}
+                    onClick={() => handleUpdateReceipt(receipt)}
+                    title="Click to edit this receipt"
                   >
                     <td
-                      className={`px-6 py-3 w-[100px] sticky left-0 z-8 ${receipt.type === 'Receipt' ? 'bg-blue-100' : 'bg-red-100'}`}
+                      className={`px-6 py-3 w-[100px] sticky left-0 z-8 ${
+                        receipt.type === 'Receipt'
+                          ? 'bg-blue-50 text-blue-500 font-bold hover:bg-blue-100'
+                          : 'bg-red-50 text-red-500 font-bold hover:bg-red-100'
+                      } ${selectedReceiptId === receipt.id ? 'ring-2 ring-blue-500' : ''}`}
                     >
                       {receipt.srNo}
                     </td>
                     <td className="px-6 py-3 w-[100px]">
-                      {receipt.date}
-                      {console.log(receipt.date)}
+                      {receipt.date ? new Date(receipt.date).toLocaleDateString('en-GB') : ''}
                     </td>
                     <td className="px-6 py-3">{receipt.cash}</td>
                     <td className="px-6 py-3">{getClientName(Number(receipt.party))}</td>
-                    <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
-                    <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
-                    <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
+                    {receipt.type === 'Payment' ? (
+                      <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
+                    ) : (
+                      <td className="px-6 py-3">-</td>
+                    )}
+                    {receipt.type === 'Receipt' ? (
+                      <td className="px-6 py-3">₹ {toThousands(receipt.amount)}</td>
+                    ) : (
+                      <td className="px-6 py-3">-</td>
+                    )}
+                    <td className="px-6 py-3">₹ {toThousands(balances[idx])}</td>
                     <td className="px-6 py-3 max-w-[350px] truncate">
                       <Whisper
                         trigger="hover"
@@ -491,6 +622,18 @@ const Cash = () => {
                       >
                         {receipt.description}
                       </Whisper>
+                    </td>
+                    <td className="px-6 py-3">
+                      <button
+                        className="text-red-500 p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation() // prevent triggering row click
+                          handleDeleteReceipt(receipt?.id)
+                        }}
+                        title="Delete product"
+                      >
+                        <Trash size={12} />
+                      </button>
                     </td>
                   </tr>
                 ))

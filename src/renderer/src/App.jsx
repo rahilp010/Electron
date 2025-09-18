@@ -1,7 +1,7 @@
 // import Versions from './components/Versions'
 import { store } from './app/store.js'
 import { Provider } from 'react-redux'
-import { ToastContainer } from 'react-toastify'
+import { ToastContainer, Zoom } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import ClientList from './Screens/ClientList'
 import Transaction from './Screens/Transaction'
@@ -27,7 +27,7 @@ function App() {
       <Provider store={store}>
         <ToastContainer
           position="top-right"
-          autoClose={5000}
+          autoClose={3000}
           hideProgressBar={false}
           newestOnTop={false}
           closeOnClick
@@ -35,6 +35,8 @@ function App() {
           pauseOnFocusLoss
           draggable
           pauseOnHover
+          theme="dark"
+          transition={Zoom}
         />
         <HashRouter>
           <KeyBind>

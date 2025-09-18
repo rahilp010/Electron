@@ -11,6 +11,7 @@ import { toast } from 'react-toastify'
 import Navbar from '../components/UI/Navbar'
 import { DateRangePicker, Input, InputGroup, SelectPicker, Tooltip, Whisper } from 'rsuite'
 import SearchIcon from '@mui/icons-material/Search'
+import PrintIcon from '@mui/icons-material/Print'
 
 const LedgerReport = () => {
   const dispatch = useDispatch()
@@ -187,7 +188,7 @@ const LedgerReport = () => {
               </InputGroup.Button>
             </InputGroup>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <DateRangePicker
               format="dd/MM/yyyy"
               character=" ~ "
@@ -206,6 +207,9 @@ const LedgerReport = () => {
               placement="bottomEnd"
               container={() => document.body}
             />
+            <div className="p-1 rounded-lg bg-black hover:bg-black/80 transition-all duration-300 hover:scale-105 cursor-pointer">
+              <PrintIcon className="p-0.5 text-white" />
+            </div>
           </div>
         </div>
 
@@ -227,8 +231,8 @@ const LedgerReport = () => {
             </thead>
             <tbody className="text-sm divide-y divide-gray-200">
               {receipts.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-4 text-center text-gray-400">
+                <tr className="h-96">
+                  <td colSpan={8} className="px-6 py-4 text-xl text-center text-gray-400">
                     No receipts found
                   </td>
                 </tr>

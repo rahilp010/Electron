@@ -1,3 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable no-undef */
+/* eslint-disable no-case-declarations */
+/* eslint-disable no-unused-vars */
+/* eslint-disable react/prop-types */
 import React, { useCallback, useEffect, useState } from 'react'
 import { setProducts, updateProduct } from '../../app/features/electronSlice'
 import { CircleX } from 'lucide-react'
@@ -150,7 +155,6 @@ const ProductModal = ({
           console.log('Product created:', response)
           dispatch(setProducts(response))
           toast.success('Product added successfully')
-          fetchProducts()
         } else {
           const response = await window.api.updateProduct({
             id: safeProduct.id,
@@ -158,9 +162,9 @@ const ProductModal = ({
           })
           dispatch(updateProduct(response))
           toast.success('Product updated successfully')
-          fetchProducts()
         }
 
+        fetchProducts()
         setShowModal(false)
       } catch (error) {
         console.error('Transaction Submit Error:', error)
@@ -182,7 +186,7 @@ const ProductModal = ({
     ]
   )
 
-  const selectedProduct = products.find((p) => p.id === product.productId)
+  const selectedProduct = products.find((p) => p?.id === product?.productId)
 
   // Calculate available stock for validation
   const getAvailableStock = () => {

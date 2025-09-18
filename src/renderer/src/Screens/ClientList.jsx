@@ -303,6 +303,8 @@ const ClientList = () => {
     fetchClients()
   }, [fetchClients])
 
+  console.log(clients)
+
   return (
     <div className="select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-hidden relative">
       <div className="w-full sticky top-0 z-10">

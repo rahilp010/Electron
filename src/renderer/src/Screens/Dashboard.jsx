@@ -9,6 +9,10 @@ import { useNavigate } from 'react-router-dom'
 
 const Dashboard = () => {
   const navigate = useNavigate()
+
+  const date = new Date()
+  const year = date.getFullYear()
+  const fullMonth = date.toLocaleString('default', { month: 'long' })
   return (
     <div className="w-full">
       <div className="overflow-y-auto h-screen customScrollbar">
@@ -124,14 +128,16 @@ const Dashboard = () => {
 
             {/* Calendar */}
             <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
-              <h3 className="font-semibold text-gray-700">September 2024</h3>
+              <h3 className="font-semibold text-gray-700">
+                {fullMonth} {year}
+              </h3>
               <div className="mt-4 flex flex-col space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Weekly Team Sync</span>
+                  <span className="font-medium">Last BackUp</span>
                   <span className="text-gray-500 text-sm">Sep 13, 10:00 AM</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Onboarding Session</span>
+                  <span className="font-medium">Next BackUp</span>
                   <span className="text-gray-500 text-sm">Sep 15, 09:00 AM</span>
                 </div>
               </div>

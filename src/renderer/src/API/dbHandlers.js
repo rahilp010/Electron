@@ -1,6 +1,9 @@
 import db from './db.js'
 import { ipcMain } from 'electron'
 import * as XLSX from 'xlsx'
+import toast from 'react-toastify'
+import fs from 'fs'
+import PDFDocument from 'pdfkit'
 
 const toInt = (val, fallback = 0) => {
   const n = parseInt(val, 10)
@@ -228,28 +231,41 @@ ipcMain.handle('createTransaction', (event, transaction) => {
   // Check if product exists and has sufficient quantity
   const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId)
   if (!product) {
-    throw new Error('Product not found')
+    toast.error('Product not Found')
+    return
   }
 
-  if (product.quantity < quantity) {
-    throw new Error('Insufficient product quantity')
+  if (transactionType === 'sales' && product.quantity < quantity) {
+    toast.error('Insufficient product quantity')
+    return
   }
 
   // Fix: sellAmount is already the total amount, don't multiply by quantity
-  if (paymentType === 'partial') {
-    if ((pendingAmount || 0) + (paidAmount || 0) !== sellAmount) {
-      throw new Error('Pending amount and paid amount should be equal to total selling amount')
+  if (transactionType === 'sales' && paymentType === 'partial') {
+    if ((pendingAmount || 0) + (paidAmount || 0) !== sellAmount * quantity) {
+      toast.error('Pending amount and paid amount should be equal to total selling amount')
+      return
     }
   }
 
   // Check if client exists
   const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId)
   if (!client) {
-    throw new Error('Client not found')
+    toast.error('Client not Found')
+    return
   }
 
   // Start database transaction
   const dbTransaction = db.transaction(() => {
+    let totalTransactionAmount = 0
+
+    if (transactionType === 'sales') {
+      totalTransactionAmount = sellAmount * quantity
+    } else if (transactionType === 'purchase') {
+      // ✅ For purchase, always calculate from product.price
+      totalTransactionAmount = product.price * quantity
+    }
+
     // 1. Create the transaction record
     const stmt = db.prepare(`
             INSERT INTO transactions (clientId, productId, quantity, sellAmount, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType)
@@ -267,36 +283,62 @@ ipcMain.handle('createTransaction', (event, transaction) => {
       transactionType
     )
 
-    // 2. Update product quantity (reduce by sold quantity)
-    const productStmt = db.prepare(`
+    if (transactionType === 'sales') {
+      // 2. Update product quantity (reduce by sold quantity)
+      const productStmt = db.prepare(`
             UPDATE products
             SET quantity = quantity - ?, updatedAt = CURRENT_TIMESTAMP
             WHERE id = ?
         `)
-    productStmt.run(quantity, productId)
+      productStmt.run(quantity, productId)
+    } else if (transactionType === 'purchase') {
+      // 2. Update product quantity (reduce by sold quantity)
+      const productStmt = db.prepare(`
+            UPDATE products
+            SET quantity = quantity + ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `)
+      productStmt.run(quantity, productId)
+    }
 
     // 3. Update client amounts based on payment type and transaction status
     let clientPendingIncrease = 0
     let clientPaidIncrease = 0
-    const totalTransactionAmount = sellAmount
+    let clientPendingFromOursIncrease = 0
 
-    if (paymentType === 'partial') {
-      clientPendingIncrease = pendingAmount || 0
-      clientPaidIncrease = paidAmount || 0
-    } else if (statusOfTransaction === 'completed') {
-      clientPaidIncrease = totalTransactionAmount
-    } else {
-      clientPendingIncrease = totalTransactionAmount
+    if (transactionType === 'sales') {
+      if (paymentType === 'partial') {
+        clientPendingIncrease = pendingAmount || 0
+        clientPaidIncrease = paidAmount || 0
+      } else if (statusOfTransaction === 'completed') {
+        clientPaidIncrease = totalTransactionAmount
+      } else {
+        clientPendingIncrease = totalTransactionAmount
+      }
+    } else if (transactionType === 'purchase') {
+      if (paymentType === 'partial') {
+        clientPendingFromOursIncrease = pendingAmount || 0
+      } else if (statusOfTransaction === 'completed') {
+        clientPendingFromOursIncrease = totalTransactionAmount
+      } else {
+        clientPendingFromOursIncrease = totalTransactionAmount
+      }
     }
 
-    const clientStmt = db.prepare(`
+    if (transactionType === 'sales') {
+      const clientStmt = db.prepare(`
             UPDATE clients
             SET pendingAmount = pendingAmount + ?, 
                 paidAmount = paidAmount + ?,
                 updatedAt = CURRENT_TIMESTAMP
             WHERE id = ?
         `)
-    clientStmt.run(clientPendingIncrease, clientPaidIncrease, clientId)
+      clientStmt.run(clientPendingIncrease, clientPaidIncrease, clientId)
+    } else if (transactionType === 'purchase') {
+      const clientStmt = db.prepare(`
+        UPDATE clients SET pendingFromOurs = pendingFromOurs + ? WHERE id = ?`)
+      clientStmt.run(clientPendingFromOursIncrease, clientId)
+    }
 
     // 4. Get the created transaction with all details
     const createdTransaction = db
@@ -330,62 +372,87 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
       const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id)
       if (!transaction) throw new Error('Transaction not found')
 
+      // Fetch old product (for rollback math) and new product (for applying new)
+      const newProduct = db.prepare('SELECT * FROM products WHERE id = ?').get(productId)
+
       // Fetch client and product
       const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId)
+      if (!client || !newProduct) throw new Error('Client or Product not found')
       const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId)
       if (!client || !product) throw new Error('Client or Product not found')
 
-      // Rollback previous stock
-      db.prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?').run(
-        transaction.quantity,
-        transaction.productId
-      )
+      // Rollback stock changes from previous transaction
+      if (transaction.transactionType === 'sales') {
+        // Add back the stock that was deducted
+        db.prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?').run(
+          transaction.quantity,
+          transaction.productId
+        )
+      } else if (transaction.transactionType === 'purchase') {
+        // Remove the stock that was added
+        db.prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?').run(
+          transaction.quantity,
+          transaction.productId
+        )
+      }
 
-      // Calculate previous total
-      const previousTotalAmount = transaction.sellAmount * transaction.quantity
+      // Calculate previous total amount
+      let previousTotalAmount =
+        transaction.transactionType === 'sales'
+          ? transaction.sellAmount * transaction.quantity
+          : product.price * transaction.quantity
 
-      // Rollback client amounts
-      if (transaction.paymentType === 'partial') {
-        db.prepare(
-          `
-            UPDATE clients
+      // Rollback client amounts from previous transaction
+      if (transaction.transactionType === 'sales') {
+        if (transaction.paymentType === 'partial') {
+          db.prepare(
+            `UPDATE clients
             SET pendingAmount = pendingAmount - ?, 
                 paidAmount = paidAmount - ?,
                 updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `
-        ).run(transaction.pendingAmount, transaction.paidAmount, transaction.clientId)
-      } else if (transaction.statusOfTransaction === 'completed') {
-        db.prepare(
-          `
-            UPDATE clients
-            SET paidAmount = paidAmount - ?,
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `
-        ).run(previousTotalAmount, transaction.clientId)
-      } else {
-        db.prepare(
-          `
-            UPDATE clients
-            SET pendingAmount = pendingAmount - ?,
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `
-        ).run(previousTotalAmount, transaction.clientId)
+            WHERE id = ?`
+          ).run(transaction.pendingAmount, transaction.paidAmount, transaction.clientId)
+        } else if (transaction.statusOfTransaction === 'completed') {
+          db.prepare(
+            `UPDATE clients
+            SET paidAmount = paidAmount - ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`
+          ).run(previousTotalAmount, transaction.clientId)
+        } else {
+          // Previous status was pending
+          db.prepare(
+            `UPDATE clients
+            SET pendingAmount = pendingAmount - ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`
+          ).run(previousTotalAmount, transaction.clientId)
+        }
+      } else if (transaction.transactionType === 'purchase') {
+        // Rollback purchase amounts
+        if (transaction.paymentType === 'partial') {
+          // For partial: rollback only the pending amount that was added
+          db.prepare(
+            `UPDATE clients
+            SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`
+          ).run(transaction.pendingAmount, transaction.clientId)
+        } else if (transaction.statusOfTransaction === 'pending') {
+          // Previous status was pending: remove the full amount from pendingFromOurs
+          db.prepare(
+            `UPDATE clients
+            SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`
+          ).run(previousTotalAmount, transaction.clientId)
+        }
+        // If previous status was 'completed', nothing was in pendingFromOurs, so no rollback needed
       }
 
-      // Apply new values
-      const newTotalAmount = sellAmount * quantity
-
+      // Update the transaction record
       db.prepare(
-        `
-          UPDATE transactions
-          SET clientId = ?, productId = ?, quantity = ?, sellAmount = ?, 
-              statusOfTransaction = ?, paymentType = ?, 
-              pendingAmount = ?, paidAmount = ?, transactionType = ?, updatedAt = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `
+        `UPDATE transactions
+        SET clientId = ?, productId = ?, quantity = ?, sellAmount = ?, 
+            statusOfTransaction = ?, paymentType = ?, 
+            pendingAmount = ?, paidAmount = ?, transactionType = ?, updatedAt = CURRENT_TIMESTAMP
+        WHERE id = ?`
       ).run(
         clientId,
         productId,
@@ -399,40 +466,71 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
         id
       )
 
-      // Deduct new stock
-      db.prepare(
-        'UPDATE products SET quantity = quantity - ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?'
-      ).run(quantity, productId)
+      // Apply new stock changes
+      if (transactionType === 'sales') {
+        // Deduct stock for sales
+        db.prepare(
+          'UPDATE products SET quantity = quantity - ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?'
+        ).run(quantity, productId)
+      } else if (transactionType === 'purchase') {
+        // Add stock for purchase
+        db.prepare(
+          'UPDATE products SET quantity = quantity + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?'
+        ).run(quantity, productId)
+      }
 
-      // Update client amounts with new values
-      if (paymentType === 'partial') {
-        db.prepare(
-          `
-            UPDATE clients
+      // Apply new client amount changes
+      const newTotalAmount =
+        transactionType === 'sales'
+          ? (sellAmount || 0) * quantity
+          : (newProduct?.price || 0) * quantity
+
+      if (transactionType === 'sales') {
+        if (paymentType === 'partial') {
+          db.prepare(
+            `UPDATE clients
             SET pendingAmount = pendingAmount + ?, 
-                paidAmount = paidAmount + ?,
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `
-        ).run(pendingAmount, paidAmount, clientId)
-      } else if (statusOfTransaction === 'completed') {
-        db.prepare(
-          `
-            UPDATE clients
-            SET paidAmount = paidAmount + ?,
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `
-        ).run(newTotalAmount, clientId)
-      } else {
-        db.prepare(
-          `
-            UPDATE clients
-            SET pendingAmount = pendingAmount + ?,
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `
-        ).run(newTotalAmount, clientId)
+                paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`
+          ).run(pendingAmount, paidAmount, clientId)
+        } else if (statusOfTransaction === 'completed') {
+          db.prepare(
+            `UPDATE clients
+            SET paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`
+          ).run(newTotalAmount, clientId)
+        } else {
+          // Status is pending
+          db.prepare(
+            `UPDATE clients
+            SET pendingAmount = pendingAmount + ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`
+          ).run(newTotalAmount, clientId)
+        }
+      } else if (transactionType === 'purchase') {
+        // Apply new purchase amounts
+        if (paymentType === 'partial') {
+          // For partial: only add the pending amount to pendingFromOurs
+          db.prepare(
+            `UPDATE clients
+            SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`
+          ).run(pendingAmount, clientId)
+        } else if (statusOfTransaction === 'pending') {
+          // Status is pending: add full amount to pendingFromOurs
+          db.prepare(
+            `UPDATE clients
+            SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`
+          ).run(newTotalAmount, clientId)
+        } else if (statusOfTransaction === 'completed') {
+          // For completed: nothing goes to pendingFromOurs (payment is already made)
+          // db.prepare(
+          //   `UPDATE clients
+          //   SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
+          //   WHERE id = ?`
+          // ).run(newTotalAmount, clientId)
+        }
       }
 
       // Return updated transaction
@@ -459,46 +557,71 @@ ipcMain.handle('deleteTransaction', (event, transactionId) => {
       const product = db.prepare('SELECT * FROM products WHERE id = ?').get(transaction.productId)
 
       // Restore product stock
-      if (product) {
-        db.prepare(
-          `
-            UPDATE products 
-            SET quantity = quantity + ?, updatedAt = CURRENT_TIMESTAMP 
-            WHERE id = ?
-          `
-        ).run(transaction.quantity, transaction.productId)
+      if (transaction.transactionType === 'sales') {
+        if (product) {
+          db.prepare(
+            `UPDATE products 
+             SET quantity = quantity + ?, updatedAt = CURRENT_TIMESTAMP 
+             WHERE id = ?`
+          ).run(transaction.quantity, transaction.productId)
+        }
+      } else if (transaction.transactionType === 'purchase') {
+        if (product) {
+          db.prepare(
+            `UPDATE products 
+             SET quantity = quantity - ?, updatedAt = CURRENT_TIMESTAMP 
+             WHERE id = ?`
+          ).run(transaction.quantity, transaction.productId)
+        }
       }
 
       // Adjust client balances
       if (client) {
-        if (transaction.paymentType === 'partial') {
-          db.prepare(
-            `
-              UPDATE clients
-              SET pendingAmount = pendingAmount - ?, 
-                  paidAmount = paidAmount - ?, 
-                  updatedAt = CURRENT_TIMESTAMP
-              WHERE id = ?
-            `
-          ).run(transaction.pendingAmount, transaction.paidAmount, transaction.clientId)
-        } else if (transaction.statusOfTransaction === 'completed') {
-          db.prepare(
-            `
-              UPDATE clients
-              SET paidAmount = paidAmount - ?, 
-                  updatedAt = CURRENT_TIMESTAMP
-              WHERE id = ?
-            `
-          ).run(transaction.sellAmount * transaction.quantity, transaction.clientId)
-        } else {
-          db.prepare(
-            `
-              UPDATE clients
-              SET pendingAmount = pendingAmount - ?, 
-                  updatedAt = CURRENT_TIMESTAMP
-              WHERE id = ?
-            `
-          ).run(transaction.sellAmount * transaction.quantity, transaction.clientId)
+        let rollbackAmount =
+          transaction.transactionType === 'sales'
+            ? transaction.sellAmount * transaction.quantity
+            : product.price * transaction.quantity
+
+        if (transaction.transactionType === 'sales') {
+          if (transaction.paymentType === 'partial') {
+            db.prepare(
+              `UPDATE clients
+               SET pendingAmount = pendingAmount - ?, 
+                   paidAmount = paidAmount - ?, updatedAt = CURRENT_TIMESTAMP
+               WHERE id = ?`
+            ).run(transaction.pendingAmount, transaction.paidAmount, transaction.clientId)
+          } else if (transaction.statusOfTransaction === 'completed') {
+            db.prepare(
+              `UPDATE clients
+               SET paidAmount = paidAmount - ?, updatedAt = CURRENT_TIMESTAMP
+               WHERE id = ?`
+            ).run(rollbackAmount, transaction.clientId)
+          } else {
+            // Status was pending
+            db.prepare(
+              `UPDATE clients
+               SET pendingAmount = pendingAmount - ?, updatedAt = CURRENT_TIMESTAMP
+               WHERE id = ?`
+            ).run(rollbackAmount, transaction.clientId)
+          }
+        } else if (transaction.transactionType === 'purchase') {
+          // Handle purchase transaction rollback
+          if (transaction.paymentType === 'partial') {
+            // For partial: only subtract the pending amount that was actually added
+            db.prepare(
+              `UPDATE clients
+               SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
+               WHERE id = ?`
+            ).run(transaction.pendingAmount, transaction.clientId)
+          } else if (transaction.statusOfTransaction === 'pending') {
+            // For pending: subtract the full amount that was added
+            db.prepare(
+              `UPDATE clients
+               SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
+               WHERE id = ?`
+            ).run(rollbackAmount, transaction.clientId)
+          }
+          // For completed status: nothing was in pendingFromOurs, so no rollback needed
         }
       }
 
@@ -545,6 +668,36 @@ ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
   return tx()
 })
 
+ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
+  const { srNo, type, bank, date, party, amount, description } = bankReceipt
+
+  const formattedDate =
+    typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
+
+  const tx = db.transaction(() => {
+    const res = db
+      .prepare(
+        `
+      UPDATE bankReceipts
+        SET srNo = ?, type = ?, bank = ?, date = ?, party = ?, amount = ?, description = ?
+        WHERE srNo = ?`
+      )
+      .run(srNo, type, bank, formattedDate, party, amount, description, srNo)
+    return res
+  })
+  return tx()
+})
+
+ipcMain.handle('deleteBankReceipt', (event, bankReceiptId) => {
+  try {
+    const dbBankReceipt = db.prepare('DELETE FROM bankReceipts WHERE id = ?').run(bankReceiptId)
+    return { success: true, data: dbBankReceipt }
+  } catch (err) {
+    console.error('deleteBankReceipt error:', err)
+    throw new Error(err.message || 'Failed to delete bank receipt')
+  }
+})
+
 // -------- Cash Receipts --------
 
 ipcMain.handle('getRecentCashReceipts', async () => {
@@ -571,6 +724,36 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
   return tx()
 })
 
+ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
+  const { srNo, type, cash, date, party, amount, description } = cashReceipt
+
+  const formattedDate =
+    typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
+
+  const tx = db.transaction(() => {
+    const res = db
+      .prepare(
+        `
+      UPDATE cashReceipts
+        SET srNo = ?, type = ?, cash = ?, date = ?, party = ?, amount = ?, description = ?
+        WHERE srNo = ?`
+      )
+      .run(srNo, type, cash, formattedDate, party, amount, description, srNo)
+    return res
+  })
+  return tx()
+})
+
+ipcMain.handle('deleteCashReceipt', (event, cashReceiptId) => {
+  try {
+    const dbCashReceipt = db.prepare('DELETE FROM cashReceipts WHERE id = ?').run(cashReceiptId)
+    return { success: true, data: dbCashReceipt }
+  } catch (err) {
+    console.error('deleteCashReceipt error:', err)
+    throw new Error(err.message || 'Failed to delete cash receipt')
+  }
+})
+
 // -------- Excel Import --------
 ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
   try {
@@ -591,7 +774,7 @@ ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
         for (const row of rows) {
           stmt.run({
             clientName: row.clientName || '',
-            phoneNo: row.phoneNo || '',
+            phoneNo: String(row.phoneNo).split('.')[0] || '',
             pendingAmount: row.pendingAmount || 0,
             paidAmount: row.paidAmount || 0,
             pendingFromOurs: row.pendingFromOurs || 0
@@ -660,6 +843,61 @@ ipcMain.handle('exportExcel', async (_, { tableName, savePath }) => {
 
     XLSX.writeFile(workbook, savePath)
     return { success: true, savePath }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('generate-pdf', async (_, { tableName, savePath }) => {
+  try {
+    const stmt = db.prepare(`SELECT * FROM ${tableName}`)
+    const rows = stmt.all()
+
+    const doc = new PDFDocument({ margin: 30, size: 'A4' })
+    doc.pipe(fs.createWriteStream(savePath))
+
+    // Title
+    doc.fontSize(18).text(`${tableName} Report`, { align: 'center' })
+    doc.moveDown()
+
+    if (rows.length === 0) {
+      doc.fontSize(12).text('No data found.')
+      doc.end()
+      return { success: true, path: savePath }
+    }
+
+    // Table setup
+    const columns = Object.keys(rows[0])
+    const colWidth = (doc.page.width - 60) / columns.length // equally divided
+
+    let y = doc.y + 10
+    const rowHeight = 20
+
+    // Draw header
+    columns.forEach((col, i) => {
+      doc.rect(30 + i * colWidth, y, colWidth, rowHeight).stroke()
+      doc.text(col, 35 + i * colWidth, y + 5, { width: colWidth - 5 })
+    })
+    y += rowHeight
+
+    // Draw rows
+    rows.forEach((row) => {
+      columns.forEach((col, i) => {
+        doc.rect(30 + i * colWidth, y, colWidth, rowHeight).stroke()
+        const text = row[col] !== null ? String(row[col]) : ''
+        doc.text(text, 35 + i * colWidth, y + 5, { width: colWidth - 5 })
+      })
+      y += rowHeight
+
+      // Handle page break
+      if (y > doc.page.height - 50) {
+        doc.addPage()
+        y = 50
+      }
+    })
+
+    doc.end()
+    return { success: true, path: savePath }
   } catch (err) {
     return { success: false, error: err.message }
   }

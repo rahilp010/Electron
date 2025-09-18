@@ -1,19 +1,188 @@
+/* eslint-disable react/display-name */
+/* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useCallback, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BrainCircuit, FileUp, Import, PenLine, Plus, Trash } from 'lucide-react'
-import Loader from '../Components/Loader'
+import { FileUp, Import, PenLine, Plus, Trash } from 'lucide-react'
+import Loader from '../components/Loader'
 import { useDispatch, useSelector } from 'react-redux'
 import { deleteProduct, setClients, setProducts } from '../app/features/electronSlice'
 import { toast } from 'react-toastify'
 import SearchIcon from '@mui/icons-material/Search'
 import { DateRangePicker, SelectPicker, InputGroup, Input } from 'rsuite'
-import ProductModal from '../Components/Modal/ProductModal'
-import Navbar from '../Components/UI/Navbar'
+import ProductModal from '../components/Modal/ProductModal'
+import Navbar from '../components/UI/Navbar'
+import ImportExcel from '../components/UI/ImportExcel'
+import * as XLSX from 'xlsx'
 
+// Constants
+const TABLE_HEADERS = [
+  { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
+  { key: 'date', label: 'Date', width: 'w-[150px]' },
+  { key: 'client', label: 'Client', width: 'w-[250px]' },
+  { key: 'product', label: 'Product', width: 'w-[250px]' },
+  { key: 'price', label: 'Price', width: 'w-[200px]' },
+  { key: 'quantity', label: 'Quantity', width: 'w-[200px]' },
+  { key: 'assetsType', label: 'Assets Type', width: 'w-[200px]' },
+  { key: 'totalWorth', label: 'Total Worth', width: 'w-[200px]' },
+  { key: 'action', label: 'Action', width: 'w-[150px]' }
+]
+
+const ASSETS_TYPE_OPTIONS = [
+  { label: 'Raw Material', value: 'Raw Material' },
+  { label: 'Finished Goods', value: 'Finished Goods' },
+  { label: 'Assets', value: 'Assets' }
+]
+
+// Utility functions
+const toThousands = (value) => {
+  if (!value || isNaN(value)) return '0'
+  return new Intl.NumberFormat('en-IN').format(Number(value))
+}
+
+const formatProductId = (id) => {
+  return id ? `RO${String(id).slice(-3).toUpperCase()}` : 'RO---'
+}
+
+const getClientName = (clientId, clients) => {
+  if (!clientId || clientId === 0 || clientId === '') return '-'
+  const client = clients.find((c) => String(c?.id) === String(clientId))
+  return client ? client.clientName : '-'
+}
+
+const getAssetsTypeStyle = (assetsType) => {
+  switch (assetsType) {
+    case 'Raw Material':
+      return 'text-[#166534] font-medium border border-[#8ffab5] bg-green-50'
+    case 'Finished Goods':
+      return 'border border-[#fef08a] text-[#854d0e] bg-yellow-50'
+    case 'Assets':
+      return 'border border-[#8a94fe] text-[#0e1a85] bg-blue-50'
+    default:
+      return 'border border-gray-300 text-gray-600 bg-gray-50'
+  }
+}
+
+// Memoized ProductRow component
+const ProductRow = memo(({ product, index, clients, onDelete, onEdit }) => {
+  const isEven = index % 2 === 0
+  const rowBg = isEven ? 'bg-white' : 'bg-[#f0f0f0]'
+  const totalWorth = (product?.price || 0) * (product?.quantity || 0)
+
+  return (
+    <tr className={`text-sm text-center ${rowBg}`}>
+      <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
+        {formatProductId(product?.id)}
+      </td>
+      <td className="px-4 py-3">{new Date(product?.createdAt).toLocaleDateString()}</td>
+      <td className="px-4 py-3 tracking-wide">{getClientName(product?.clientId, clients)}</td>
+      <td className="px-4 py-3 tracking-wide font-medium">
+        {String(product?.name || '').toUpperCase()}
+      </td>
+      <td className="px-4 py-3">
+        <div className="border border-[#67C090] text-[#568F87] bg-[#DDF4E7] p-1 px-2 rounded-full font-bold text-xs">
+          ₹ {toThousands(product?.price)}
+        </div>
+      </td>
+      <td className={`px-4 py-3 ${(product?.quantity || 0) <= 0 ? 'text-red-500' : ''}`}>
+        <span className="bg-gray-300 px-2 py-1 rounded-full text-xs font-medium">
+          {product?.quantity || 0}
+        </span>
+      </td>
+      <td className="px-4 py-3 tracking-wide">
+        <div
+          className={`p-1 px-2 rounded-full font-medium text-xs ${getAssetsTypeStyle(product?.assetsType)}`}
+        >
+          {product?.assetsType || '-'}
+        </div>
+      </td>
+      <td className="px-4 py-3 tracking-wide font-bold">₹ {toThousands(totalWorth)}</td>
+      <td className="w-28">
+        <div className="flex gap-3 justify-center items-center">
+          <button
+            className="text-red-500 p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+            onClick={() => onDelete(product?.id)}
+            title="Delete product"
+          >
+            <Trash size={12} />
+          </button>
+          <button
+            className="text-purple-500 p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+            onClick={() => onEdit(product)}
+            title="Edit product"
+          >
+            <PenLine size={12} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+})
+
+// Custom hook for product operations
+const useProductOperations = () => {
+  const dispatch = useDispatch()
+
+  const fetchProducts = useCallback(async () => {
+    try {
+      const response = await window.api?.getAllProducts()
+      dispatch(setProducts(response))
+    } catch (error) {
+      toast.error('Failed to fetch products: ' + error.message)
+      console.error('Error fetching products:', error)
+    }
+  }, [dispatch])
+
+  const fetchClients = useCallback(async () => {
+    try {
+      const response = await window.api.getAllClients()
+      dispatch(setClients(response))
+    } catch (error) {
+      toast.error('Failed to fetch clients: ' + error.message)
+    }
+  }, [dispatch])
+
+  const handleDeleteProduct = useCallback(
+    async (id) => {
+      if (!window.confirm('Are you sure you want to delete this product?')) return
+
+      try {
+        await window.api.deleteProduct(id)
+        dispatch(deleteProduct(id))
+        toast.success('Product deleted successfully')
+      } catch (error) {
+        toast.error('Failed to delete product: ' + error.message)
+      }
+    },
+    [dispatch]
+  )
+
+  const handleEditProduct = useCallback(
+    async (product, setSelectedProduct, setIsUpdateExpense, setShowModal) => {
+      try {
+        const response = await window.api?.getProductById(product.id)
+        setSelectedProduct(response)
+        setIsUpdateExpense(true)
+        setShowModal(true)
+      } catch (error) {
+        toast.error('Failed to fetch product details: ' + error.message)
+        console.error('Error fetching product:', error)
+      }
+    },
+    []
+  )
+
+  return { fetchProducts, fetchClients, handleDeleteProduct, handleEditProduct }
+}
+
+// Main Component
 const Products = () => {
   const dispatch = useDispatch()
   const navigate = useNavigate()
+  const { fetchProducts, fetchClients, handleDeleteProduct, handleEditProduct } =
+    useProductOperations()
+
+  // State management
   const [showLoader, setShowLoader] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
@@ -22,161 +191,192 @@ const Products = () => {
   const [dateRange, setDateRange] = useState([])
   const [productFilter, setProductFilter] = useState('')
   const [assetsTypeFilter, setAssetsTypeFilter] = useState('')
+  const [importFile, setImportFile] = useState(false)
 
   const products = useSelector((state) => state.electron.products?.data || [])
   const clients = useSelector((state) => state.electron.clients?.data || [])
 
-  const fetchProducts = async () => {
-    try {
-      setShowLoader(true)
-      const response = await window.api?.getAllProducts()
-      dispatch(setProducts(response))
-    } catch (err) {
-      console.error('Error fetching products:', err)
-    } finally {
-      setShowLoader(false)
-    }
-  }
-
-  const fetchClients = async () => {
-    const response = await window.api.getAllClients()
-    dispatch(setClients(response))
-  }
-
-  const getClientName = (id) => {
-    const client = clients.find((c) => String(c?.id) === String(id?.id))
-    return client ? client.clientName : ''
-  }
-
+  // Memoized filtered data
   const filteredData = useMemo(() => {
     if (!Array.isArray(products)) return []
     const query = searchQuery?.toLowerCase()
-    let result = products.filter((data) => {
+
+    return products.filter((data) => {
+      // Search filter
       const matchesSearch =
-        data?.id?.toString().includes(query) ||
-        data?.name?.toLowerCase().includes(query) ||
-        data?.price?.toString().includes(query) ||
-        data?.quantity?.toString().includes(query) ||
-        data?.assetsType?.toLowerCase().includes(query) ||
-        getClientName(data?.clientId)?.toLowerCase().includes(query)
+        !query ||
+        [
+          data?.id?.toString(),
+          data?.name?.toLowerCase(),
+          data?.price?.toString(),
+          data?.quantity?.toString(),
+          data?.assetsType?.toLowerCase(),
+          getClientName(data?.clientId, clients)?.toLowerCase()
+        ].some((field) => field?.includes(query))
 
-      const matchesProduct = productFilter ? data.id === productFilter : true
+      // Product filter
+      const matchesProduct = !productFilter || data.id === productFilter
 
-      const matchesAssetsType = assetsTypeFilter ? data.assetsType === assetsTypeFilter : true
+      // Assets type filter
+      const matchesAssetsType = !assetsTypeFilter || data.assetsType === assetsTypeFilter
 
+      // Date filter
       let matchesDate = true
-      if (dateRange && dateRange.length === 2) {
+      if (dateRange?.length === 2) {
         const createdDate = new Date(data.createdAt)
-        const start = new Date(dateRange[0])
-        const end = new Date(dateRange[1])
-        matchesDate = createdDate >= start && createdDate <= end
+        const [start, end] = dateRange
+        matchesDate = createdDate >= new Date(start) && createdDate <= new Date(end)
       }
 
       return matchesSearch && matchesProduct && matchesDate && matchesAssetsType
     })
-    return result
-  }, [products, searchQuery, productFilter, dateRange, assetsTypeFilter])
+  }, [products, searchQuery, productFilter, dateRange, assetsTypeFilter, clients])
 
-  const handleDeleteProduct = async (id) => {
-    try {
-      await window.api.deleteProduct(id)
-      dispatch(deleteProduct(id)) // directly remove by ID
-      toast.success('Product deleted successfully')
-    } catch (err) {
-      toast.error('Failed to delete product')
-    }
-  }
+  // Memoized statistics
+  const statistics = useMemo(() => {
+    const totalAssetsValue = filteredData.reduce(
+      (acc, item) => acc + (item?.price || 0) * (item?.quantity || 0),
+      0
+    )
+    const totalQuantity = filteredData.reduce((acc, item) => acc + (item?.quantity || 0), 0)
 
-  const handleEditProduct = async (product) => {
-    try {
-      const response = await window.api?.getProductById(product.id)
-      setSelectedProduct(response)
-      setIsUpdateExpense(true)
-      setShowModal(true)
-    } catch (err) {
-      console.error('Error fetching product:', err)
-      toast.error('Failed to edit product')
-    }
-  }
-
-  const handleAddProduct = async () => {
-    const response = await window.api?.getAllProducts()
-    dispatch(setProducts(response))
-    setSelectedProduct(null)
-    setIsUpdateExpense(false)
-    setShowModal(true)
-  }
+    return { totalAssetsValue, totalQuantity }
+  }, [filteredData])
 
   useEffect(() => {
     fetchProducts()
     fetchClients()
+  }, [fetchProducts, fetchClients])
+
+  // Event handlers
+  const handleAddProduct = useCallback(() => {
+    setSelectedProduct(null)
+    setIsUpdateExpense(false)
+    setShowModal(true)
   }, [])
 
-  const toThousands = (value) => {
-    if (!value) return value
-    return new Intl.NumberFormat('en-IN').format(value)
-  }
-
-  const totalAssetsValue = useMemo(() => {
-    return products?.reduce((acc, item) => acc + item?.price * item?.quantity, 0) ?? 0
-  }, [products])
-
-  const handleOnChange = (value) => {
+  const handleSearchChange = useCallback((value) => {
     setSearchQuery(value)
-  }
+  }, [])
+
+  const handleImportExcel = useCallback(
+    async (filePath) => {
+      try {
+        const result = await window.api.importExcel(filePath, 'products')
+
+        if (result.success) {
+          toast.success(`Imported ${result.count} products successfully`)
+          await fetchProducts()
+          setImportFile(false)
+        } else {
+          toast.error(`Import failed: ${result.error}`)
+        }
+      } catch (error) {
+        toast.error('Failed to import Excel: ' + error.message)
+      }
+    },
+    [fetchProducts]
+  )
+
+  const handleExportExcel = useCallback(() => {
+    try {
+      const exportData = filteredData.map((product) => ({
+        ID: formatProductId(product.id),
+        Date: new Date(product.createdAt).toLocaleDateString(),
+        Client: getClientName(product.clientId, clients),
+        'Product Name': product.name,
+        Price: product.price,
+        Quantity: product.quantity,
+        'Assets Type': product.assetsType,
+        'Total Worth': (product.price || 0) * (product.quantity || 0)
+      }))
+
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Products')
+      XLSX.writeFile(wb, `products_${new Date().toISOString().split('T')[0]}.xlsx`)
+
+      toast.success('Data exported successfully')
+    } catch (error) {
+      toast.error('Failed to export data: ' + error.message)
+    }
+  }, [filteredData, clients])
+
+  // Effects
+  useEffect(() => {
+    const timer = setTimeout(() => setShowLoader(false), 500)
+    return () => clearTimeout(timer)
+  }, [])
 
   return (
     <div className="select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-hidden">
       <div className="w-full sticky top-0 z-10">
         <Navbar />
       </div>
+
+      {/* Header */}
       <div className="flex justify-between mt-5 pb-2 items-center">
         <p className="text-3xl font-light mx-7">Products</p>
         <div className="mx-7 flex gap-2">
-          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm">
+          <button
+            className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105 cursor-pointer"
+            onClick={() => setImportFile(!importFile)}
+          >
             <Import size={16} />
-            <p className="text-sm">Import</p>
-          </div>
-          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm">
+            <span className="text-sm">Import</span>
+          </button>
+          <button
+            className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105 cursor-pointer"
+            onClick={handleExportExcel}
+          >
             <FileUp size={16} />
-            <p className="text-sm">Export</p>
-          </div>
-          <div
+            <span className="text-sm">Export</span>
+          </button>
+          <button
             className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
             onClick={handleAddProduct}
           >
             <Plus size={16} />
-            <p className="text-sm">ADD</p>
-          </div>
+            <span className="text-sm">ADD</span>
+          </button>
         </div>
       </div>
-      <div>{showLoader && <Loader />}</div>
+
+      {/* Import Excel Component */}
+      {importFile && (
+        <ImportExcel onFileSelected={handleImportExcel} onClose={() => setImportFile(false)} />
+      )}
+
+      {/* Loader */}
+      {showLoader && <Loader />}
+
       <div className="overflow-y-auto h-screen customScrollbar">
+        {/* Statistics Cards */}
         <div className="border border-gray-200 shadow px-5 py-3 mx-6 rounded-3xl my-4 flex">
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light mb-1">Total Assets Value</p>
-            <p className="text-2xl font-light">₹ {toThousands(totalAssetsValue)}</p>
+            <p className="text-2xl font-light">₹ {toThousands(statistics.totalAssetsValue)}</p>
           </div>
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light">Total Products</p>
             <p className="font-light text-sm">
-              <span className="font-bold text-2xl">
-                {products?.reduce((acc, item) => acc + item?.quantity, 0)}{' '}
-              </span>
-              Products
+              <span className="font-bold text-2xl">{statistics.totalQuantity}</span> Products
             </p>
           </div>
         </div>
+
+        {/* Main Content */}
         <div className="w-full h-[calc(100%-40px)] my-3 bg-white overflow-y-auto customScrollbar relative">
           <div className="mx-7 my-3">
-            <div className="flex justify-between">
+            {/* Filters */}
+            <div className="flex justify-between mb-4">
               <div>
                 <InputGroup size="md">
                   <Input
-                    placeholder="Search..."
+                    placeholder="Search products..."
                     value={searchQuery || ''}
-                    onChange={(value) => handleOnChange(value)}
-                    className={`rounded-xl border-2 indent-2 border-[#d4d9fb] outline-none`}
+                    onChange={handleSearchChange}
+                    className="rounded-xl border-2 indent-2 border-[#d4d9fb] outline-none"
                   />
                   <InputGroup.Button>
                     <SearchIcon />
@@ -188,144 +388,81 @@ const Products = () => {
                   format="dd/MM/yyyy"
                   character=" ~ "
                   placeholder="Select Date Range"
-                  onChange={(value) => setDateRange(value)}
+                  onChange={setDateRange}
                   placement="bottomEnd"
                 />
                 <SelectPicker
                   data={products.map((product) => ({
                     label: product?.name,
-                    value: product?.id // DB ID
+                    value: product?.id
                   }))}
-                  onChange={(value) => setProductFilter(value)}
+                  onChange={setProductFilter}
                   placeholder="Select Product"
                   style={{ width: 150 }}
                 />
                 <SelectPicker
-                  data={[
-                    { label: 'Raw Material', value: 'Raw Material' },
-                    {
-                      label: 'Finished Goods',
-                      value: 'Finished Goods'
-                    },
-                    { label: 'Assets', value: 'Assets' }
-                  ]}
-                  onChange={(value) => setAssetsTypeFilter(value)}
+                  data={ASSETS_TYPE_OPTIONS}
+                  onChange={setAssetsTypeFilter}
                   placeholder="Select Assets Type"
                   style={{ width: 150 }}
                 />
               </div>
             </div>
 
-            <div className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5 ">
-              <table className="min-w-max border-collapse  table-fixed">
+            {/* Table */}
+            <div className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5">
+              <table className="min-w-max border-collapse table-fixed">
                 <thead className="bg-gray-200">
                   <tr className="text-sm sticky top-0">
-                    <th className="px-4 py-3 border-r border-gray-300 w-[80px] sticky left-0 bg-gray-200 z-10">
-                      ID
-                    </th>
-                    <th className="px-4 py-3  border-r border-gray-300 w-[150px]">Date</th>
-                    <th className="px-4 py-3  border-r border-gray-300 w-[250px]">Client</th>
-                    <th className="px-4 py-3  border-r border-gray-300 w-[250px]">Product</th>
-                    {/* <th className="px-4 py-3">Image</th> */}
-                    <th className="px-4 py-3  border-r border-gray-300 w-[200px]">Price</th>
-                    <th className="px-4 py-3  border-r border-gray-300 w-[200px]">Quantity</th>
-                    <th className="px-4 py-3  border-r border-gray-300 w-[200px]">Assets Type</th>
-                    <th className="px-4 py-3  border-r border-gray-300 w-[200px]">Total Worth</th>
-                    <th className="px-4 py-3 w-[150px]">Action</th>
+                    {TABLE_HEADERS.map((header) => (
+                      <th
+                        key={header.key}
+                        className={`px-4 py-3 border-r border-gray-300 ${header.width} ${
+                          header.sticky ? 'sticky left-0 bg-gray-200 z-10' : ''
+                        }`}
+                      >
+                        {header.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-200">
-                  {filteredData && filteredData.length === 0 && (
+                  {filteredData.length === 0 ? (
                     <tr className="text-center h-72">
                       <td
-                        colSpan={10}
+                        colSpan={TABLE_HEADERS.length}
                         className="text-center font-light tracking-wider text-gray-500 text-lg"
                       >
                         No Data Found
                       </td>
                     </tr>
+                  ) : (
+                    filteredData.map((product, index) => (
+                      <ProductRow
+                        key={product?.id || index}
+                        product={product}
+                        index={index}
+                        clients={clients}
+                        onDelete={handleDeleteProduct}
+                        onEdit={(product) =>
+                          handleEditProduct(
+                            product,
+                            setSelectedProduct,
+                            setIsUpdateExpense,
+                            setShowModal
+                          )
+                        }
+                      />
+                    ))
                   )}
-                  {filteredData.map((product, index) => (
-                    <tr
-                      key={index}
-                      className={`text-sm text-center ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-[#f0f0f0]'
-                      }`}
-                    >
-                      <td
-                        className={`px-4 py-3 w-[80px] sticky left-0 ${
-                          index % 2 === 0 ? 'bg-white' : 'bg-[#f0f0f0]'
-                        } z-10 text-xs`}
-                      >
-                        {product?.id ? `RO${String(product?.id).slice(-3).toUpperCase()}` : 'RO---'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {new Date(product?.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3 tracking-wide">
-                        {product?.clientId === null ||
-                        product?.clientId === 0 ||
-                        product?.clientId === ''
-                          ? '-'
-                          : clients.find((client) => client?.id === product?.clientId)?.clientName}
-                      </td>
-                      <td className="px-4 py-3 tracking-wide">
-                        {String(product?.name).toUpperCase()}
-                      </td>
-                      <td className={`px-4 py-3 text-[#93DA97] font-bold`}>
-                        <p className="border border-[#fe8a8a] text-[#850e0e] p-1 rounded-4xl font-bold">
-                          ₹ {toThousands(product?.price)}
-                        </p>
-                      </td>
-                      <td className={`px-4 py-3 ${product?.quantity <= 0 ? 'text-red-500' : ''}`}>
-                        <span className="bg-gray-300 px-2 py-2 rounded-full">
-                          {product?.quantity}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 tracking-wide">
-                        {product?.assetsType === 'Raw Material' ? (
-                          <p className="text-[#166534] font-medium border-1 border-[#8ffab5] p-1 rounded-4xl">
-                            {product?.assetsType}
-                          </p>
-                        ) : product?.assetsType === 'Finished Goods' ? (
-                          <p className="flex items-center border border-[#fef08a] text-[#854d0e] p-1 rounded-4xl justify-center gap-1 font-medium">
-                            {product?.assetsType}
-                          </p>
-                        ) : product?.assetsType === 'Assets' ? (
-                          <p className="flex items-center border border-[#8a94fe] text-[#0e1a85] p-1 rounded-4xl justify-center gap-1 font-medium">
-                            {product?.assetsType}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 tracking-wide">
-                        <p className="font-bold">
-                          ₹ {toThousands(product?.price * product?.quantity)}
-                        </p>
-                      </td>
-                      <td className="w-28 ">
-                        <div>
-                          <div className="flex gap-3 justify-center relative transition cursor-pointer items-center">
-                            <Trash
-                              className="text-red-500 text-sm p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-120"
-                              onClick={() => handleDeleteProduct(product?.id)}
-                              size={28}
-                            />
-                            <PenLine
-                              className="text-purple-500 text-sm p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-120"
-                              onClick={() => handleEditProduct(product)}
-                              size={28}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Modal */}
       {showModal && (
         <ProductModal
           setShowModal={setShowModal}

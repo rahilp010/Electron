@@ -1,20 +1,14 @@
+/* eslint-disable react/display-name */
+/* eslint-disable react/prop-types */
 /* eslint-disable no-undef */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useState, useMemo } from 'react'
-import { ChevronLeft, FileUp, Import, PenLine, Plus, Trash } from 'lucide-react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { FileUp, Import, PenLine, Plus, Trash } from 'lucide-react'
 import Loader from '../components/Loader'
 import { useNavigate } from 'react-router-dom'
 import SearchIcon from '@mui/icons-material/Search'
-import {
-  DateRangePicker,
-  SelectPicker,
-  Animation,
-  Whisper,
-  Tooltip,
-  InputGroup,
-  Input
-} from 'rsuite'
+import { DateRangePicker, SelectPicker, Whisper, Tooltip, InputGroup, Input } from 'rsuite'
 import 'rsuite/dist/rsuite-no-reset.min.css'
 import {
   deleteTransaction,
@@ -25,18 +19,288 @@ import {
 import { useDispatch, useSelector } from 'react-redux'
 import { clientApi, productApi, transactionApi } from '../API/Api'
 import { toast } from 'react-toastify'
-import TransactionModal from '../components/Modal/TransactionModal'
 import HistoryToggleOffIcon from '@mui/icons-material/HistoryToggleOff'
 import CreditScoreIcon from '@mui/icons-material/CreditScore'
 import Navbar from '../components/UI/Navbar'
-import ProductModal from '../components/Modal/ProductModal'
 import PurchaseModal from '../components/Modal/PurchaseModal'
+import ImportExcel from '../components/UI/ImportExcel'
+import * as XLSX from 'xlsx'
 
+// Constants
+const TABLE_HEADERS = [
+  { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
+  { key: 'date', label: 'Date', width: 'w-[150px]' },
+  { key: 'clientName', label: 'Client Name', width: 'w-[200px]' },
+  { key: 'productName', label: 'Product Name', width: 'w-[230px]' },
+  { key: 'quantity', label: 'Quantity', width: 'w-[150px]' },
+  { key: 'totalAmount', label: 'Total Amount', width: 'w-[200px]' },
+  { key: 'pendingAmount', label: 'Pending Amount', width: 'w-[200px]' },
+  { key: 'paidAmount', label: 'Paid Amount', width: 'w-[200px]' },
+  { key: 'paymentStatus', label: 'Payment Status', width: 'w-[170px]' },
+  { key: 'action', label: 'Action', width: 'w-[150px]' }
+]
+
+const ASSETS_TYPE_OPTIONS = [
+  { label: 'Raw Material', value: 'Raw Material' },
+  { label: 'Finished Goods', value: 'Finished Goods' },
+  { label: 'Assets', value: 'Assets' }
+]
+
+// Utility functions
+const toThousands = (value) => {
+  if (!value || isNaN(value)) return '0'
+  return new Intl.NumberFormat('en-IN').format(Number(value))
+}
+
+const formatTransactionId = (id) => {
+  return id ? `RO${String(id).slice(-3).toUpperCase()}` : 'RO---'
+}
+
+const getClientName = (clientId, clients) => {
+  if (!clientId) return 'Unknown Client'
+
+  // Handle both direct ID and nested object structure
+  const id = typeof clientId === 'object' ? clientId.id : clientId
+  const client = clients.find((c) => String(c?.id) === String(id))
+  return client ? client.clientName : 'Unknown Client'
+}
+
+const getProductName = (productId, products) => {
+  if (!productId) return 'Unknown Product'
+
+  // Handle both direct ID and nested object structure
+  const id = typeof productId === 'object' ? productId.id : productId
+  const product = products.find((p) => String(p?.id) === String(id))
+  return product ? product.name : 'Unknown Product'
+}
+
+const getInitials = (name) => {
+  if (!name || name === 'Unknown Client') return '??'
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+}
+
+const getPaymentStatusComponent = (transaction) => {
+  const { statusOfTransaction, paymentType } = transaction
+
+  if (statusOfTransaction === 'completed') {
+    return (
+      <span className="flex items-center text-[#166534] bg-[#dcfce7] border border-[#8ffab5] px-2 py-1 rounded-full justify-center text-xs font-medium">
+        Completed
+      </span>
+    )
+  }
+
+  if (statusOfTransaction === 'pending' && paymentType === 'partial') {
+    return (
+      <span className="flex items-center border border-[#8a94fe] text-[#0e1a85] bg-[#c3d3fe] px-2 py-1 rounded-full justify-center text-xs font-medium">
+        Partial
+      </span>
+    )
+  }
+
+  if (statusOfTransaction === 'pending') {
+    return (
+      <span className="flex items-center border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] px-2 py-1 rounded-full justify-center text-xs font-medium">
+        Pending
+      </span>
+    )
+  }
+
+  return <span className="text-gray-500">-</span>
+}
+
+// Memoized PurchaseRow component
+const PurchaseRow = React.memo(({ transaction, index, clients, products, onEdit, onDelete }) => {
+  const isEven = index % 2 === 0
+  const rowBg = isEven ? 'bg-white' : 'bg-[#f0f0f0]'
+  const clientName = getClientName(transaction?.clientId, clients)
+  const productName = getProductName(transaction?.productId, products)
+  const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
+  const totalAmount = (totalAmountProduct || 0) * (transaction?.quantity || 0)
+
+  const renderPendingAmount = () => {
+    if (transaction?.statusOfTransaction === 'pending' && transaction?.paymentType === 'partial') {
+      return (
+        <Whisper
+          trigger="hover"
+          placement="rightStart"
+          speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
+        >
+          <span>₹ {toThousands(Number(transaction?.pendingAmount).toFixed(0))}</span>
+        </Whisper>
+      )
+    }
+
+    if (transaction?.statusOfTransaction === 'completed') {
+      return '-'
+    }
+
+    return <HistoryToggleOffIcon className="text-yellow-500" />
+  }
+
+  const renderPaidAmount = () => {
+    if (transaction?.paymentType === 'partial') {
+      return (
+        <Whisper
+          trigger="hover"
+          placement="rightStart"
+          speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
+        >
+          <span>₹ {toThousands(Number(transaction?.paidAmount).toFixed(0))}</span>
+        </Whisper>
+      )
+    }
+
+    if (transaction?.statusOfTransaction === 'pending') {
+      return '-'
+    }
+
+    return <CreditScoreIcon className="text-green-600" />
+  }
+
+  return (
+    <tr className={`text-sm text-center ${rowBg}`}>
+      <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
+        {formatTransactionId(transaction?.id)}
+      </td>
+      <td className="px-4 py-3">{new Date(transaction?.createdAt).toLocaleDateString()}</td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2 px-6">
+          <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center border border-blue-300 justify-center text-xs font-medium text-blue-600 mr-3">
+            {getInitials(clientName)}
+          </div>
+          {clientName}
+        </div>
+      </td>
+      <td className="px-4 py-3 tracking-wide font-medium">{String(productName).toUpperCase()}</td>
+      <td className="px-4 py-3">
+        <span className="bg-gray-300 px-2 py-1 rounded-full text-xs font-medium">
+          {transaction?.quantity || 0}
+        </span>
+      </td>
+      <td className="px-4 py-3 font-semibold">₹ {toThousands(Number(totalAmount).toFixed(0))}</td>
+      <td className="px-4 py-3">{renderPendingAmount()}</td>
+      <td className="px-4 py-3">{renderPaidAmount()}</td>
+      <td className="px-4 py-3 tracking-wide">{getPaymentStatusComponent(transaction)}</td>
+      <td className="w-28">
+        <div className="flex gap-3 justify-center items-center">
+          <button
+            className="text-purple-500 p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+            onClick={() => onEdit(transaction)}
+            title="Edit purchase"
+          >
+            <PenLine size={12} />
+          </button>
+          <button
+            className="text-red-500 p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+            onClick={() => onDelete(transaction?.id)}
+            title="Delete purchase"
+          >
+            <Trash size={12} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+})
+
+// Custom hook for purchase operations
+const usePurchaseOperations = () => {
+  const dispatch = useDispatch()
+
+  const fetchAllProducts = useCallback(async () => {
+    try {
+      const response = await productApi.getAllProducts()
+      dispatch(setProducts(response))
+    } catch (error) {
+      console.error('Error fetching products:', error)
+      toast.error('Failed to fetch products')
+    }
+  }, [dispatch])
+
+  const fetchAllClients = useCallback(async () => {
+    try {
+      const response = await clientApi.getAllClients()
+      dispatch(setClients(response))
+    } catch (error) {
+      console.error('Error fetching clients:', error)
+      toast.error('Failed to fetch clients')
+    }
+  }, [dispatch])
+
+  const fetchAllTransactions = useCallback(async () => {
+    try {
+      const response = await transactionApi.getAllTransactions()
+      dispatch(setTransactions(response))
+    } catch (error) {
+      console.error('Error fetching transactions:', error)
+      toast.error('Failed to fetch transactions')
+    }
+  }, [dispatch])
+
+  const transactions = useSelector((state) => state.electron.transaction.data || [])
+
+  const handleDeleteTransaction = useCallback(
+    async (id) => {
+      if (!window.confirm('Are you sure you want to delete this purchase?')) return
+
+      try {
+        const response = await transactionApi.deleteTransaction(id)
+        console.log(response)
+        dispatch(deleteTransaction(response))
+        await fetchAllTransactions()
+        toast.success('Purchase deleted successfully')
+      } catch (error) {
+        toast.error('Failed to delete purchase: ' + error.message)
+      }
+    },
+    [dispatch, fetchAllTransactions]
+  )
+
+  console.log(transactions)
+
+  const handleEditTransaction = useCallback(
+    async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowModal) => {
+      try {
+        const response = await transactionApi.getTransactionById(transaction.id)
+        setSelectedTransaction(response)
+        setIsUpdateExpense(true)
+        setShowModal(true)
+      } catch (error) {
+        console.error('Error fetching transaction:', error)
+        toast.error('Failed to load purchase data: ' + error.message)
+      }
+    },
+    []
+  )
+
+  return {
+    fetchAllProducts,
+    fetchAllClients,
+    fetchAllTransactions,
+    handleDeleteTransaction,
+    handleEditTransaction
+  }
+}
+
+// Main Component
 const Purchase = () => {
   const navigate = useNavigate()
+  const dispatch = useDispatch()
+  const {
+    fetchAllProducts,
+    fetchAllClients,
+    fetchAllTransactions,
+    handleDeleteTransaction,
+    handleEditTransaction
+  } = usePurchaseOperations()
+
+  // State management
   const [showLoader, setShowLoader] = useState(false)
-  const [showSearchFiled, setShowSearchField] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -44,183 +308,239 @@ const Purchase = () => {
   const [dateRange, setDateRange] = useState([])
   const [clientFilter, setClientFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
+  const [assetsTypeFilter, setAssetsTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const dispatch = useDispatch()
+  const [importFile, setImportFile] = useState(false)
 
-  const fetchAllProducts = async () => {
-    try {
-      setShowLoader(true)
-      const response = await productApi.getAllProducts()
-      dispatch(setProducts(response))
-    } catch (error) {
-      console.error('Error fetching products:', error)
-      toast.error('Failed to fetch products')
-    } finally {
-      setShowLoader(false)
-    }
-  }
-
-  const fetchAllClients = async () => {
-    try {
-      setShowLoader(true)
-      const response = await clientApi.getAllClients()
-      dispatch(setClients(response))
-    } catch (error) {
-      console.error('Error fetching clients:', error)
-      toast.error('Failed to fetch clients')
-    } finally {
-      setShowLoader(false)
-    }
-  }
-
-  const fetchAllTransaction = async () => {
-    try {
-      setShowLoader(true)
-      const response = await transactionApi.getAllTransactions()
-      dispatch(setTransactions(response))
-    } catch (error) {
-      console.error('Error fetching transactions:', error)
-      toast.error('Failed to fetch transactions')
-    } finally {
-      setShowLoader(false)
-    }
-  }
   const products = useSelector((state) => state.electron.products.data || [])
-
   const clients = useSelector((state) => state.electron.clients.data || [])
+  const transactions = useSelector((state) => state.electron.transaction.data || [])
 
-  const transaction = useSelector((state) => state.electron.transaction.data || [])
-
-  const getClientName = (id) => {
-    const client = clients.find((c) => String(c?.id) === String(id?.id))
-    return client ? client.clientName : ''
-  }
-
-  const getProductName = (id) => {
-    const product = products.find((p) => String(p?.id) === String(id?.id))
-    return product ? product.name : ''
-  }
-
+  // Memoized filtered data
   const filteredData = useMemo(() => {
-    if (!Array.isArray(transaction)) return []
-    const query = searchQuery.toLowerCase()
-    let result = transaction.filter((data) => {
+    if (!Array.isArray(transactions)) return []
+    const query = searchQuery?.toLowerCase()
+
+    return transactions.filter((data) => {
+      // Only show purchase transactions
+      if (data?.transactionType !== 'purchase') return false
+
+      // Search filter
       const matchesSearch =
-        data?.id?.toString().includes(query) ||
-        getClientName(data?.clientId)?.toLowerCase().includes(query) ||
-        data?.sellAmount?.toString().includes(query) ||
-        getProductName(data?.productId)?.toLowerCase().includes(query) ||
-        data?.quantity?.toString().includes(query) ||
-        data?.statusOfTransaction?.toLowerCase().includes(query)
+        !query ||
+        [
+          data?.id?.toString(),
+          getClientName(data?.clientId, clients)?.toLowerCase(),
+          data?.sellAmount?.toString(),
+          getProductName(data?.productId, products)?.toLowerCase(),
+          data?.quantity?.toString(),
+          data?.statusOfTransaction?.toLowerCase()
+        ].some((field) => field?.includes(query))
 
-      const matchesClient = clientFilter ? String(data.clientId.id) === String(clientFilter) : true
+      // Client filter - handle nested object structure
+      const matchesClient =
+        !clientFilter || String(data.clientId?.id || data.clientId) === String(clientFilter)
 
-      const matchesProduct = productFilter
-        ? String(data.productId.id) === String(productFilter)
-        : true
+      // Product filter - handle nested object structure
+      const matchesProduct =
+        !productFilter || String(data.productId?.id || data.productId) === String(productFilter)
 
-      const matchesStatus = statusFilter ? data?.statusOfTransaction === statusFilter : true
+      // Status filter
+      const matchesStatus = !statusFilter || data?.statusOfTransaction === statusFilter
 
+      // Date filter
       let matchesDate = true
-      if (dateRange && dateRange.length === 2) {
+      if (dateRange?.length === 2) {
         const createdDate = new Date(data.createdAt)
-        const start = new Date(dateRange[0])
-        const end = new Date(dateRange[1])
-        matchesDate = createdDate >= start && createdDate <= end
+        const [start, end] = dateRange
+        matchesDate = createdDate >= new Date(start) && createdDate <= new Date(end)
       }
 
       return matchesSearch && matchesClient && matchesProduct && matchesDate && matchesStatus
     })
-    return result
-  }, [transaction, searchQuery, clientFilter, productFilter, dateRange, statusFilter])
+  }, [
+    transactions,
+    searchQuery,
+    clientFilter,
+    productFilter,
+    dateRange,
+    statusFilter,
+    clients,
+    products
+  ])
 
-  const handlecreateTransaction = async () => {
-    const response = await transactionApi.getAllTransactions()
-    dispatch(setTransactions(response))
+  // Memoized statistics
+  const statistics = useMemo(() => {
+    const purchaseTransactions = transactions.filter((t) => t?.transactionType === 'purchase')
+
+    const currentPID = purchaseTransactions.map((p) => p.productId)
+
+    const productName = getProductName(currentPID[0], products)
+
+    const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
+
+    const totalPurchases = purchaseTransactions.reduce(
+      (total, item) => total + (totalAmountProduct || 0) * (item.quantity || 0),
+      0
+    )
+
+    console.log(totalPurchases)
+
+    const totalProducts = purchaseTransactions.reduce(
+      (total, item) => total + (item.quantity || 0),
+      0
+    )
+
+    return { totalPurchases, totalProducts }
+  }, [transactions])
+
+  // Event handlers
+  const handleCreateTransaction = useCallback(() => {
+    setSelectedTransaction(null)
     setIsUpdateExpense(false)
     setShowModal(true)
-  }
+  }, [])
 
-  const handleEditTransaction = async (transaction) => {
+  const handleSearchChange = useCallback((value) => {
+    setSearchQuery(value)
+  }, [])
+
+  const handleImportExcel = useCallback(
+    async (filePath) => {
+      try {
+        const result = await window.api.importExcel(filePath, 'purchases')
+
+        if (result.success) {
+          toast.success(`Imported ${result.count} purchases successfully`)
+          await fetchAllTransactions()
+          setImportFile(false)
+        } else {
+          toast.error(`Import failed: ${result.error}`)
+        }
+      } catch (error) {
+        toast.error('Failed to import Excel: ' + error.message)
+      }
+    },
+    [fetchAllTransactions]
+  )
+
+  const handleExportExcel = useCallback(() => {
     try {
-      const response = await transactionApi.getTransactionById(transaction.id)
+      const exportData = filteredData.map((transaction) => ({
+        ID: formatTransactionId(transaction.id),
+        Date: new Date(transaction.createdAt).toLocaleDateString(),
+        'Client Name': getClientName(transaction.clientId, clients),
+        'Product Name': getProductName(transaction.productId, products),
+        Quantity: transaction.quantity,
+        'Total Amount': (transaction.sellAmount || 0) * (transaction.quantity || 0),
+        'Pending Amount': transaction.pendingAmount || 0,
+        'Paid Amount': transaction.paidAmount || 0,
+        'Payment Status': transaction.statusOfTransaction,
+        'Payment Type': transaction.paymentType
+      }))
 
-      // Make sure the response has the right structure
-      setSelectedTransaction(response)
-      setIsUpdateExpense(true)
-      setShowModal(true)
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Purchases')
+      XLSX.writeFile(wb, `purchases_${new Date().toISOString().split('T')[0]}.xlsx`)
+
+      toast.success('Data exported successfully')
     } catch (error) {
-      console.error('Error fetching transaction:', error)
-      toast.error('Failed to load transaction data')
+      toast.error('Failed to export data: ' + error.message)
+    }
+  }, [filteredData, clients, products])
+
+  const generatePDF = async () => {
+    try {
+      const savePath = `purchases_${new Date().toISOString().split('T')[0]}.pdf`
+      const response = await window.api.generatePDF({ tableName: 'transactions', savePath })
+      if (response.success) {
+        toast.success(`PDF saved to: ${savePath}`)
+      } else {
+        toast.error(`Error: ${response.error}`)
+      }
+    } catch (err) {
+      toast.error(`Error: ${err.message}`)
     }
   }
 
-  const handleDeleteTransaction = async (id) => {
-    const response = await transactionApi.deleteTransactionApi(id)
-    dispatch(deleteTransaction(response))
-    fetchAllTransaction()
-    toast.success('Transaction data deleted successfully')
-  }
-
-  const toThousands = (value) => {
-    if (!value) return value
-    return new Intl.NumberFormat('en-IN').format(value)
-  }
-
-  const handleOnChange = (value) => {
-    setSearchQuery(value)
-  }
+  // Effects
+  useEffect(() => {
+    setShowLoader(true)
+    Promise.all([fetchAllProducts(), fetchAllClients(), fetchAllTransactions()]).finally(() => {
+      setShowLoader(false)
+    })
+  }, [fetchAllProducts, fetchAllClients, fetchAllTransactions])
 
   return (
     <div className="select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-hidden">
       <div className="w-full sticky top-0 z-10">
         <Navbar />
       </div>
+
+      {/* Header */}
       <div className="flex justify-between mt-5 pb-2 items-center">
         <p className="text-3xl font-light mx-7">Purchase</p>
         <div className="mx-7 flex gap-2">
-          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm">
+          <button
+            className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm hover:bg-gray-50 transition-colors"
+            onClick={() => setImportFile(!importFile)}
+          >
             <Import size={16} />
-            <p className="text-sm">Import</p>
-          </div>
-          <div className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm">
+            <span className="text-sm">Import</span>
+          </button>
+          <button
+            className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm hover:bg-gray-50 transition-colors"
+            onClick={handleExportExcel}
+          >
             <FileUp size={16} />
-            <p className="text-sm">Export</p>
-          </div>
-          <div
+            <span className="text-sm">Export</span>
+          </button>
+          <button
             className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
-            onClick={handlecreateTransaction}
+            onClick={handleCreateTransaction}
           >
             <Plus size={16} />
-            <p className="text-sm">ADD</p>
-          </div>
+            <span className="text-sm">ADD</span>
+          </button>
         </div>
       </div>
-      <div>{showLoader && <Loader />}</div>
+
+      {/* Import Excel Component */}
+      {importFile && (
+        <ImportExcel onFileSelected={handleImportExcel} onClose={() => setImportFile(false)} />
+      )}
+
+      {/* Loader */}
+      {showLoader && <Loader />}
+
       <div className="overflow-y-auto h-screen customScrollbar">
+        {/* Statistics Cards */}
         <div className="border border-gray-200 shadow px-5 py-3 mx-6 rounded-3xl my-4 flex">
           <div className="mx-5 border-r w-52">
-            <p className="text-sm font-light mb-1">Total Assets Value</p>
-            <p className="text-2xl font-light">₹ {toThousands(20000)}</p>
+            <p className="text-sm font-light mb-1">Total Purchase Value</p>
+            <p className="text-2xl font-light">₹ {toThousands(statistics.totalPurchases)}</p>
           </div>
           <div className="mx-5 border-r w-52">
-            <p className="text-sm font-light">Total Products</p>
+            <p className="text-sm font-light">Total Products Purchased</p>
             <p className="font-light text-sm">
-              <span className="font-bold text-2xl">200 </span>
-              Products
+              <span className="font-bold text-2xl">{statistics.totalProducts}</span> Products
             </p>
           </div>
         </div>
+
+        {/* Main Content */}
         <div className="w-full h-[calc(100%-40px)] my-3 bg-white overflow-y-auto customScrollbar relative">
           <div className="mx-7 my-3">
-            <div className="flex justify-between">
+            {/* Filters */}
+            <div className="flex justify-between mb-4">
               <div>
                 <InputGroup size="md">
                   <Input
-                    placeholder="Search..."
+                    placeholder="Search purchases..."
                     value={searchQuery || ''}
-                    onChange={(value) => handleOnChange(value)}
-                    className={`rounded-xl border-2 indent-2 border-[#d4d9fb] outline-none`}
+                    onChange={handleSearchChange}
+                    className="rounded-xl border-2 indent-2 border-[#d4d9fb] outline-none"
                   />
                   <InputGroup.Button>
                     <SearchIcon />
@@ -232,195 +552,82 @@ const Purchase = () => {
                   format="dd/MM/yyyy"
                   character=" ~ "
                   placeholder="Select Date Range"
-                  onChange={(value) => setDateRange(value)}
+                  onChange={setDateRange}
                   placement="bottomEnd"
                 />
                 <SelectPicker
                   data={products.map((product) => ({
                     label: product?.name,
-                    value: product?.id // DB ID
+                    value: product?.id
                   }))}
-                  onChange={(value) => setProductFilter(value)}
+                  onChange={setProductFilter}
                   placeholder="Select Product"
                   style={{ width: 150 }}
                 />
                 <SelectPicker
-                  data={products.map((product) => ({
-                    label: product?.assetsType,
-                    value: product?.assetsType // DB ID
-                  }))}
-                  onChange={(value) => setAssetsTypeFilter(value)}
+                  data={ASSETS_TYPE_OPTIONS}
+                  onChange={setAssetsTypeFilter}
                   placeholder="Select Assets Type"
                   style={{ width: 150 }}
                 />
               </div>
             </div>
 
-            <div className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5 ">
+            {/* Table */}
+            <div className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5">
               <table className="min-w-max border-collapse table-fixed">
                 <thead className="bg-gray-200">
                   <tr className="text-sm sticky top-0">
-                    <th className="px-4 py-3 border-r border-gray-300 w-[80px] sticky left-0 bg-gray-200 z-10">
-                      ID
-                    </th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[150px]">Date</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[200px]">Client Name</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[230px]">Product Name</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[150px]">Quantity</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[170px]">Selling Price</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[200px]">Total Amount</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[200px]">Pending Amount</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[200px]">Paid Amount</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[170px]">Payment Status</th>
-                    <th className="px-4 py-3 border-r border-gray-300 w-[150px]">Action</th>
+                    {TABLE_HEADERS.map((header) => (
+                      <th
+                        key={header.key}
+                        className={`px-4 py-3 border-r border-gray-300 ${header.width} ${
+                          header.sticky ? 'sticky left-0 bg-gray-200 z-10' : ''
+                        }`}
+                      >
+                        {header.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-200">
-                  {filteredData && filteredData.length === 0 && (
+                  {filteredData.length === 0 ? (
                     <tr className="text-center h-80">
                       <td
-                        colSpan={8}
+                        colSpan={TABLE_HEADERS.length}
                         className="text-center font-light tracking-wider text-gray-500 text-lg"
                       >
                         No Data Found
                       </td>
                     </tr>
+                  ) : (
+                    filteredData.map((transaction, index) => (
+                      <PurchaseRow
+                        key={transaction?.id || index}
+                        transaction={transaction}
+                        index={index}
+                        clients={clients}
+                        products={products}
+                        onEdit={(transaction) =>
+                          handleEditTransaction(
+                            transaction,
+                            setSelectedTransaction,
+                            setIsUpdateExpense,
+                            setShowModal
+                          )
+                        }
+                        onDelete={handleDeleteTransaction}
+                      />
+                    ))
                   )}
-                  {filteredData
-                    .filter((data) => data?.transactionType === 'purchase')
-                    .map((transaction, index) => (
-                      <tr
-                        key={transaction?.id}
-                        className={`text-sm text-center  ${
-                          index % 2 === 0 ? 'bg-white' : 'bg-[#f0f0f0]'
-                        }`}
-                      >
-                        <td
-                          className={`px-4 py-3 w-[80px] sticky left-0 ${
-                            index % 2 === 0 ? 'bg-white' : 'bg-[#f0f0f0]'
-                          } z-10 text-xs`}
-                        >
-                          {transaction?.id
-                            ? `RO${String(transaction.id).slice(-3).toUpperCase()}`
-                            : 'RO---'}
-                        </td>
-                        <td className="px-4 py-3">
-                          {new Date(transaction?.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 px-6">
-                            <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center border border-blue-300 justify-center text-xs font-medium text-blue-600 mr-3">
-                              {getClientName(transaction?.clientId)
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')
-                                .toUpperCase()}
-                            </div>
-                            {getClientName(transaction?.clientId)}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 tracking-wide">
-                          {getProductName(transaction?.productId)}
-                        </td>
-                        <td className={`px-4 py-3`}>
-                          <span className="bg-gray-300 px-2 py-1 rounded-full">
-                            {transaction?.quantity}
-                          </span>
-                        </td>
-                        <td
-                          className={`px-4 py-3 font-bold ${
-                            transaction?.sellAmount > getProductName(transaction?.productId)?.price
-                              ? 'text-indigo-500'
-                              : 'text-[#568F87]'
-                          }`}
-                        >
-                          ₹ {toThousands(Number(transaction?.sellAmount).toFixed(0))}
-                        </td>
-                        <td className={`px-4 py-3 `}>
-                          ₹{' '}
-                          {toThousands(
-                            Number(transaction?.sellAmount * transaction?.quantity).toFixed(0)
-                          )}
-                        </td>
-                        <td className={`px-4 py-3 `}>
-                          <Whisper
-                            trigger="hover"
-                            placement="rightStart"
-                            speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
-                          >
-                            {transaction?.statusOfTransaction === 'pending' &&
-                            transaction?.paymentType === 'partial' ? (
-                              '₹ ' + toThousands(Number(transaction?.pendingAmount).toFixed(0))
-                            ) : transaction?.statusOfTransaction === 'completed' ? (
-                              '-'
-                            ) : (
-                              <HistoryToggleOffIcon />
-                            )}
-                          </Whisper>
-                        </td>
-                        <td className={`px-4 py-3 `}>
-                          <Whisper
-                            trigger="hover"
-                            placement="rightStart"
-                            speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
-                          >
-                            {transaction?.paymentType === 'partial' ? (
-                              '₹ ' + toThousands(Number(transaction?.paidAmount).toFixed(0))
-                            ) : transaction?.statusOfTransaction === 'pending' ? (
-                              '-'
-                            ) : (
-                              <CreditScoreIcon />
-                            )}
-                          </Whisper>
-                        </td>
-                        <td className="px-4 py-3 tracking-wide">
-                          <div className={`font-bold text-white`}>
-                            {transaction?.statusOfTransaction === 'completed' ? (
-                              <p className="flex items-center text-[#166534] bg-[#dcfce7] border-1 border-[#8ffab5] p-1 rounded-4xl justify-center gap-1 text-xs">
-                                {/* <CircleCheck size={16} /> */}
-                                {String(transaction?.statusOfTransaction).charAt(0).toUpperCase() +
-                                  String(transaction?.statusOfTransaction).slice(1)}
-                              </p>
-                            ) : transaction?.statusOfTransaction === 'pending' &&
-                              transaction?.paymentType === 'partial' ? (
-                              <p className="flex items-center border border-[#8a94fe] text-[#0e1a85] bg-[#c3d3fe] p-1 rounded-4xl justify-center gap-1 text-xs">
-                                Partial
-                              </p>
-                            ) : transaction?.statusOfTransaction === 'pending' ? (
-                              <p className="flex items-center border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] p-1 rounded-4xl justify-center gap-1 text-xs">
-                                {/* <ClockArrowUp size={16} /> */}
-                                {String(transaction?.statusOfTransaction).charAt(0).toUpperCase() +
-                                  String(transaction?.statusOfTransaction).slice(1)}
-                              </p>
-                            ) : (
-                              ''
-                            )}
-                          </div>
-                        </td>
-                        <td className="w-28 ">
-                          <div>
-                            <div className="flex gap-3 justify-center relative transition cursor-pointer items-center">
-                              <PenLine
-                                className="text-purple-500 text-sm p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-120"
-                                onClick={() => handleEditTransaction(transaction)}
-                                size={28}
-                              />
-                              <Trash
-                                className="text-red-500 text-sm p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-120"
-                                onClick={() => handleDeleteTransaction(transaction?.id)}
-                                size={28}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Modal */}
       {showModal && (
         <PurchaseModal
           setShowModal={setShowModal}

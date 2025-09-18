@@ -26,16 +26,23 @@ contextBridge.exposeInMainWorld('api', {
   // Bank receipt methods
   getRecentBankReceipts: () => ipcRenderer.invoke('getRecentBankReceipts'),
   createBankReceipt: (bankReceipt) => ipcRenderer.invoke('createBankReceipt', bankReceipt),
+  updateBankReceipt: (bankReceipt) => ipcRenderer.invoke('updateBankReceipt', bankReceipt),
+  deleteBankReceipt: (id) => ipcRenderer.invoke('deleteBankReceipt', id),
 
   // Cash receipt methods
   getRecentCashReceipts: () => ipcRenderer.invoke('getRecentCashReceipts'),
   createCashReceipt: (cashReceipt) => ipcRenderer.invoke('createCashReceipt', cashReceipt),
+  updateCashReceipt: (cashReceipt) => ipcRenderer.invoke('updateCashReceipt', cashReceipt),
+  deleteCashReceipt: (id) => ipcRenderer.invoke('deleteCashReceipt', id),
 
   // Excel Import
   importExcel: (filePath, tableName) => ipcRenderer.invoke('importExcel', filePath, tableName),
 
   // (Optional) Excel Export
-  exportExcel: (tableName, savePath) => ipcRenderer.invoke('exportExcel', tableName, savePath)
+  exportExcel: (tableName, savePath) => ipcRenderer.invoke('exportExcel', tableName, savePath),
+
+  // PDF Export
+  generatePDF: (options) => ipcRenderer.invoke('generate-pdf', options)
 })
 
 // Version information

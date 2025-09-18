@@ -52,7 +52,6 @@ const PurchaseModal = ({
 
   const getInitialTransaction = () => {
     if (isUpdateExpense && existingTransaction) {
-      console.log('Initializing with existing transaction:', existingTransaction)
       return {
         clientId: existingTransaction.clientId || '',
         productId: existingTransaction.productId || '',
@@ -103,6 +102,10 @@ const PurchaseModal = ({
     }
   }, [isUpdateExpense, existingTransaction?.id])
 
+  const totalAmount = products.filter((p) => p.id === transaction.productId).map((p) => p.price)
+
+  const totalPurchaseAmount = totalAmount.toString()
+
   const handleSubmitTransaction = useCallback(
     async (e) => {
       e.preventDefault()
@@ -112,15 +115,13 @@ const PurchaseModal = ({
 
       try {
         console.log(location.pathname)
+
         // Validation
         if (!transaction.clientId || !transaction.productId) {
           toast.error('Please enter details')
           return
         } else if (!transaction.quantity || transaction.quantity <= 0) {
           toast.error('Please enter a valid quantity')
-          return
-        } else if (!transaction.sellAmount || transaction.sellAmount <= 0) {
-          toast.error('Please enter a valid selling price')
           return
         } else if (transaction.paymentType === 'full') {
           transaction.pendingAmount = 0
@@ -129,13 +130,13 @@ const PurchaseModal = ({
           transaction.statusOfTransaction === 'pending' &&
           transaction.paymentType !== 'partial'
         ) {
-          transaction.pendingAmount = transaction.sellAmount * transaction.quantity
+          transaction.pendingAmount = Number(totalPurchaseAmount) * transaction.quantity
           transaction.paidAmount = 0
         } else if (transaction.statusOfTransaction === 'completed') {
           transaction.pendingAmount = 0
-          transaction.paidAmount = transaction.sellAmount * transaction.quantity
+          transaction.paidAmount = Number(totalPurchaseAmount) * transaction.quantity
         } else if (transaction.paymentType === 'partial') {
-          if (transaction.sellAmount < transaction.pendingAmount + transaction.paidAmount) {
+          if (Number(totalPurchaseAmount) >= transaction.pendingAmount + transaction.paidAmount) {
             toast.error('Partial amount should be less than total amount')
             return
           }
@@ -158,6 +159,7 @@ const PurchaseModal = ({
         if (!isUpdateExpense) {
           const response = await window.api.createTransaction(transactionData)
           dispatch(setTransactions(response))
+          console.log('res', response)
           toast.success('Transaction added successfully')
         } else {
           const response = await window.api.updateTransaction({
@@ -182,26 +184,9 @@ const PurchaseModal = ({
 
   const selectedProduct = products.find((p) => p.id === transaction.productId)
 
-  // Calculate available stock for validation
-  const getAvailableStock = () => {
-    if (!selectedProduct) return 0
-
-    if (isUpdateExpense && existingTransaction?.productId === transaction.productId) {
-      // For updates of the same product, add back the old quantity to available stock
-      return selectedProduct.quantity + (existingTransaction.quantity || 0)
-    }
-
-    return selectedProduct.quantity
-  }
-
   const handleOnChangeEvent = (value, fieldName) => {
     switch (fieldName) {
       case 'quantity':
-        const availableStock = getAvailableStock()
-        if (value > availableStock) {
-          toast.error(`Not enough stock. Available: ${availableStock}`)
-          return
-        }
         setTransaction((prev) => ({ ...prev, quantity: value }))
         break
 
@@ -276,7 +261,7 @@ const PurchaseModal = ({
         <form onSubmit={handleSubmitTransaction}>
           <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-xl relative">
             <p className="text-lg font-semibold mb-4">
-              {isUpdateExpense ? 'Update Transaction' : 'Add Transaction'}
+              {isUpdateExpense ? 'Update Purchase' : 'Add Purchase'}
             </p>
             <CircleX
               className="absolute top-4 right-4 cursor-pointer text-red-400 hover:text-red-600"
@@ -374,7 +359,7 @@ const PurchaseModal = ({
 
               <div>
                 <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
-                  Quantity {selectedProduct && `(Available: ${getAvailableStock()})`}
+                  Quantity
                 </label>
                 <InputNumber
                   defaultValue={0}
@@ -382,7 +367,6 @@ const PurchaseModal = ({
                   formatter={toThousands}
                   value={transaction.quantity}
                   onChange={(value) => handleOnChangeEvent(value, 'quantity')}
-                  max={getAvailableStock()}
                   min={0}
                   name="quantity"
                   id="quantity"
@@ -470,7 +454,10 @@ const PurchaseModal = ({
                     value={transaction.pendingAmount}
                     size="xs"
                     formatter={toThousands}
-                    onChange={(val) => handleOnChangeEvent(val, 'pendingAmount')}
+                    onChange={(val) => handleOnChangeEvent(val ?? 0, 'pendingAmount')}
+                    onBlur={(e) =>
+                      handleOnChangeEvent(Number(e.target.value) || 0, 'pendingAmount')
+                    }
                     id="pendingAmount"
                     className="w-full border border-gray-300 rounded px-2 py-1.5 
                                                focus:outline-none focus:ring-2 focus:ring-blue-400 h-9"
@@ -485,11 +472,12 @@ const PurchaseModal = ({
                   <InputNumber
                     prefix={<div className="">₹</div>}
                     value={
-                      transaction.sellAmount * transaction.quantity - transaction.pendingAmount
+                      Number(totalPurchaseAmount) * transaction.quantity - transaction.pendingAmount
                     }
                     size="xs"
                     formatter={toThousands}
-                    onChange={(val) => handleOnChangeEvent(val, 'paidAmount')}
+                    onChange={(val) => handleOnChangeEvent(val ?? 0, 'paidAmount')}
+                    onBlur={(e) => handleOnChangeEvent(Number(e.target.value) || 0, 'paidAmount')}
                     id="paidAmount"
                     className="w-full border border-gray-300 rounded px-2 py-1.5 
                                                focus:outline-none focus:ring-2 focus:ring-blue-400 h-9"

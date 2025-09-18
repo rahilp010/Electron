@@ -1,7 +1,9 @@
 /* eslint-disable prettier/prettier */
+/* eslint-disable react/prop-types */
 import { useState } from 'react'
 import { Uploader, Animation } from 'rsuite'
 import { X, Upload } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 const ImportExcel = ({ onFileSelected, onClose }) => {
   const [isUploading, setIsUploading] = useState(false)
@@ -9,34 +11,23 @@ const ImportExcel = ({ onFileSelected, onClose }) => {
 
   const handleFileChange = async (files) => {
     if (files.length > 0) {
-      const file = files[0]
-
-      // Validate file type
-      const validTypes = [
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-        'application/vnd.ms-excel', // .xls
-        'text/csv' // .csv
-      ]
-
-      if (!validTypes.includes(file.blobFile.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
-        alert('Please select a valid Excel file (.xlsx, .xls) or CSV file')
-        return
-      }
-
       setIsUploading(true)
-
-      try {
-        await onFileSelected(file.blobFile.path || file.name)
-      } catch (error) {
-        console.error('Error processing file:', error)
-      } finally {
-        setIsUploading(false)
+      const file = files[0].blobFile
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]])
+        console.log(rows) // rows from Excel
+        await onFileSelected(file.blobFile?.path || file.name)
       }
+      reader.readAsArrayBuffer(file)
     }
+    setIsUploading(false)
   }
 
   return (
-    <Animation.Slide in={true} placement="top" className="mx-14 my-2">
+    <Animation.Bounce in={true} className="mx-14 my-2">
       <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-4 relative">
         {/* Header */}
         <div className="flex justify-between items-center mb-3">
@@ -85,9 +76,9 @@ const ImportExcel = ({ onFileSelected, onClose }) => {
               </div>
             )}
           </div>
-        </Uploader> 
+        </Uploader>
       </div>
-    </Animation.Slide>
+    </Animation.Bounce>
   )
 }
 

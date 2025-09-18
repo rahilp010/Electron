@@ -111,6 +111,8 @@ const TransactionModal = ({
 
       try {
         console.log(location.pathname)
+        console.log('transaction', transaction)
+
         // Validation
         if (!transaction.clientId || !transaction.productId) {
           toast.error('Please enter details')
@@ -134,7 +136,8 @@ const TransactionModal = ({
           transaction.pendingAmount = 0
           transaction.paidAmount = transaction.sellAmount * transaction.quantity
         } else if (transaction.paymentType === 'partial') {
-          if (transaction.sellAmount < transaction.pendingAmount + transaction.paidAmount) {
+          console.log(transaction.sellAmount > transaction.pendingAmount + transaction.paidAmount)
+          if (transaction.sellAmount > transaction.pendingAmount + transaction.paidAmount) {
             toast.error('Partial amount should be less than total amount')
             return
           }

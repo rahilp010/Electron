@@ -24,7 +24,8 @@ const transactionApi = {
 
 const bankReceiptApi = {
   getAllBankReceipts: () => window.api.getAllBankReceipts(),
-  createBankReceipt: (bankReceipt) => window.api.createBankReceipt(bankReceipt)
+  createBankReceipt: (bankReceipt) => window.api.createBankReceipt(bankReceipt),
+  updateBankReceipt: (bankReceipt) => window.api.updateBankReceipt(bankReceipt)
 }
 
 const cashReceiptApi = {
