@@ -196,7 +196,7 @@ const Bank = () => {
           srNo: bankReceipt.srNo,
           type: bankReceipt.type,
           bank: bankReceipt.bank,
-          date: new Date(bankReceipt.date).toISOString(),
+          date: new Date(bankReceipt.date).toLocaleString(),
           party: Number(bankReceipt.party),
           amount: parseFloat(bankReceipt.amount) || 0,
           description: bankReceipt.description
@@ -213,15 +213,19 @@ const Bank = () => {
           } else {
             toast.error('Failed to update bank receipt')
           }
+          console.log(response)
+
           toast.success('Bank receipt updated successfully')
         } else {
           // Create new receipt
           if (window.api && window.api.createBankReceipt) {
             response = await window.api.createBankReceipt(bankReceiptData)
+            console.log(response)
             dispatch(createBankReceipt(bankReceiptData))
           } else {
             toast.error('Failed to create bank receipt')
           }
+          console.log(response)
           toast.success('Bank receipt added successfully')
         }
 
@@ -236,6 +240,8 @@ const Bank = () => {
     },
     [bankReceipt, isSubmittingTransaction, isUpdatingReceipt, selectedReceiptId]
   )
+
+  console.log(bankReceipt)
 
   const handleClearForm = () => {
     // Reset to create mode
@@ -291,7 +297,7 @@ const Bank = () => {
       srNo: receipt.srNo || '',
       type: receipt.type || 'Receipt',
       bank: receipt.bank || 'IDBI',
-      date: receipt.date ? new Date(receipt.date) : new Date(),
+      date: receipt.date ? new Date(receipt.date).toLocaleString() : new Date().toLocaleString(),
       party: receipt.party ? Number(receipt.party) : '',
       amount: receipt.amount ? String(receipt.amount) : '',
       description: receipt.description || ''
@@ -423,7 +429,7 @@ const Bank = () => {
         </div>
 
         <div className="bg-gray-100 p-1 mx-7 rounded-xl">
-          <div className="flex items-center gap-5 mx-4 my-2">
+          <div className="grid grid-cols-4 items-center gap-5 mx-4 my-2">
             <div className="flex flex-col gap-1 indent-0.5">
               <p className="font-light text-sm text-gray-500 tracking-wider">Sr No.</p>
               <Input
@@ -474,12 +480,26 @@ const Bank = () => {
                 placeholder="Enter Amount"
                 style={{ width: 260 }}
                 type="number"
-                step="0.01"
+                step="1"
                 min="0"
                 value={bankReceipt.amount}
                 onChange={(value) => handleInputChange('amount', value)}
               />
               {errors.amount && <p className="text-red-500 text-xs mt-1">{errors.amount}</p>}
+            </div>
+
+            <div className="flex flex-col gap-1 indent-0.5">
+              <p className="font-light text-sm text-gray-500 tracking-wider">Due Date</p>
+              <DatePicker
+                size="lg"
+                placeholder="Enter Date"
+                style={{ width: 250 }}
+                value={bankReceipt.dueDate}
+                onChange={(value) => handleInputChange('dueDate', value)}
+                oneTap
+                format="dd-MM-yyyy"
+              />
+              {errors.dueDate && <p className="text-red-500 text-xs mt-1">{errors.dueDate}</p>}
             </div>
           </div>
 

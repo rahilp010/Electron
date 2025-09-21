@@ -99,3 +99,12 @@ html {
 .rotate-y-180 {
   transform: rotateY(180deg);
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    display: block;
+  }
+}

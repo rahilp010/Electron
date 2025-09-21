@@ -38,9 +38,12 @@ db.prepare(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     clientName TEXT NOT NULL,
     phoneNo TEXT,
+    gstNo TEXT,
+    address TEXT,
     pendingAmount REAL DEFAULT 0,
     paidAmount REAL DEFAULT 0,
     pendingFromOurs REAL DEFAULT 0,
+    accountType TEXT NOT NULL CHECK (accountType IN ('Creditors', 'Debtors')),
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`

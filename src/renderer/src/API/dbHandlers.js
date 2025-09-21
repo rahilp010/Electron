@@ -168,31 +168,37 @@ ipcMain.handle('createClient', (event, client) => {
   return db
     .prepare(
       `
-    INSERT INTO clients (clientName, phoneNo, pendingAmount, paidAmount, pendingFromOurs)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO clients (clientName, phoneNo,address, pendingAmount, paidAmount, pendingFromOurs, accountType, gstNo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `
     )
     .run(
       client.clientName,
       client.phoneNo,
+      client.address,
       client.pendingAmount,
       client.paidAmount,
-      client.pendingFromOurs
+      client.pendingFromOurs,
+      client.accountType,
+      client.gstNo
     )
 })
 
 ipcMain.handle('updateClient', (event, client) => {
   const stmt = db.prepare(`
     UPDATE clients
-    SET clientName = ?, phoneNo = ?, pendingAmount = ?, paidAmount = ?, pendingFromOurs = ?, updatedAt = CURRENT_TIMESTAMP
+    SET clientName = ?, phoneNo = ?, address = ?, pendingAmount = ?, paidAmount = ?, pendingFromOurs = ?, accountType = ?, gstNo = ?, updatedAt = CURRENT_TIMESTAMP
     WHERE id = ?
   `)
   stmt.run(
     client.clientName,
     client.phoneNo,
+    client.address,
     client.pendingAmount,
     client.paidAmount,
     client.pendingFromOurs,
+    client.accountType,
+    client.gstNo,
     client.id
   )
   return client

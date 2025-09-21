@@ -19,12 +19,13 @@ import ImportExcel from '../components/UI/ImportExcel'
 const TABLE_HEADERS = [
   { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
   { key: 'date', label: 'Date', width: 'w-[150px]' },
-  { key: 'clientName', label: 'Client Name', width: 'w-[200px]' },
+  { key: 'clientName', label: 'Client Name', width: 'w-[300px]' },
+  { key: 'gstNo', label: 'GST No', width: 'w-[200px]' },
   { key: 'phoneNo', label: 'Phone No', width: 'w-[200px]' },
   { key: 'pendingAmount', label: 'Pending Payment', width: 'w-[170px]' },
   { key: 'paidAmount', label: 'Paid Amount', width: 'w-[170px]' },
   { key: 'pendingFromOurs', label: 'Our Pendings', width: 'w-[150px]' },
-  { key: 'loss', label: 'Loss', width: 'w-[150px]' },
+  { key: 'accountType', label: 'Account Type', width: 'w-[150px]' },
   { key: 'totalWorth', label: 'Total Worth', width: 'w-[150px]' },
   { key: 'action', label: 'Action', width: 'w-[150px]' }
 ]
@@ -73,13 +74,14 @@ const ClientRow = memo(({ client, index, onDelete, onEdit }) => {
       </td>
       <td className="px-4 py-3">{new Date(client.createdAt).toLocaleDateString()}</td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-2 px-6">
+        <div className="flex items-center gap-2 px-6 uppercase">
           <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center border border-blue-300 justify-center text-xs font-medium text-blue-600 mr-3">
             {getInitials(client.clientName)}
           </div>
           {client.clientName}
         </div>
       </td>
+      <td className="px-4 py-3 uppercase">{client.gstNo === '' ? '-' : client.gstNo}</td>
       <td className="px-4 py-3">{client.phoneNo === '' ? '-' : client.phoneNo}</td>
       <td className="px-4 py-3">
         <div className="border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] p-1 rounded-full font-bold text-xs px-2">
@@ -94,7 +96,7 @@ const ClientRow = memo(({ client, index, onDelete, onEdit }) => {
       </td>
       <td className="px-4 py-3 tracking-wide">
         <div className="text-[#991b1b] bg-[#fee2e2] border border-[#ffadad] p-1 rounded-full font-bold text-xs px-2">
-          ₹ {toThousands(calculateLoss(client.pendingFromOurs, client.pendingAmount))}
+          {client.accountType}
         </div>
       </td>
       <td className="px-4 py-3 tracking-wide">
@@ -140,14 +142,15 @@ const useClientOperations = () => {
 
   const handleDeleteClient = useCallback(
     async (id) => {
+      if (!window.confirm('Are you sure you want to delete this client?')) return
       try {
         const response = await window.api.deleteClient(id)
         dispatch(deleteClient(response))
-        await fetchClients()
         toast.success('Client data deleted successfully')
       } catch (error) {
         toast.error('Failed to delete client: ' + error.message)
       }
+      await fetchClients()
     },
     [dispatch, fetchClients]
   )

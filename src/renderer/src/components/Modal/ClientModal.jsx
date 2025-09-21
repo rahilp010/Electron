@@ -6,7 +6,7 @@ import { setClients, updateClient } from '../../app/features/electronSlice'
 import { CircleX } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
-import { Input, InputNumber } from 'rsuite'
+import { Input, InputNumber, SelectPicker } from 'rsuite'
 
 const ClientModal = ({
   setShowModal,
@@ -15,6 +15,11 @@ const ClientModal = ({
   type = 'client'
 }) => {
   const dispatch = useDispatch()
+
+  const accountTypeOptions = [
+    { value: 'Creditors', label: 'Creditors' },
+    { value: 'Debtors', label: 'Debtors' }
+  ]
 
   const fetchClients = async () => {
     const response = await window.api.getAllClients()
@@ -32,17 +37,23 @@ const ClientModal = ({
       return {
         clientName: existingClient.clientName || '',
         phoneNo: existingClient.phoneNo || '',
+        gstNo: existingClient.gstNo || '',
+        address: existingClient.address || '',
         pendingAmount: Number(existingClient.pendingAmount) || '',
         paidAmount: Number(existingClient.paidAmount) || '',
-        pendingFromOurs: existingClient.pendingFromOurs || ''
+        pendingFromOurs: existingClient.pendingFromOurs || '',
+        accountType: existingClient.accountType || ''
       }
     }
     return {
       clientName: '',
       phoneNo: '',
+      gstNo: '',
+      address: '',
       pendingAmount: '',
       paidAmount: '',
-      pendingFromOurs: ''
+      pendingFromOurs: '',
+      accountType: ''
     }
   }
 
@@ -61,9 +72,12 @@ const ClientModal = ({
       setClient({
         clientName: existingClient.clientName || '',
         phoneNo: existingClient.phoneNo || '',
+        gstNo: existingClient.gstNo || '',
+        address: existingClient.address || '',
         pendingAmount: Number(existingClient.pendingAmount) || '',
         paidAmount: Number(existingClient.paidAmount) || '',
-        pendingFromOurs: existingClient.pendingFromOurs || ''
+        pendingFromOurs: existingClient.pendingFromOurs || '',
+        accountType: existingClient.accountType || ''
       })
     }
   }, [isUpdateExpense, existingClient?.id])
@@ -82,6 +96,11 @@ const ClientModal = ({
           return
         }
 
+        if (!client.accountType) {
+          toast.error('Please select account type')
+          return
+        }
+
         if (!client.pendingAmount || client.pendingAmount < 0) {
           toast.error('Please enter a valid pending amount')
           return
@@ -95,9 +114,12 @@ const ClientModal = ({
         const clientData = {
           clientName: client.clientName,
           phoneNo: client.phoneNo,
+          gstNo: client.gstNo,
+          address: client.address,
           pendingAmount: Number(client.pendingAmount),
           paidAmount: Number(client.paidAmount),
-          pendingFromOurs: client.pendingFromOurs
+          pendingFromOurs: client.pendingFromOurs,
+          accountType: client.accountType
         }
 
         console.log('Submitting client:', clientData)
@@ -149,6 +171,14 @@ const ClientModal = ({
         setClient((prev) => ({ ...prev, phoneNo: value }))
         break
 
+      case 'gstNo':
+        setClient((prev) => ({ ...prev, gstNo: value }))
+        break
+
+      case 'address':
+        setClient((prev) => ({ ...prev, address: value }))
+        break
+
       case 'pendingAmount':
         setClient((prev) => ({ ...prev, pendingAmount: value }))
         break
@@ -159,6 +189,10 @@ const ClientModal = ({
 
       case 'pendingFromOurs':
         setClient((prev) => ({ ...prev, pendingFromOurs: value }))
+        break
+
+      case 'accountType':
+        setClient((prev) => ({ ...prev, accountType: value }))
         break
 
       default:
@@ -198,6 +232,7 @@ const ClientModal = ({
                 <Input
                   size="sm"
                   value={client.clientName}
+                  placeholder="Enter Client Name"
                   onChange={(value) => handleOnChangeEvent(value, 'clientName')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
@@ -209,23 +244,66 @@ const ClientModal = ({
                 <Input
                   size="sm"
                   value={client.phoneNo}
+                  placeholder="Enter phone no"
                   onChange={(value) => handleOnChangeEvent(value, 'phoneNo')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
               </div>
-              <div className="mb-4">
-                <label htmlFor="price" className="block text-sm mb-1 text-gray-600">
-                  Pending Amount
+              <div className="col-span-2">
+                <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
+                  Address
                 </label>
-                <InputNumber
-                  prefix="₹"
-                  defaultValue={0}
-                  size="xs"
-                  formatter={toThousands}
-                  value={client.pendingAmount}
-                  onChange={(value) => handleOnChangeEvent(value, 'pendingAmount')}
-                  className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                <Input
+                  as="textarea"
+                  rows={2}
+                  size="sm"
+                  value={client.address}
+                  placeholder="Enter address"
+                  onChange={(value) => handleOnChangeEvent(value, 'address')}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
+              </div>
+              <div className="grid grid-cols-3 col-span-2 gap-4">
+                <div>
+                  <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
+                    Account Type
+                  </label>
+                  <SelectPicker
+                    data={accountTypeOptions}
+                    searchable={false}
+                    value={client.accountType}
+                    onChange={(value) => handleOnChangeEvent(value, 'accountType')}
+                    placeholder="Account Type"
+                    style={{ width: 300, zIndex: 999 }}
+                    menuStyle={{ zIndex: 999 }}
+                    menuMaxHeight={200}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
+                    GST No
+                  </label>
+                  <Input
+                    value={client.gstNo}
+                    onChange={(value) => handleOnChangeEvent(value, 'gstNo')}
+                    placeholder="GST No"
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="price" className="block text-sm mb-1 text-gray-600">
+                    Pending Amount
+                  </label>
+                  <InputNumber
+                    prefix="₹"
+                    defaultValue={0}
+                    size="xs"
+                    formatter={toThousands}
+                    value={client.pendingAmount}
+                    onChange={(value) => handleOnChangeEvent(value, 'pendingAmount')}
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
               </div>
               <div className="mb-4">
                 <label htmlFor="price" className="block text-sm mb-1 text-gray-600">
