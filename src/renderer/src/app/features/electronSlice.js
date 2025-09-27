@@ -42,6 +42,19 @@ export const electronSlice = createSlice({
       })(),
       isLoading: false
     },
+    transactionItems: {
+      data: (() => {
+        try {
+          const stored = localStorage.getItem('transactionItems')
+          return stored ? JSON.parse(stored) : []
+        } catch (error) {
+          console.error('Error parsing transactionItems from localStorage:', error)
+          localStorage.removeItem('transactionItems') // Clear corrupted data
+          return []
+        }
+      })(),
+      isLoading: false
+    },
     bankReceipt: {
       data: (() => {
         try {
@@ -266,6 +279,7 @@ export const electronSlice = createSlice({
         localStorage.removeItem('transaction')
       }
     },
+
     createBankReceipt: (state, action) => {
       // Ensure state.products.data is always an array
       if (!Array.isArray(state.bankReceipt.data)) {
@@ -273,6 +287,38 @@ export const electronSlice = createSlice({
       }
       state.bankReceipt.data.push(action.payload)
       state.bankReceipt.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      localStorage.setItem('bankReceipt', JSON.stringify(state.bankReceipt.data))
+    },
+    updateBankReceipt: (state, action) => {
+      const updatedBankReceipt = action.payload
+      if (!updatedBankReceipt) return // safety check
+
+      if (!Array.isArray(state.bankReceipt.data)) {
+        state.bankReceipt.data = []
+      }
+
+      const index = state.bankReceipt.data.findIndex(
+        (bankReceipt) => bankReceipt.id === updatedBankReceipt.id
+      )
+
+      if (index !== -1) {
+        state.bankReceipt.data[index] = updatedBankReceipt
+      } else {
+        // If it doesn't exist, push it
+        state.bankReceipt.data.push(updatedBankReceipt)
+      }
+
+      localStorage.setItem('bankReceipt', JSON.stringify(state.bankReceipt.data))
+    },
+    setBankReceipt: (state, action) => {
+      if (!Array.isArray(state.bankReceipt.data)) {
+        state.bankReceipt.data = []
+      }
+      if (Array.isArray(action.payload)) {
+        state.bankReceipt.data = action.payload
+      } else {
+        state.bankReceipt.data.push(action.payload)
+      }
       localStorage.setItem('bankReceipt', JSON.stringify(state.bankReceipt.data))
     },
     getBankReceipt: (state) => {
@@ -303,6 +349,31 @@ export const electronSlice = createSlice({
       }
       state.cashReceipt.data.push(action.payload)
       state.cashReceipt.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
+    },
+    updateCashReceipt: (state, action) => {
+      if (!Array.isArray(state.cashReceipt.data)) {
+        state.cashReceipt.data = []
+        return
+      }
+      const updatedCashReceipt = action.payload
+      const index = state.cashReceipt.data.findIndex(
+        (cashReceipt) => cashReceipt.id === updatedCashReceipt.id
+      )
+      if (index !== -1) {
+        state.cashReceipt.data[index] = updatedCashReceipt
+        localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
+      }
+    },
+    setCashReceipt: (state, action) => {
+      if (!Array.isArray(state.cashReceipt.data)) {
+        state.cashReceipt.data = []
+      }
+      if (Array.isArray(action.payload)) {
+        state.cashReceipt.data = action.payload
+      } else {
+        state.cashReceipt.data.push(action.payload)
+      }
       localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
     },
     getCashReceipt: (state) => {
@@ -346,8 +417,12 @@ export const {
   setTransactions,
   getTransaction,
   createBankReceipt,
+  updateBankReceipt,
+  setBankReceipt,
   getBankReceipt,
   createCashReceipt,
+  updateCashReceipt,
+  setCashReceipt,
   getCashReceipt
 } = electronSlice.actions
 export default electronSlice.reducer

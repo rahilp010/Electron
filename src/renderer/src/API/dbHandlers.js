@@ -221,12 +221,13 @@ ipcMain.handle('getAllTransactions', () => {
 })
 
 // ✅ Create transaction
-ipcMain.handle('createTransaction', (event, transaction) => {
+ipcMain.handle('createTransaction', (event, transaction, bankReceipt = {}, cashReceipt = {}) => {
   const {
     clientId,
     productId,
     quantity,
     sellAmount,
+    paymentMethod,
     statusOfTransaction,
     paymentType,
     pendingAmount,
@@ -234,7 +235,6 @@ ipcMain.handle('createTransaction', (event, transaction) => {
     transactionType
   } = transaction
 
-  // Check if product exists and has sufficient quantity
   const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId)
   if (!product) {
     toast.error('Product not Found')
@@ -274,14 +274,15 @@ ipcMain.handle('createTransaction', (event, transaction) => {
 
     // 1. Create the transaction record
     const stmt = db.prepare(`
-            INSERT INTO transactions (clientId, productId, quantity, sellAmount, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (clientId, productId, quantity, sellAmount, paymentMethod, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
     const result = stmt.run(
       clientId,
       productId,
       quantity,
       sellAmount,
+      paymentMethod,
       statusOfTransaction || 'pending',
       paymentType || 'cash',
       pendingAmount || 0,
@@ -346,12 +347,108 @@ ipcMain.handle('createTransaction', (event, transaction) => {
       clientStmt.run(clientPendingFromOursIncrease, clientId)
     }
 
-    // 4. Get the created transaction with all details
-    const createdTransaction = db
-      .prepare('SELECT * FROM transactions WHERE id = ?')
-      .get(result.lastInsertRowid)
+    const transactionId = result.lastInsertRowid
 
-    return createdTransaction
+    // 4. Create linked bank receipt if purchase
+    if (
+      transactionType === 'purchase' &&
+      bankReceipt &&
+      bankReceipt.type &&
+      bankReceipt.bank &&
+      bankReceipt.amount
+    ) {
+      const { type, bank, date, party, amount, description } = bankReceipt
+
+      let formattedDate = null
+      if (date) {
+        const parsedDate = new Date(date)
+        if (!isNaN(parsedDate)) {
+          formattedDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ')
+        }
+      }
+
+      db.prepare(
+        `
+        INSERT INTO bankReceipts (transactionId, type, bank, date, party, amount, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        `
+      ).run(transactionId, type, bank, formattedDate, party, amount, description)
+    } else if (
+      transactionType === 'sales' &&
+      bankReceipt &&
+      bankReceipt.type &&
+      bankReceipt.bank &&
+      bankReceipt.amount
+    ) {
+      const { type, bank, date, party, amount, description } = bankReceipt
+
+      let formattedDate = null
+      if (date) {
+        const parsedDate = new Date(date)
+        if (!isNaN(parsedDate)) {
+          formattedDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ')
+        }
+      }
+
+      db.prepare(
+        `
+        INSERT INTO bankReceipts (transactionId, type, bank, date, party, amount, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        `
+      ).run(transactionId, type, bank, formattedDate, party, amount, description)
+    }
+
+    //cash
+
+    if (
+      transactionType === 'purchase' &&
+      cashReceipt &&
+      cashReceipt.type &&
+      cashReceipt.bank &&
+      cashReceipt.amount
+    ) {
+      const { type, bank, date, party, amount, description } = cashReceipt
+
+      let formattedDate = null
+      if (date) {
+        const parsedDate = new Date(date)
+        if (!isNaN(parsedDate)) {
+          formattedDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ')
+        }
+      }
+
+      db.prepare(
+        `
+        INSERT INTO cashReceipts (transactionId, type, bank, date, party, amount, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        `
+      ).run(transactionId, type, bank, formattedDate, party, amount, description)
+    } else if (
+      transactionType === 'sales' &&
+      cashReceipt &&
+      cashReceipt.type &&
+      cashReceipt.bank &&
+      cashReceipt.amount
+    ) {
+      const { type, bank, date, party, amount, description } = cashReceipt
+
+      let formattedDate = null
+      if (date) {
+        const parsedDate = new Date(date)
+        if (!isNaN(parsedDate)) {
+          formattedDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ')
+        }
+      }
+
+      db.prepare(
+        `
+        INSERT INTO cashReceipts (transactionId, type, bank, date, party, amount, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        `
+      ).run(transactionId, type, bank, formattedDate, party, amount, description)
+    }
+
+    return db.prepare('SELECT * FROM transactions WHERE id = ?').get(transactionId)
   })
 
   return dbTransaction()
@@ -366,6 +463,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
       productId,
       quantity,
       sellAmount,
+      paymentMethod,
       statusOfTransaction,
       paymentType,
       pendingAmount,
@@ -456,7 +554,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
       db.prepare(
         `UPDATE transactions
         SET clientId = ?, productId = ?, quantity = ?, sellAmount = ?, 
-            statusOfTransaction = ?, paymentType = ?, 
+            paymentMethod = ?, statusOfTransaction = ?, paymentType = ?, 
             pendingAmount = ?, paidAmount = ?, transactionType = ?, updatedAt = CURRENT_TIMESTAMP
         WHERE id = ?`
       ).run(
@@ -464,6 +562,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
         productId,
         quantity,
         sellAmount,
+        paymentMethod,
         statusOfTransaction,
         paymentType,
         pendingAmount,
@@ -536,6 +635,43 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
           //   SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
           //   WHERE id = ?`
           // ).run(newTotalAmount, clientId)
+        }
+      }
+
+      // After updating transaction amounts
+      if (transactionType === 'purchase') {
+        // Fetch existing bank receipt linked to this transaction
+        const bankReceipt = db.prepare('SELECT * FROM bankReceipts WHERE transactionId = ?').get(id)
+
+        const totalAmount = (newProduct?.price || 0) * quantity
+
+        if (bankReceipt) {
+          // Update existing bank receipt
+          db.prepare(
+            `UPDATE bankReceipts
+       SET type = ?, bank = ?, date = CURRENT_TIMESTAMP, party = ?, amount = ?, description = ?
+       WHERE id = ?`
+          ).run(
+            'Payment',
+            updatedTransaction.bank || 'IDBI',
+            client?.clientName || 'Unknown Client',
+            totalAmount,
+            `Purchase ${newProduct?.name}`,
+            bankReceipt.id
+          )
+        } else {
+          // Create new bank receipt if it didn't exist before
+          db.prepare(
+            `INSERT INTO bankReceipts (transactionId, type, bank, date, party, amount, description)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)`
+          ).run(
+            id,
+            'Payment',
+            updatedTransaction.bank || 'IDBI',
+            client?.clientName || 'Unknown Client',
+            totalAmount,
+            `Purchase ${newProduct?.name}`
+          )
         }
       }
 
@@ -656,7 +792,8 @@ ipcMain.handle('getRecentBankReceipts', async () => {
 
 // ✅ Create bank receipt
 ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
-  const { srNo, type, bank, date, party, amount, description } = bankReceipt
+  const { transactionId, type, bank, date, party, amount, description, statusOfTransaction } =
+    bankReceipt
 
   const formattedDate =
     typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
@@ -665,32 +802,84 @@ ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
     const res = db
       .prepare(
         `
-      INSERT INTO bankReceipts (srNo, type, bank, date, party, amount, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?) `
+      INSERT INTO bankReceipts (transactionId, type, bank, date, party, amount, description, statusOfTransaction)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?) `
       )
-      .run(srNo, type, bank, formattedDate, party, amount, description)
-    return res
+      .run(
+        transactionId,
+        type,
+        bank,
+        formattedDate,
+        party,
+        amount,
+        description,
+        statusOfTransaction
+      )
+    // Fetch the inserted row
+    const createdBankReceipt = db
+      .prepare('SELECT * FROM bankReceipts WHERE id = ?')
+      .get(res.lastInsertRowid)
+
+    return createdBankReceipt
   })
   return tx()
 })
 
 ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
-  const { srNo, type, bank, date, party, amount, description } = bankReceipt
+  const { transactionId, type, bank, date, party, amount, description, statusOfTransaction } =
+    bankReceipt
 
   const formattedDate =
     typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
 
   const tx = db.transaction(() => {
-    const res = db
-      .prepare(
-        `
-      UPDATE bankReceipts
-        SET srNo = ?, type = ?, bank = ?, date = ?, party = ?, amount = ?, description = ?
-        WHERE srNo = ?`
+    // 1️⃣ Check if bank receipt exists by transactionId
+    const existing = db
+      .prepare(`SELECT * FROM bankReceipts WHERE transactionId = ?`)
+      .get(transactionId)
+
+    if (existing) {
+      // 2️⃣ Update existing
+      db.prepare(
+        `UPDATE bankReceipts
+         SET type = ?, bank = ?, date = ?, party = ?, amount = ?, description = ?, statusOfTransaction = ?, updatedAt = CURRENT_TIMESTAMP
+         WHERE transactionId = ?`
+      ).run(
+        type,
+        bank,
+        formattedDate,
+        party,
+        amount,
+        description,
+        statusOfTransaction,
+        transactionId
       )
-      .run(srNo, type, bank, formattedDate, party, amount, description, srNo)
-    return res
+
+      // 3️⃣ Return the updated record using its id
+      return db.prepare(`SELECT * FROM bankReceipts WHERE id = ?`).get(existing.id)
+    } else {
+      // 4️⃣ Insert new record if not exists
+      const result = db
+        .prepare(
+          `INSERT INTO bankReceipts (transactionId, type, bank, date, party, amount, description, statusOfTransaction)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          transactionId,
+          type,
+          bank,
+          formattedDate,
+          party,
+          amount,
+          description,
+          statusOfTransaction
+        )
+
+      // 5️⃣ Return newly created record
+      return db.prepare(`SELECT * FROM bankReceipts WHERE id = ?`).get(result.lastInsertRowid)
+    }
   })
+
   return tx()
 })
 
@@ -712,7 +901,7 @@ ipcMain.handle('getRecentCashReceipts', async () => {
 
 // ✅ Create bank receipt
 ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
-  const { srNo, type, cash, date, party, amount, description } = cashReceipt
+  const { transactionId, type, cash, date, party, amount, description } = cashReceipt
 
   const formattedDate =
     typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
@@ -721,31 +910,53 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
     const res = db
       .prepare(
         `
-      INSERT INTO cashReceipts (srNo, type, cash, date, party, amount, description)
+      INSERT INTO cashReceipts (transactionId, type, cash, date, party, amount, description)
         VALUES (?, ?, ?, ?, ?, ?, ?) `
       )
-      .run(srNo, type, cash, formattedDate, party, amount, description)
-    return res
+      .run(transactionId, type, cash, formattedDate, party, amount, description)
+    // Fetch the inserted row
+    const createdCashReceipt = db
+      .prepare(`SELECT * FROM cashReceipts WHERE id = ?`)
+      .get(res.lastInsertRowid)
+    return createdCashReceipt
   })
   return tx()
 })
 
 ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
-  const { srNo, type, cash, date, party, amount, description } = cashReceipt
+  const { transactionId, type, cash, date, party, amount, description } = cashReceipt
 
   const formattedDate =
     typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
 
   const tx = db.transaction(() => {
-    const res = db
-      .prepare(
-        `
-      UPDATE cashReceipts
-        SET srNo = ?, type = ?, cash = ?, date = ?, party = ?, amount = ?, description = ?
-        WHERE srNo = ?`
-      )
-      .run(srNo, type, cash, formattedDate, party, amount, description, srNo)
-    return res
+    // 1️⃣ Check if bank receipt exists by transactionId
+    const existing = db
+      .prepare(`SELECT * FROM cashReceipts WHERE transactionId = ?`)
+      .get(transactionId)
+
+    if (existing) {
+      // 2️⃣ Update existing
+      db.prepare(
+        `UPDATE cashReceipts
+        SET type = ?, cash = ?, date = ?, party = ?, amount = ?, description = ?
+        WHERE transactionId = ?`
+      ).run(type, cash, formattedDate, party, amount, description, transactionId)
+
+      // 3️⃣ Return the updated record using its id
+      return db.prepare(`SELECT * FROM cashReceipts WHERE id = ?`).get(existing.id)
+    } else {
+      // 4️⃣ Insert new record if not exists
+      const result = db
+        .prepare(
+          `INSERT INTO cashReceipts (transactionId, type, cash, date, party, amount, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(transactionId, type, cash, formattedDate, party, amount, description)
+
+      // 5️⃣ Return newly created record
+      return db.prepare(`SELECT * FROM cashReceipts WHERE id = ?`).get(result.lastInsertRowid)
+    }
   })
   return tx()
 })

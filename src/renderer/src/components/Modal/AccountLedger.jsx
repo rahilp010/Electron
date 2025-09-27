@@ -79,7 +79,7 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
           <div className={`p-1 rounded-full ${isReceipt ? 'bg-emerald-200' : 'bg-red-200'}`}>
             <Calendar size={14} className={isReceipt ? 'text-emerald-600' : 'text-red-600'} />
           </div>
-          <span className="font-medium text-gray-700">{receipt.date}</span>
+          <span className="font-medium text-gray-700">{new Date(receipt.date).toLocaleDateString()}</span>
         </div>
       </td>
 
@@ -88,20 +88,20 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
           <div className="p-1 rounded-full bg-blue-200">
             <Building2 size={14} className="text-blue-600" />
           </div>
-          <span className="font-medium text-gray-700">{receipt.bank} Bank</span>
+          <span className="font-medium text-gray-700">{receipt.bank}</span>
         </div>
       </td>
 
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {clientName
+            {receipt.clientName
               .split(' ')
               .map((n) => n[0])
               .join('')
               .toUpperCase()}
           </div>
-          <span className="font-medium text-gray-800 tracking-wide">{clientName}</span>
+          <span className="font-medium text-gray-800 tracking-wide">{receipt.clientName}</span>
         </div>
       </td>
 
@@ -111,7 +111,7 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
             <div className="p-1 rounded-full bg-red-200">
               <TrendingDown size={14} className="text-red-600" />
             </div>
-            <span className="font-semibold text-red-600 bg-red-100 px-3 py-1 rounded-full">
+            <span className="font-semibold text-red-600 px-3 py-1 rounded-full">
               {toThousands(receipt.amount)}
             </span>
           </div>
@@ -126,7 +126,7 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
             <div className="p-1 rounded-full bg-emerald-200">
               <TrendingUp size={14} className="text-emerald-600" />
             </div>
-            <span className="font-semibold text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full">
+            <span className="font-semibold text-emerald-600 px-3 py-1 rounded-full">
               {toThousands(receipt.amount)}
             </span>
           </div>
@@ -188,7 +188,7 @@ const useAccountOperations = () => {
       const receipts = await window.api.getRecentBankReceipts()
       return receipts.map((r) => ({
         ...r,
-        clientId: r.clientId || r.party,
+        clientName: r.party,
         date: r.date || r.createdAt
       }))
     } catch (error) {
@@ -203,7 +203,7 @@ const useAccountOperations = () => {
       const receipts = await window.api.getRecentCashReceipts()
       return receipts.map((r) => ({
         ...r,
-        clientId: r.clientId || r.party,
+        clientName: r.party,
         date: r.date || r.createdAt
       }))
     } catch (error) {
@@ -243,11 +243,13 @@ const AccountLedger = ({ client, onClose }) => {
     const sourceData = selectedType === 'Bank' ? recentBankReceipts : recentCashReceipts
 
     if (client?.id) {
-      return sourceData.filter((r) => Number(r.clientId) === Number(client.id))
+      return sourceData.filter((r) => r.clientName === getClientName(client.id))
     }
 
     return sourceData
-  }, [selectedType, recentBankReceipts, recentCashReceipts, client])
+  }, [selectedType, recentBankReceipts, recentCashReceipts, client, getClientName])
+
+  console.log('filteredData', filteredData)
 
   // Memoized running balance calculation
   const balances = useMemo(() => {
@@ -452,7 +454,7 @@ const AccountLedger = ({ client, onClose }) => {
               ) : (
                 filteredData.map((receipt, index) => (
                   <TransactionRow
-                    key={`${receipt.id || receipt.srNo}-${index}`}
+                    key={`${receipt.id || receipt.transactionId}-${index}`}
                     receipt={receipt}
                     index={index}
                     balance={balances[index]}

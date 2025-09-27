@@ -16,6 +16,9 @@ import Cash from './Screens/Cash.jsx'
 import LedgerReport from './Screens/LedgerReport.jsx'
 import Authentication from './components/UI/Authentication.jsx'
 import Analytics from './Screens/Analytics.jsx'
+import Reports from './Screens/Reports.jsx'
+import PendingPaymentsReport from './Screens/PendingPaymentsReport.jsx'
+import PendingCollectionReport from './Screens/PendingCollectionReport.jsx'
 
 function App() {
   return (
@@ -52,6 +55,9 @@ function App() {
               <Route path="/ledger" element={<LedgerReport />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/auth" element={<Authentication />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/pendingCollection" element={<PendingCollectionReport />} />
+              <Route path="/pendingPayment" element={<PendingPaymentsReport />} />
             </Routes>
           </KeyBind>
         </HashRouter>

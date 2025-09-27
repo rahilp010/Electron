@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
 /* eslint-disable react-hooks/exhaustive-deps */
@@ -113,99 +114,109 @@ const getPaymentStatusComponent = (transaction) => {
 }
 
 // Memoized PurchaseRow component
-const PurchaseRow = React.memo(({ transaction, index, clients, products, onEdit, onDelete }) => {
-  const isEven = index % 2 === 0
-  const rowBg = isEven ? 'bg-white' : 'bg-[#f0f0f0]'
-  const clientName = getClientName(transaction?.clientId, clients)
-  const productName = getProductName(transaction?.productId, products)
-  const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
-  const totalAmount = (totalAmountProduct || 0) * (transaction?.quantity || 0)
+const PurchaseRow = React.memo(
+  ({ transaction, index, clients, products, onEdit, onDelete, onUpdateStatus }) => {
+    const isEven = index % 2 === 0
+    const rowBg = isEven ? 'bg-white' : 'bg-[#f0f0f0]'
+    const clientName = getClientName(transaction?.clientId, clients)
+    const productName = getProductName(transaction?.productId, products)
+    const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
+    const totalAmount = (totalAmountProduct || 0) * (transaction?.quantity || 0)
 
-  const renderPendingAmount = () => {
-    if (transaction?.statusOfTransaction === 'pending' && transaction?.paymentType === 'partial') {
-      return (
-        <Whisper
-          trigger="hover"
-          placement="rightStart"
-          speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
-        >
-          <span>₹ {toThousands(Number(transaction?.pendingAmount).toFixed(0))}</span>
-        </Whisper>
-      )
+    const renderPendingAmount = () => {
+      if (
+        transaction?.statusOfTransaction === 'pending' &&
+        transaction?.paymentType === 'partial'
+      ) {
+        return (
+          <Whisper
+            trigger="hover"
+            placement="rightStart"
+            speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
+          >
+            <span>₹ {toThousands(Number(transaction?.pendingAmount).toFixed(0))}</span>
+          </Whisper>
+        )
+      }
+
+      if (transaction?.statusOfTransaction === 'completed') {
+        return '-'
+      }
+
+      return <HistoryToggleOffIcon className="text-yellow-500" />
     }
 
-    if (transaction?.statusOfTransaction === 'completed') {
-      return '-'
+    const renderPaidAmount = () => {
+      if (transaction?.paymentType === 'partial') {
+        return (
+          <Whisper
+            trigger="hover"
+            placement="rightStart"
+            speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
+          >
+            <span>₹ {toThousands(Number(transaction?.paidAmount).toFixed(0))}</span>
+          </Whisper>
+        )
+      }
+
+      if (transaction?.statusOfTransaction === 'pending') {
+        return '-'
+      }
+
+      return <CreditScoreIcon className="text-green-600" />
     }
 
-    return <HistoryToggleOffIcon className="text-yellow-500" />
-  }
-
-  const renderPaidAmount = () => {
-    if (transaction?.paymentType === 'partial') {
-      return (
-        <Whisper
-          trigger="hover"
-          placement="rightStart"
-          speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
-        >
-          <span>₹ {toThousands(Number(transaction?.paidAmount).toFixed(0))}</span>
-        </Whisper>
-      )
-    }
-
-    if (transaction?.statusOfTransaction === 'pending') {
-      return '-'
-    }
-
-    return <CreditScoreIcon className="text-green-600" />
-  }
-
-  return (
-    <tr className={`text-sm text-center ${rowBg}`}>
-      <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
-        {formatTransactionId(transaction?.id)}
-      </td>
-      <td className="px-4 py-3">{new Date(transaction?.createdAt).toLocaleDateString()}</td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2 px-6">
-          <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center border border-blue-300 justify-center text-xs font-medium text-blue-600 mr-3">
-            {getInitials(clientName)}
+    return (
+      <tr className={`text-sm text-center ${rowBg}`}>
+        <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
+          {formatTransactionId(transaction?.id)}
+        </td>
+        <td className="px-4 py-3">{new Date(transaction?.createdAt).toLocaleDateString()}</td>
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-2 px-6 truncate">
+            <div
+              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200 bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600 backdrop-blur-sm`}
+            >
+              {getInitials(clientName)}
+            </div>
+            {clientName}
           </div>
-          {clientName}
-        </div>
-      </td>
-      <td className="px-4 py-3 tracking-wide font-medium">{String(productName).toUpperCase()}</td>
-      <td className="px-4 py-3">
-        <span className="bg-gray-300 px-2 py-1 rounded-full text-xs font-medium">
-          {transaction?.quantity || 0}
-        </span>
-      </td>
-      <td className="px-4 py-3 font-semibold">₹ {toThousands(Number(totalAmount).toFixed(0))}</td>
-      <td className="px-4 py-3">{renderPendingAmount()}</td>
-      <td className="px-4 py-3">{renderPaidAmount()}</td>
-      <td className="px-4 py-3 tracking-wide">{getPaymentStatusComponent(transaction)}</td>
-      <td className="w-28">
-        <div className="flex gap-3 justify-center items-center">
-          <button
-            className="text-purple-500 p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
-            onClick={() => onEdit(transaction)}
-            title="Edit purchase"
-          >
-            <PenLine size={12} />
-          </button>
-          <button
-            className="text-red-500 p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
-            onClick={() => onDelete(transaction?.id)}
-            title="Delete purchase"
-          >
-            <Trash size={12} />
-          </button>
-        </div>
-      </td>
-    </tr>
-  )
-})
+        </td>
+        <td className="px-4 py-3 tracking-wide font-medium">{String(productName).toUpperCase()}</td>
+        <td className="px-4 py-3">
+          <span className="bg-gray-300 px-2 py-1 rounded-full text-xs font-medium">
+            {transaction?.quantity || 0}
+          </span>
+        </td>
+        <td className="px-4 py-3 font-semibold">₹ {toThousands(Number(totalAmount).toFixed(0))}</td>
+        <td className="px-4 py-3">{renderPendingAmount()}</td>
+        <td className="px-4 py-3">{renderPaidAmount()}</td>
+        <td className="px-4 py-3 tracking-wide">
+          <PaymentStatusDropdown transaction={transaction} onUpdateStatus={onUpdateStatus} />
+        </td>
+
+        <td className="w-28">
+          <div className="flex gap-3 justify-center items-center">
+            <button
+              className="text-purple-500 p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+              onClick={() => onEdit(transaction)}
+              title="Edit purchase"
+            >
+              <PenLine size={12} />
+            </button>
+            <button
+              className="text-red-500 p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+              onClick={() => onDelete(transaction?.id)}
+              title="Delete purchase"
+            >
+              <Trash size={12} />
+            </button>
+          </div>
+        </td>
+      </tr>
+    )
+  }
+)
 
 // Custom hook for purchase operations
 const usePurchaseOperations = () => {
@@ -242,6 +253,7 @@ const usePurchaseOperations = () => {
   }, [dispatch])
 
   const transactions = useSelector((state) => state.electron.transaction.data || [])
+  const bankReceiptData = useSelector((state) => state.electron.bankReceipt.data || [])
 
   const handleDeleteTransaction = useCallback(
     async (id) => {
@@ -260,8 +272,6 @@ const usePurchaseOperations = () => {
     [dispatch, fetchAllTransactions]
   )
 
-  console.log(transactions)
-
   const handleEditTransaction = useCallback(
     async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowModal) => {
       try {
@@ -277,13 +287,55 @@ const usePurchaseOperations = () => {
     []
   )
 
+  const handleUpdatePaymentStatus = useCallback(
+    async (transactionId, newStatus) => {
+      console.log('Updating Transaction:', transactionId, newStatus)
+      try {
+        // Call API (assuming your backend supports update)
+        const response = await transactionApi.updateTransaction(transactionId, {
+          statusOfTransaction: newStatus
+        })
+
+        console.log(response)
+
+        // Update redux with new transaction
+        await fetchAllTransactions()
+
+        toast.success(`Payment status updated to ${newStatus}`)
+      } catch (error) {
+        toast.error('Failed to update payment status: ' + error.message)
+      }
+    },
+    [fetchAllTransactions]
+  )
+
   return {
     fetchAllProducts,
     fetchAllClients,
     fetchAllTransactions,
     handleDeleteTransaction,
-    handleEditTransaction
+    handleEditTransaction,
+    handleUpdatePaymentStatus
   }
+}
+
+const PaymentStatusDropdown = ({ transaction, onUpdateStatus }) => {
+  const options = [
+    { label: 'Pending', value: 'pending' },
+    { label: 'Completed', value: 'completed' }
+  ]
+
+  return (
+    <SelectPicker
+      cleanable={false}
+      searchable={false}
+      data={options}
+      value={transaction?.statusOfTransaction}
+      onChange={(value) => onUpdateStatus(transaction.id, value)}
+      style={{ width: 130 }}
+      placement="auto"
+    />
+  )
 }
 
 // Main Component
@@ -295,7 +347,8 @@ const Purchase = () => {
     fetchAllClients,
     fetchAllTransactions,
     handleDeleteTransaction,
-    handleEditTransaction
+    handleEditTransaction,
+    handleUpdatePaymentStatus
   } = usePurchaseOperations()
 
   // State management
@@ -383,14 +436,17 @@ const Purchase = () => {
       0
     )
 
-    console.log(totalPurchases)
-
     const totalProducts = purchaseTransactions.reduce(
       (total, item) => total + (item.quantity || 0),
       0
     )
 
-    return { totalPurchases, totalProducts }
+    const totalPendingAmount = purchaseTransactions.reduce(
+      (total, item) => total + (item.pendingAmount || 0),
+      0
+    )
+
+    return { totalPurchases, totalProducts, totalPendingAmount }
   }, [transactions])
 
   // Event handlers
@@ -517,13 +573,21 @@ const Purchase = () => {
         {/* Statistics Cards */}
         <div className="border border-gray-200 shadow px-5 py-3 mx-6 rounded-3xl my-4 flex">
           <div className="mx-5 border-r w-52">
-            <p className="text-sm font-light mb-1">Total Purchase Value</p>
-            <p className="text-2xl font-light">₹ {toThousands(statistics.totalPurchases)}</p>
+            <p className="text-sm font-light">Total Purchase Value</p>
+            <p className="text-2xl font-bold">₹ {toThousands(statistics.totalPurchases)}</p>
           </div>
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light">Total Products Purchased</p>
             <p className="font-light text-sm">
               <span className="font-bold text-2xl">{statistics.totalProducts}</span> Products
+            </p>
+          </div>
+          <div className="mx-5 border-r w-52">
+            <p className="text-sm font-light">Total Pending Amount</p>
+            <p className="font-light text-sm">
+              <span className="font-bold text-2xl">
+                ₹ {toThousands(statistics.totalPendingAmount)}
+              </span>
             </p>
           </div>
         </div>
@@ -616,6 +680,7 @@ const Purchase = () => {
                           )
                         }
                         onDelete={handleDeleteTransaction}
+                        onUpdateStatus={handleUpdatePaymentStatus}
                       />
                     ))
                   )}

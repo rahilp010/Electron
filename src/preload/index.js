@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Bank receipt methods
   getRecentBankReceipts: () => ipcRenderer.invoke('getRecentBankReceipts'),
+  getBankReceiptByTransactionId: (transactionId) =>
+    ipcRenderer.invoke('getBankReceiptByTransactionId', transactionId),
   createBankReceipt: (bankReceipt) => ipcRenderer.invoke('createBankReceipt', bankReceipt),
   updateBankReceipt: (bankReceipt) => ipcRenderer.invoke('updateBankReceipt', bankReceipt),
   deleteBankReceipt: (id) => ipcRenderer.invoke('deleteBankReceipt', id),

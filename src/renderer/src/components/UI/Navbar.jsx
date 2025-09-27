@@ -7,7 +7,7 @@ const Navbar = () => {
   const location = useLocation()
   const navItems = [
     { name: 'Dashboard', active: true, path: '/' },
-    { name: 'Purchase', active: false, path: '/purchase' },
+    { name: 'Reports', active: false, path: '/reports' },
     { name: 'Sales', active: false, path: '/sales' },
     { name: 'Ledger', active: false, path: '/ledger' },
     { name: 'Analytics', active: false, path: '/analytics' }

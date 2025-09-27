@@ -234,7 +234,22 @@ const ClientList = () => {
     )
     const totalProducts = filteredData.length
 
-    return { totalAssets, totalProducts }
+    const totalPendingAmount = filteredData.reduce(
+      (sum, client) => sum + Number(client.pendingAmount || 0),
+      0
+    )
+
+    const totalPaidAmount = filteredData.reduce(
+      (sum, client) => sum + Number(client.paidAmount || 0),
+      0
+    )
+
+    const totalPendingFromOurs = filteredData.reduce(
+      (sum, client) => sum + Number(client.pendingFromOurs || 0),
+      0
+    )
+
+    return { totalAssets, totalProducts, totalPendingAmount, totalPaidAmount, totalPendingFromOurs }
   }, [filteredData])
 
   // Event handlers
@@ -354,13 +369,29 @@ const ClientList = () => {
         {/* Statistics Cards */}
         <div className="border border-gray-200 shadow px-5 py-3 mx-6 rounded-3xl my-4 flex">
           <div className="mx-5 border-r w-52">
-            <p className="text-sm font-light mb-1">Total Assets Value</p>
-            <p className="text-2xl font-light">₹ {toThousands(statistics.totalAssets)}</p>
+            <p className="text-sm font-light">Total Assets Value</p>
+            <p className="text-2xl font-bold">₹ {toThousands(statistics.totalAssets)}</p>
           </div>
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light">Total Clients</p>
             <p className="font-light text-sm">
               <span className="font-bold text-2xl">{statistics.totalProducts}</span> Clients
+            </p>
+          </div>
+          <div className="mx-5 border-r w-52">
+            <p className="text-sm font-light">Total Pending Amount</p>
+            <p className="font-light text-sm">
+              <span className="font-bold text-2xl">
+                ₹ {toThousands(statistics.totalPendingAmount)}
+              </span>
+            </p>
+          </div>
+          <div className="mx-5 w-52">
+            <p className="text-sm font-light">Total Pending From Ours</p>
+            <p className="font-light text-sm">
+              <span className="font-bold text-2xl">
+                ₹ {toThousands(statistics.totalPendingFromOurs)}
+              </span>
             </p>
           </div>
         </div>

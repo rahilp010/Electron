@@ -99,7 +99,7 @@ const Dashboard = () => {
               <img src={report} alt="product" className="w-24 h-24 object-cover" />
               <button
                 className="mt-4 bg-black text-white px-10 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
-                onClick={() => navigate('/analytics')}
+                onClick={() => navigate('/reports')}
               >
                 Reports & Analytics
               </button>

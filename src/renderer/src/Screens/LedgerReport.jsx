@@ -1,8 +1,10 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable react/prop-types */
+/* eslint-disable no-unused-vars */
+/* eslint-disable react/no-unknown-property */
 /* eslint-disable react/display-name */
 import React, { useEffect, useState, useCallback, useMemo, memo } from 'react'
-import { FileUp, Import, X, ChevronRight, ChevronLeft, Users, Search } from 'lucide-react'
+import { FileUp, Import, Users, Search } from 'lucide-react'
 import Loader from '../components/Loader'
 import 'rsuite/dist/rsuite-no-reset.min.css'
 import { setClients } from '../app/features/electronSlice'
@@ -472,21 +474,15 @@ const LedgerReport = () => {
             </div>
             <div className="mx-5 border-r w-52 flex-shrink-0">
               <p className="text-sm font-light mb-1 text-gray-600">Total Pending</p>
-              <p className="text-2xl font-light">
-                {toThousands(statistics.totalPendingAmount)}
-              </p>
+              <p className="text-2xl font-light">{toThousands(statistics.totalPendingAmount)}</p>
             </div>
             <div className="mx-5 border-r w-52 flex-shrink-0">
               <p className="text-sm font-light mb-1 text-gray-600">Total Paid</p>
-              <p className="text-2xl font-light">
-                {toThousands(statistics.totalPaidAmount)}
-              </p>
+              <p className="text-2xl font-light">{toThousands(statistics.totalPaidAmount)}</p>
             </div>
             <div className="mx-5 w-52 flex-shrink-0">
               <p className="text-sm font-light mb-1 text-gray-600">Customers</p>
-              <p className="text-2xl font-light">
-                {statistics.accountsByType.Customer || 0}
-              </p>
+              <p className="text-2xl font-light">{statistics.accountsByType.Customer || 0}</p>
             </div>
           </div>
         )}
@@ -581,7 +577,7 @@ const LedgerReport = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredData.map((client, index) => (
+                    filteredData.map((client) => (
                       <AccountRow
                         key={client.id}
                         client={client}
