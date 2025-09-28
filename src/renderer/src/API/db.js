@@ -57,6 +57,7 @@ db.prepare(
     productId INTEGER NOT NULL,
     quantity INTEGER NOT NULL,
     sellAmount REAL NOT NULL,
+    purchaseAmount REAL NOT NULL,
     paymentMethod TEXT NOT NULL DEFAULT 'bank' CHECK (paymentMethod IN ('cash', 'bank')),
     statusOfTransaction TEXT NOT NULL DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
     paymentType TEXT NOT NULL DEFAULT 'full' CHECK (paymentType IN ('full', 'partial')),
@@ -101,6 +102,7 @@ db.prepare(
     party TEXT NOT NULL,
     amount REAL NOT NULL,
     description TEXT,
+    statusOfTransaction TEXT NOT NULL DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE

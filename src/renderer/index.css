@@ -108,3 +108,7 @@ html {
     display: block;
   }
 }
+
+.selectPicker {
+  z-index: 999 !important;
+}

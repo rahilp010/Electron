@@ -115,106 +115,84 @@ const Reports = () => {
           </div>
         </div>
 
-        {/* Enhanced Reports Grid */}
-        <div className="px-6 pb-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-3 gap-6 max-w-7xl mx-auto max-h-[calc(100vh-200px)] overflow-scroll cursor-pointer customScrollbar">
-            {reportCards.map((card, index) => (
-              <div
-                key={card.id}
-                className="group relative overflow-hidden rounded-3xl cursor-pointer transition-all duration-500 animate-fadeInUp"
-                style={{ animationDelay: `${index * 100}ms` }}
-                onMouseEnter={() => setHoveredCard(card.id)}
-                onMouseLeave={() => setHoveredCard(null)}
-                onClick={() => navigate(card.route)}
-              >
-                {/* Glass Card Background */}
+        <div className="max-h-[calc(100vh-200px)] overflow-scroll customScrollbar">
+          {/* Enhanced Reports Grid */}
+          <div className="px-6 pb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-3 gap-4 max-w-7xl mx-auto cursor-pointer">
+              {reportCards.map((card, index) => (
                 <div
-                  className={`relative p-8 h-64 bg-white/20 backdrop-blur-xl border border-white/30 rounded-3xl transition-all duration-500 group-hover:bg-white/30 group-hover:backdrop-blur-2xl group-hover:border-white/40 group-hover:scale-[1.02] group-hover:shadow-2xl
-                  ${hoveredCard === card.id ? 'shadow-2xl' : 'shadow-lg'}`}
-                  style={{
-                    boxShadow:
-                      hoveredCard === card.id
-                        ? '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
-                        : '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
-                  }}
+                  key={card.id}
+                  className={`group relative overflow-hidden rounded-3xl cursor-pointer transition-all duration-500 animate-fadeInUp border border-gray-200`}
+                  style={{ animationDelay: `${index * 100}ms` }}
+                  onMouseEnter={() => setHoveredCard(card.id)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                  onClick={() => navigate(card.route)}
                 >
-                  {/* Background Pattern */}
+                  {/* Glass Card Background */}
                   <div
-                    className={`absolute inset-0 bg-gradient-to-br ${card.bgPattern} rounded-3xl transition-opacity duration-500 ${hoveredCard === card.id ? 'opacity-100' : 'opacity-50'}`}
-                  />
-
-                  {/* Animated Gradient Overlay */}
-                  <div
-                    className={`absolute inset-0 bg-gradient-to-br ${hoveredCard === card.id ? card.hoverGradient : card.gradient} opacity-0 group-hover:opacity-10 rounded-3xl transition-all duration-500`}
-                  />
-
-                  {/* Content */}
-                  <div className="relative z-10 h-full flex flex-col justify-between">
-                    {/* Icon and Title */}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="text-4xl transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12">
-                          {card.icon}
-                        </div>
-                        <div
-                          className={`w-3 h-3 rounded-full bg-gradient-to-r ${card.gradient} opacity-60 group-hover:opacity-100 transition-all duration-300`}
-                        />
-                      </div>
-
-                      <div>
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-gray-800 transition-colors duration-300">
-                          {card.title}
-                        </h3>
-                        <p className="text-sm text-gray-600 leading-relaxed group-hover:text-gray-700 transition-colors duration-300">
-                          {card.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Action Button */}
-                    <div className="flex justify-end">
-                      <div
-                        className={`px-6 py-2 bg-gradient-to-r ${card.gradient} text-white text-sm font-medium rounded-2xl shadow-lg backdrop-blur-sm border border-white/20 transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-xl opacity-90 group-hover:opacity-100`}
-                      >
-                        View Report
-                        <span className="ml-2 transform transition-transform duration-300 group-hover:translate-x-1 inline-block">
-                          →
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Hover Glow Effect */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-3xl" />
-
-                  {/* Edge Highlight */}
-                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Quick Stats Section */}
-          <div className="mt-12 max-w-7xl mx-auto">
-            <div className="bg-white/20 backdrop-blur-xl border border-white/30 rounded-3xl p-8">
-              <h2 className="text-2xl font-light text-gray-900 mb-6 text-center">Quick Insights</h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                {[
-                  { label: 'Total Reports', value: '6', icon: '📊', color: 'blue' },
-                  { label: 'Active Clients', value: '142', icon: '👥', color: 'green' },
-                  { label: 'Pending Items', value: '23', icon: '⏰', color: 'amber' },
-                  { label: 'Data Accuracy', value: '99.9%', icon: '✅', color: 'emerald' }
-                ].map((stat, index) => (
-                  <div
-                    key={index}
-                    className="text-center p-4 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/20"
+                    className={`relative p-8 h-64 bg-white/20 backdrop-blur-xl border border-white/30 rounded-3xl transition-all duration-500 group-hover:bg-white/30 group-hover:backdrop-blur-2xl group-hover:border-white/40 group-hover:scale-[1.02] group-hover:shadow-2xl
+                  ${hoveredCard === card.id ? 'shadow-2xl' : 'shadow-lg'}`}
+                    style={{
+                      boxShadow:
+                        hoveredCard === card.id
+                          ? '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                          : '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                    }}
                   >
-                    <div className="text-2xl mb-2">{stat.icon}</div>
-                    <div className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</div>
-                    <div className="text-sm text-gray-600">{stat.label}</div>
+                    {/* Background Pattern */}
+                    <div
+                      className={`absolute inset-0 bg-gradient-to-br ${card.bgPattern} rounded-3xl transition-opacity duration-500 ${hoveredCard === card.id ? 'opacity-100' : 'opacity-50'}`}
+                    />
+
+                    {/* Animated Gradient Overlay */}
+                    <div
+                      className={`absolute inset-0 bg-gradient-to-br ${hoveredCard === card.id ? card.hoverGradient : card.gradient} opacity-0 group-hover:opacity-10 rounded-3xl transition-all duration-500`}
+                    />
+
+                    {/* Content */}
+                    <div className="relative z-10 h-full flex flex-col justify-between">
+                      {/* Icon and Title */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-4xl transform transition-all duration-300 group-hover:scale-110 group-hover:rotate-12">
+                            {card.icon}
+                          </div>
+                          <div
+                            className={`w-3 h-3 rounded-full bg-gradient-to-r ${card.gradient} opacity-60 group-hover:opacity-100 transition-all duration-300`}
+                          />
+                        </div>
+
+                        <div>
+                          <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-gray-800 transition-colors duration-300">
+                            {card.title}
+                          </h3>
+                          <p className="text-sm text-gray-600 leading-relaxed group-hover:text-gray-700 transition-colors duration-300">
+                            {card.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action Button */}
+                      <div className="flex justify-end">
+                        <div
+                          className={`px-6 py-2 bg-gradient-to-r ${card.gradient} text-white text-sm font-medium rounded-2xl shadow-lg backdrop-blur-sm border border-white/20 transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-xl opacity-90 group-hover:opacity-100`}
+                        >
+                          View Report
+                          <span className="ml-2 transform transition-transform duration-300 group-hover:translate-x-1 inline-block">
+                            →
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Hover Glow Effect */}
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-3xl" />
+
+                    {/* Edge Highlight */}
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

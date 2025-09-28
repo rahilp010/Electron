@@ -12,6 +12,7 @@ import {
   Animation,
   Badge,
   Checkbox,
+  CheckPicker,
   IconButton,
   Input,
   InputGroup,
@@ -262,7 +263,7 @@ const ProductModal = ({
       )}
       {type === 'product' ? (
         <form onSubmit={handleSubmitProduct}>
-          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-lg relative">
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-3xl relative">
             <p className="text-lg font-semibold mb-4">
               {isUpdateExpense ? 'Update Product' : 'Add Product'}
             </p>
@@ -272,7 +273,7 @@ const ProductModal = ({
               onClick={() => setShowModal(false)}
             />
 
-            <div className="grid grid-cols-2 gap-4 my-2">
+            <div className="grid grid-cols-3 gap-4 my-2 items-center">
               <div>
                 <label htmlFor="client" className="block text-sm mb-1 text-gray-600">
                   Client
@@ -322,6 +323,28 @@ const ProductModal = ({
                 />
               </div>
               <div>
+                <label htmlFor="client" className="block text-sm mb-1 text-gray-600">
+                  Sale HSN Code
+                </label>
+                <Input
+                  size="sm"
+                  value={product.saleHSNCode}
+                  onChange={(value) => handleOnChangeEvent(value, 'saleHSNCode')}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
+                />
+              </div>
+              <div>
+                <label htmlFor="client" className="block text-sm mb-1 text-gray-600">
+                  Purchase HSN Code
+                </label>
+                <Input
+                  size="sm"
+                  value={product.purchaseHSNCode}
+                  onChange={(value) => handleOnChangeEvent(value, 'purchaseHSNCode')}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
+                />
+              </div>
+              <div>
                 <label htmlFor="name" className="block text-sm mb-1 text-gray-600">
                   Product Name
                 </label>
@@ -343,108 +366,130 @@ const ProductModal = ({
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
               </div>
-            </div>
 
-            <div className="mb-4">
-              <label htmlFor="price" className="block text-sm mb-1 text-gray-600">
-                Price
-              </label>
-              <InputNumber
-                prefix="₹"
-                defaultValue={0}
-                size="xs"
-                formatter={toThousands}
-                value={product.price}
-                onChange={(value) => handleOnChangeEvent(value, 'price')}
-                className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-10 items-center tracking-wide"
-              />
-            </div>
+              <Animation.Collapse in={product.addParts === 1} className="col-span-3">
+                <div className="mt-2">
+                  <TagPicker
+                    data={products
+                      .filter((p) => p.assetsType !== 'Finished Goods')
+                      .map((product) => ({
+                        label: product.name,
+                        value: product.id
+                      }))}
+                    style={{
+                      width: '100%',
+                      height: '100px',
+                      zIndex: 999
+                    }}
+                    value={selectedParts.map((p) => p.partId)}
+                    onChange={(values) => {
+                      setSelectedParts(
+                        values.map((id) => ({
+                          partId: id,
+                          quantity: quantities[id] || 1
+                        }))
+                      )
+                    }}
+                    menuStyle={{ zIndex: 999 }}
+                    container={() => document.getElementById('modal-body-container')}
+                    placeholder="Select products"
+                    renderMenuItem={(label, item) => (
+                      <div className="flex items-center justify-between w-full">
+                        <span>{label}</span>
+                        <InputGroup size="xs" style={{ width: 80, zIndex: 999 }}>
+                          <IconButton
+                            size="xs"
+                            icon={<MinusIcon />}
+                            onClick={(e) => {
+                              e.stopPropagation() // prevent auto select
+                              handleQuantityChange(item.value, -1)
+                            }}
+                            style={{ zIndex: 999 }}
+                          />
+                          <input
+                            readOnly
+                            value={quantities[item.value] || 0}
+                            style={{
+                              zIndex: 999,
+                              width: 30,
+                              textAlign: 'center',
+                              border: 'none',
+                              background: 'transparent'
+                            }}
+                          />
+                          <IconButton
+                            size="xs"
+                            icon={<PlusIcon />}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleQuantityChange(item.value, 1)
+                            }}
+                            style={{ zIndex: 999 }}
+                          />
+                        </InputGroup>
+                      </div>
+                    )}
+                    renderValue={(value, items) =>
+                      items.map((item) => (
+                        <span key={item.value} className="bg-gray-200 rounded-lg p-2 m-2">
+                          <Badge content={quantities[item.value] || 1}>{item.label}</Badge>
+                        </span>
+                      ))
+                    }
+                  />
+                </div>
+              </Animation.Collapse>
 
-            <div>
-              {product.assetsType === 'Finished Goods' ? (
-                <Checkbox
-                  value="addParts"
-                  checked={product.addParts}
-                  onChange={(_, checked) => handleOnChangeEvent(checked ? 1 : 0, 'addParts')}
-                  className="text-sm text-gray-600 -ml-2"
-                >
-                  Add Parts
-                </Checkbox>
-              ) : null}
-            </div>
-
-            <Animation.Collapse in={product.addParts === 1}>
-              <div className="mt-2">
-                <TagPicker
-                  data={products
-                    .filter((p) => p.assetsType !== 'Finished Goods')
-                    .map((product) => ({
-                      label: product.name,
-                      value: product.id
-                    }))}
-                  style={{
-                    width: '100%',
-                    height: '100px',
-                    zIndex: 999
-                  }}
-                  value={selectedParts.map((p) => p.partId)}
-                  onChange={(values) => {
-                    setSelectedParts(
-                      values.map((id) => ({
-                        partId: id,
-                        quantity: quantities[id] || 1
-                      }))
-                    )
-                  }}
-                  menuStyle={{ zIndex: 999 }}
-                  container={() => document.getElementById('modal-body-container')}
-                  placeholder="Select products"
-                  renderMenuItem={(label, item) => (
-                    <div className="flex items-center justify-between w-full">
-                      <span>{label}</span>
-                      <InputGroup size="xs" style={{ width: 80, zIndex: 999 }}>
-                        <IconButton
-                          size="xs"
-                          icon={<MinusIcon />}
-                          onClick={(e) => {
-                            e.stopPropagation() // prevent auto select
-                            handleQuantityChange(item.value, -1)
-                          }}
-                          style={{ zIndex: 999 }}
-                        />
-                        <input
-                          readOnly
-                          value={quantities[item.value] || 0}
-                          style={{
-                            zIndex: 999,
-                            width: 30,
-                            textAlign: 'center',
-                            border: 'none',
-                            background: 'transparent'
-                          }}
-                        />
-                        <IconButton
-                          size="xs"
-                          icon={<PlusIcon />}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleQuantityChange(item.value, 1)
-                          }}
-                          style={{ zIndex: 999 }}
-                        />
-                      </InputGroup>
-                    </div>
-                  )}
-                  renderValue={(value, items) =>
-                    items.map((item) => (
-                      <span key={item.value} className="bg-gray-200 rounded-lg p-2 m-2">
-                        <Badge content={quantities[item.value] || 1}>{item.label}</Badge>
-                      </span>
-                    ))
-                  }
+              <div className="mb-4">
+                <label htmlFor="price" className="block text-sm mb-1 text-gray-600">
+                  Price
+                </label>
+                <InputNumber
+                  prefix="₹"
+                  defaultValue={0}
+                  size="xs"
+                  formatter={toThousands}
+                  value={product.price}
+                  onChange={(value) => handleOnChangeEvent(value, 'price')}
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
               </div>
-            </Animation.Collapse>
+
+              <div className="mb-4">
+                <label htmlFor="tax" className="block text-sm mb-1 text-gray-600">
+                  Tax
+                </label>
+                <CheckPicker
+                  data={[
+                    { label: 'IGST 18', value: 'i-18' },
+                    { label: 'IGST 28', value: 'i-28' },
+                    { label: 'SGST 9', value: 's-9' },
+                    { label: 'CGST 9', value: 'c-9' },
+                    { label: 'Fright Changed', value: 0 }
+                  ]}
+                  searchable={false}
+                  size="md"
+                  placeholder="Select Tax"
+                  value={Array.isArray(product.tax) ? product.tax : []}
+                  onChange={(value) => handleOnChangeEvent(value, 'tax')}
+                  style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
+                  menuStyle={{ zIndex: clientModal ? 1 : 999 }}
+                />
+              </div>
+
+              <div>
+                {product.assetsType === 'Finished Goods' ? (
+                  <Checkbox
+                    value="addParts"
+                    checked={product.addParts}
+                    onChange={(_, checked) => handleOnChangeEvent(checked ? 1 : 0, 'addParts')}
+                    className="text-sm text-gray-600 -ml-2"
+                  >
+                    Add Parts
+                  </Checkbox>
+                ) : null}
+              </div>
+            </div>
 
             <div className="flex items-center justify-end gap-2 mt-4">
               <button

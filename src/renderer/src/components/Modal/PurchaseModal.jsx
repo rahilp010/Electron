@@ -66,6 +66,7 @@ const PurchaseModal = ({
         productId: existingTransaction.productId || '',
         quantity: Number(existingTransaction.quantity) || 0,
         sellAmount: Number(existingTransaction.sellAmount) || 0,
+        purchaseAmount: Number(existingTransaction.purchaseAmount) || 0,
         statusOfTransaction: existingTransaction.statusOfTransaction || 'pending',
         paymentMethod: existingTransaction.paymentMethod || 'bank',
         paymentType: existingTransaction.paymentType || 'full',
@@ -79,6 +80,7 @@ const PurchaseModal = ({
       productId: '',
       quantity: 0,
       sellAmount: 0,
+      purchaseAmount: 0,
       statusOfTransaction: 'pending',
       paymentMethod: 'bank',
       paymentType: 'full',
@@ -105,6 +107,7 @@ const PurchaseModal = ({
         productId: existingTransaction.productId || '',
         quantity: existingTransaction.quantity || 0,
         sellAmount: Number(existingTransaction.sellAmount) || 0,
+        purchaseAmount: Number(existingTransaction.purchaseAmount) || 0,
         statusOfTransaction: existingTransaction.statusOfTransaction || 'pending',
         paymentMethod: existingTransaction.paymentMethod || 'bank',
         paymentType: existingTransaction.paymentType || 'full',
@@ -152,13 +155,16 @@ const PurchaseModal = ({
           transaction.statusOfTransaction === 'pending' &&
           transaction.paymentType !== 'partial'
         ) {
-          transaction.pendingAmount = Number(totalPurchaseAmount) * transaction.quantity
+          transaction.pendingAmount = transaction.purchaseAmount * transaction.quantity
           transaction.paidAmount = 0
         } else if (transaction.statusOfTransaction === 'completed') {
           transaction.pendingAmount = 0
-          transaction.paidAmount = Number(totalPurchaseAmount) * transaction.quantity
+          transaction.paidAmount = transaction.purchaseAmount * transaction.quantity
         } else if (transaction.paymentType === 'partial') {
-          if (Number(totalPurchaseAmount) >= transaction.pendingAmount + transaction.paidAmount) {
+          if (
+            transaction.purchaseAmount * transaction.quantity >=
+            transaction.pendingAmount + transaction.paidAmount
+          ) {
             toast.error('Partial amount should be less than total amount')
             return
           }
@@ -169,6 +175,7 @@ const PurchaseModal = ({
           productId: transaction.productId,
           quantity: Number(transaction.quantity),
           sellAmount: Number(transaction.sellAmount),
+          purchaseAmount: Number(totalPurchaseAmount),
           statusOfTransaction: transaction.statusOfTransaction || 'pending',
           paymentMethod: transaction.paymentMethod || 'bank',
           paymentType: transaction.paymentType || 'full',
@@ -193,7 +200,7 @@ const PurchaseModal = ({
                 party:
                   clients.find((c) => c.id === transaction.clientId)?.clientName ||
                   'Unknown Client',
-                amount: selectedProduct?.price * transaction.quantity || 0,
+                amount: transaction.purchaseAmount * transaction.quantity || 0,
                 description: `Purchase ${getProductName(transaction.productId)}`
               }
 
@@ -209,7 +216,7 @@ const PurchaseModal = ({
                 party:
                   clients.find((c) => c.id === transaction.clientId)?.clientName ||
                   'Unknown Client',
-                amount: selectedProduct?.price * transaction.quantity || 0,
+                amount: transaction.purchaseAmount * transaction.quantity || 0,
                 description: `Purchase ${getProductName(transaction.productId)}`
               }
 
@@ -248,6 +255,7 @@ const PurchaseModal = ({
                 type: 'Payment',
                 cash: transaction.cash || 'Cash',
                 date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                statusOfTransaction: transaction.statusOfTransaction || 'pending',
                 party:
                   clients.find((c) => c.id === transaction.clientId)?.clientName ||
                   'Unknown Client',
@@ -570,7 +578,7 @@ const PurchaseModal = ({
                   <InputNumber
                     prefix={<div className="">₹</div>}
                     value={
-                      Number(totalPurchaseAmount) * transaction.quantity - transaction.pendingAmount
+                      transaction.purchaseAmount * transaction.quantity - transaction.pendingAmount
                     }
                     size="xs"
                     formatter={toThousands}

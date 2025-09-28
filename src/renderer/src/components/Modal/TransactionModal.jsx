@@ -9,7 +9,9 @@ import {
   updateTransaction,
   setTransactions,
   setBankReceipt,
-  updateBankReceipt
+  updateBankReceipt,
+  updateCashReceipt,
+  setCashReceipt
 } from '../../app/features/electronSlice'
 import { CircleX } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
@@ -64,6 +66,7 @@ const TransactionModal = ({
         productId: existingTransaction.productId || '',
         quantity: Number(existingTransaction.quantity) || 0,
         sellAmount: Number(existingTransaction.sellAmount) || 0,
+        purchaseAmount: Number(existingTransaction.purchaseAmount) || 0,
         statusOfTransaction: existingTransaction.statusOfTransaction || 'pending',
         paymentType: existingTransaction.paymentType || 'full',
         paymentMethod: existingTransaction.paymentMethod || 'bank',
@@ -77,6 +80,7 @@ const TransactionModal = ({
       productId: '',
       quantity: 0,
       sellAmount: 0,
+      purchaseAmount: 0,
       statusOfTransaction: 'pending',
       paymentType: 'full',
       paymentMethod: 'bank',
@@ -103,6 +107,7 @@ const TransactionModal = ({
         productId: existingTransaction.productId || '',
         quantity: existingTransaction.quantity || 0,
         sellAmount: Number(existingTransaction.sellAmount) || 0,
+        purchaseAmount: Number(existingTransaction.purchaseAmount) || 0,
         statusOfTransaction: existingTransaction.statusOfTransaction || 'pending',
         paymentType: existingTransaction.paymentType || 'full',
         paymentMethod: existingTransaction.paymentMethod || 'bank',
@@ -171,6 +176,7 @@ const TransactionModal = ({
           productId: transaction.productId,
           quantity: Number(transaction.quantity),
           sellAmount: Number(transaction.sellAmount),
+          purchaseAmount: Number(transaction.purchaseAmount),
           statusOfTransaction: transaction.statusOfTransaction || 'pending',
           paymentType: transaction.paymentType || 'full',
           paymentMethod: transaction.paymentMethod || 'bank',
@@ -185,19 +191,38 @@ const TransactionModal = ({
           toast.success('Transaction added successfully')
 
           if (location.pathname === '/sales') {
-            const bankReceiptData = {
-              transactionId: createdTransaction.id, // ✅ Correct transaction ID
-              type: 'Receipt',
-              bank: transaction.bank || 'IDBI',
-              date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-              party:
-                clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
-              amount: transaction.sellAmount * transaction.quantity || 0,
-              description: `Purchase ${getProductName(transaction.productId)}`
-            }
+            if (transaction.paymentMethod === 'bank') {
+              const bankReceiptData = {
+                transactionId: createdTransaction.id, // ✅ Correct transaction ID
+                type: 'Receipt',
+                bank: transaction.bank || 'IDBI',
+                date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                statusOfTransaction: transaction.statusOfTransaction || 'pending',
+                party:
+                  clients.find((c) => c.id === transaction.clientId)?.clientName ||
+                  'Unknown Client',
+                amount: transaction.sellAmount * transaction.quantity || 0,
+                description: `Purchase ${getProductName(transaction.productId)}`
+              }
 
-            const createdBankReceipt = await window.api.createBankReceipt(bankReceiptData || {})
-            dispatch(setBankReceipt(createdBankReceipt))
+              const createdBankReceipt = await window.api.createBankReceipt(bankReceiptData || {})
+              dispatch(setBankReceipt(createdBankReceipt))
+            } else if (transaction.paymentMethod === 'cash') {
+              const cashReceiptData = {
+                transactionId: createdTransaction.id, // ✅ Correct transaction ID
+                type: 'Receipt',
+                cash: transaction.cash || 'Cash',
+                date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                statusOfTransaction: transaction.statusOfTransaction || 'pending',
+                party:
+                  clients.find((c) => c.id === transaction.clientId)?.clientName ||
+                  'Unknown Client',
+                amount: transaction.sellAmount * transaction.quantity || 0,
+                description: `Purchase ${getProductName(transaction.productId)}`
+              }
+              const createdCashReceipt = await window.api.createCashReceipt(cashReceiptData || {})
+              dispatch(setCashReceipt(createdCashReceipt))
+            }
           }
         } else {
           const updatedTransaction = await window.api.updateTransaction({
@@ -209,22 +234,39 @@ const TransactionModal = ({
 
           if (location.pathname === '/sales') {
             // Build bankReceiptData for update
-            const bankReceiptData = {
-              transactionId: updatedTransaction.data.id,
-              type: 'Receipt',
-              bank: transaction.bank || 'IDBI',
-              date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-              party:
-                clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
-              amount: transaction.sellAmount * transaction.quantity || 0,
-              description: `Sale ${getProductName(transaction.productId)}`
+            if (transaction.paymentMethod === 'bank') {
+              const bankReceiptData = {
+                transactionId: updatedTransaction.data.id,
+                type: 'Receipt',
+                bank: transaction.bank || 'IDBI',
+                date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                statusOfTransaction: transaction.statusOfTransaction || 'pending',
+                party:
+                  clients.find((c) => c.id === transaction.clientId)?.clientName ||
+                  'Unknown Client',
+                amount: updatedTransaction.data.pendingAmount || 0,
+                description: `Sale ${getProductName(transaction.productId)}`
+              }
+              const updatedBankReceipt = await window.api.updateBankReceipt(bankReceiptData)
+              dispatch(updateBankReceipt(updatedBankReceipt))
+            } else if (transaction.paymentMethod === 'cash') {
+              const cashReceiptData = {
+                transactionId: updatedTransaction.data.id,
+                type: 'Receipt',
+                cash: transaction.cash || 'Cash',
+                date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                statusOfTransaction: transaction.statusOfTransaction || 'pending',
+                party:
+                  clients.find((c) => c.id === transaction.clientId)?.clientName ||
+                  'Unknown Client',
+                amount: updatedTransaction.data.pendingAmount || 0,
+                description: `Sale ${getProductName(transaction.productId)}`
+              }
+              const updatedCashReceipt = await window.api.updateCashReceipt(cashReceiptData)
+              dispatch(updateCashReceipt(updatedCashReceipt))
             }
-
-            const updatedBankReceipt = await window.api.updateBankReceipt(bankReceiptData)
-            dispatch(updateBankReceipt(updatedBankReceipt))
           }
         }
-
         await fetchTransaction() // Refresh data
         setShowModal(false)
       } catch (error) {

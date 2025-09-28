@@ -227,6 +227,7 @@ ipcMain.handle('createTransaction', (event, transaction, bankReceipt = {}, cashR
     productId,
     quantity,
     sellAmount,
+    purchaseAmount,
     paymentMethod,
     statusOfTransaction,
     paymentType,
@@ -269,19 +270,20 @@ ipcMain.handle('createTransaction', (event, transaction, bankReceipt = {}, cashR
       totalTransactionAmount = sellAmount * quantity
     } else if (transactionType === 'purchase') {
       // ✅ For purchase, always calculate from product.price
-      totalTransactionAmount = product.price * quantity
+      totalTransactionAmount = purchaseAmount * quantity
     }
 
     // 1. Create the transaction record
     const stmt = db.prepare(`
-            INSERT INTO transactions (clientId, productId, quantity, sellAmount, paymentMethod, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (clientId, productId, quantity, sellAmount, purchaseAmount, paymentMethod, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
     const result = stmt.run(
       clientId,
       productId,
       quantity,
       sellAmount,
+      purchaseAmount,
       paymentMethod,
       statusOfTransaction || 'pending',
       paymentType || 'cash',
@@ -463,6 +465,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
       productId,
       quantity,
       sellAmount,
+      purchaseAmount,
       paymentMethod,
       statusOfTransaction,
       paymentType,
@@ -504,7 +507,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
       let previousTotalAmount =
         transaction.transactionType === 'sales'
           ? transaction.sellAmount * transaction.quantity
-          : product.price * transaction.quantity
+          : transaction.purchaseAmount * transaction.quantity
 
       // Rollback client amounts from previous transaction
       if (transaction.transactionType === 'sales') {
@@ -553,7 +556,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
       // Update the transaction record
       db.prepare(
         `UPDATE transactions
-        SET clientId = ?, productId = ?, quantity = ?, sellAmount = ?, 
+        SET clientId = ?, productId = ?, quantity = ?, sellAmount = ?, purchaseAmount = ?, 
             paymentMethod = ?, statusOfTransaction = ?, paymentType = ?, 
             pendingAmount = ?, paidAmount = ?, transactionType = ?, updatedAt = CURRENT_TIMESTAMP
         WHERE id = ?`
@@ -562,6 +565,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
         productId,
         quantity,
         sellAmount,
+        purchaseAmount,
         paymentMethod,
         statusOfTransaction,
         paymentType,
@@ -588,7 +592,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
       const newTotalAmount =
         transactionType === 'sales'
           ? (sellAmount || 0) * quantity
-          : (newProduct?.price || 0) * quantity
+          : (purchaseAmount || 0) * quantity
 
       if (transactionType === 'sales') {
         if (paymentType === 'partial') {
@@ -643,7 +647,7 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
         // Fetch existing bank receipt linked to this transaction
         const bankReceipt = db.prepare('SELECT * FROM bankReceipts WHERE transactionId = ?').get(id)
 
-        const totalAmount = (newProduct?.price || 0) * quantity
+        const totalAmount = (purchaseAmount || 0) * quantity
 
         if (bankReceipt) {
           // Update existing bank receipt
@@ -722,7 +726,7 @@ ipcMain.handle('deleteTransaction', (event, transactionId) => {
         let rollbackAmount =
           transaction.transactionType === 'sales'
             ? transaction.sellAmount * transaction.quantity
-            : product.price * transaction.quantity
+            : transaction.purchaseAmount * transaction.quantity
 
         if (transaction.transactionType === 'sales') {
           if (transaction.paymentType === 'partial') {
@@ -901,7 +905,8 @@ ipcMain.handle('getRecentCashReceipts', async () => {
 
 // ✅ Create bank receipt
 ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
-  const { transactionId, type, cash, date, party, amount, description } = cashReceipt
+  const { transactionId, type, cash, date, party, amount, description, statusOfTransaction } =
+    cashReceipt
 
   const formattedDate =
     typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
@@ -910,10 +915,19 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
     const res = db
       .prepare(
         `
-      INSERT INTO cashReceipts (transactionId, type, cash, date, party, amount, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?) `
+      INSERT INTO cashReceipts (transactionId, type, cash, date, party, amount, description, statusOfTransaction)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?) `
       )
-      .run(transactionId, type, cash, formattedDate, party, amount, description)
+      .run(
+        transactionId,
+        type,
+        cash,
+        formattedDate,
+        party,
+        amount,
+        description,
+        statusOfTransaction
+      )
     // Fetch the inserted row
     const createdCashReceipt = db
       .prepare(`SELECT * FROM cashReceipts WHERE id = ?`)
@@ -924,7 +938,8 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
 })
 
 ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
-  const { transactionId, type, cash, date, party, amount, description } = cashReceipt
+  const { transactionId, type, cash, date, party, amount, description, statusOfTransaction } =
+    cashReceipt
 
   const formattedDate =
     typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
@@ -939,9 +954,18 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
       // 2️⃣ Update existing
       db.prepare(
         `UPDATE cashReceipts
-        SET type = ?, cash = ?, date = ?, party = ?, amount = ?, description = ?
+        SET type = ?, cash = ?, date = ?, party = ?, amount = ?, description = ?, statusOfTransaction = ?
         WHERE transactionId = ?`
-      ).run(type, cash, formattedDate, party, amount, description, transactionId)
+      ).run(
+        type,
+        cash,
+        formattedDate,
+        party,
+        amount,
+        description,
+        statusOfTransaction,
+        transactionId
+      )
 
       // 3️⃣ Return the updated record using its id
       return db.prepare(`SELECT * FROM cashReceipts WHERE id = ?`).get(existing.id)
@@ -949,10 +973,19 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
       // 4️⃣ Insert new record if not exists
       const result = db
         .prepare(
-          `INSERT INTO cashReceipts (transactionId, type, cash, date, party, amount, description)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO cashReceipts (transactionId, type, cash, date, party, amount, description, statusOfTransaction)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(transactionId, type, cash, formattedDate, party, amount, description)
+        .run(
+          transactionId,
+          type,
+          cash,
+          formattedDate,
+          party,
+          amount,
+          description,
+          statusOfTransaction
+        )
 
       // 5️⃣ Return newly created record
       return db.prepare(`SELECT * FROM cashReceipts WHERE id = ?`).get(result.lastInsertRowid)
