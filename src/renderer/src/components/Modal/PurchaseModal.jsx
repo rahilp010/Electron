@@ -17,7 +17,7 @@ import {
 import { CircleX } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
-import { SelectPicker, InputNumber, Toggle, Checkbox, Animation } from 'rsuite'
+import { SelectPicker, InputNumber, Toggle, Checkbox, Animation, CheckPicker } from 'rsuite'
 import ClientModal from './ClientModal'
 import ProductModal from './ProductModal'
 import { useLocation } from 'react-router-dom'
@@ -72,7 +72,8 @@ const PurchaseModal = ({
         paymentType: existingTransaction.paymentType || 'full',
         pendingAmount: Number(existingTransaction.pendingAmount) || 0,
         paidAmount: Number(existingTransaction.paidAmount) || 0,
-        transactionType: existingTransaction.transactionType || ''
+        transactionType: existingTransaction.transactionType || '',
+        taxAmount: existingTransaction.taxAmount || []
       }
     }
     return {
@@ -86,7 +87,8 @@ const PurchaseModal = ({
       paymentType: 'full',
       pendingAmount: 0,
       paidAmount: 0,
-      transactionType: ''
+      transactionType: '',
+      taxAmount: []
     }
   }
 
@@ -101,37 +103,57 @@ const PurchaseModal = ({
 
   useEffect(() => {
     if (isUpdateExpense && existingTransaction?.id) {
-      console.log('Initializing transaction for update:', existingTransaction)
-      setTransaction({
-        clientId: existingTransaction.clientId || '',
-        productId: existingTransaction.productId || '',
-        quantity: existingTransaction.quantity || 0,
-        sellAmount: Number(existingTransaction.sellAmount) || 0,
-        purchaseAmount: Number(existingTransaction.purchaseAmount) || 0,
-        statusOfTransaction: existingTransaction.statusOfTransaction || 'pending',
-        paymentMethod: existingTransaction.paymentMethod || 'bank',
-        paymentType: existingTransaction.paymentType || 'full',
-        pendingAmount: Number(existingTransaction.pendingAmount) || 0,
-        paidAmount: Number(existingTransaction.paidAmount) || 0,
-        transactionType: existingTransaction.transactionType || ''
-      })
+      setTransaction(getInitialTransaction())
     }
   }, [isUpdateExpense, existingTransaction?.id])
 
-  const totalAmount = products.filter((p) => p.id === transaction.productId).map((p) => p.price)
-
-  const totalPurchaseAmount = totalAmount.toString()
-
   const selectedProduct = products.find((p) => p.id === transaction.productId)
 
-  const bankReceipt = useSelector((state) => state.electron.bankReceipt.data || [])
+  const purchasePrice = selectedProduct?.price || 0
+  const subtotal = purchasePrice * transaction.quantity
 
-  console.log('bankReceipt', bankReceipt)
+  const calculateTaxBreakdown = () => {
+    let breakdown = {}
+    let totalTax = 0
+
+    if (Array.isArray(transaction.taxAmount)) {
+      transaction.taxAmount.forEach((tax) => {
+        breakdown[tax.name] = tax.value
+        totalTax += tax.value
+      })
+    }
+
+    return { breakdown, totalTax }
+  }
+
+  const { breakdown: taxBreakdown, totalTax } = calculateTaxBreakdown()
+  const grandTotal = subtotal + totalTax
+
+  useEffect(() => {
+    if (transaction.paymentType === 'full') {
+      setTransaction((prev) => ({
+        ...prev,
+        pendingAmount: 0,
+        paidAmount: grandTotal
+      }))
+    }
+    // For partial, keep user-input paid fixed, adjust pending
+    else if (transaction.paymentType === 'partial') {
+      setTransaction((prev) => ({
+        ...prev,
+        pendingAmount: Math.max(0, grandTotal - prev.paidAmount)
+      }))
+    }
+  }, [subtotal, totalTax, transaction.paymentType])
 
   const getProductName = (productId) => {
     const product = products.find((p) => p.id === productId)
     return product ? product.name : 'Unknown Product'
   }
+
+  const totalAmount = products.filter((p) => p.id === transaction.productId).map((p) => p.price)
+
+  const totalPurchaseAmount = totalAmount.toString()
 
   const handleSubmitTransaction = useCallback(
     async (e) => {
@@ -143,7 +165,7 @@ const PurchaseModal = ({
       try {
         // Validation
         if (!transaction.clientId || !transaction.productId) {
-          toast.error('Please enter details')
+          toast.error('Please select client and product')
           return
         } else if (!transaction.quantity || transaction.quantity <= 0) {
           toast.error('Please enter a valid quantity')
@@ -161,10 +183,7 @@ const PurchaseModal = ({
           transaction.pendingAmount = 0
           transaction.paidAmount = transaction.purchaseAmount * transaction.quantity
         } else if (transaction.paymentType === 'partial') {
-          if (
-            transaction.purchaseAmount * transaction.quantity >=
-            transaction.pendingAmount + transaction.paidAmount
-          ) {
+          if (grandTotal > transaction.pendingAmount + transaction.paidAmount) {
             toast.error('Partial amount should be less than total amount')
             return
           }
@@ -175,13 +194,14 @@ const PurchaseModal = ({
           productId: transaction.productId,
           quantity: Number(transaction.quantity),
           sellAmount: Number(transaction.sellAmount),
-          purchaseAmount: Number(totalPurchaseAmount),
+          purchaseAmount: Number(grandTotal),
           statusOfTransaction: transaction.statusOfTransaction || 'pending',
           paymentMethod: transaction.paymentMethod || 'bank',
           paymentType: transaction.paymentType || 'full',
           pendingAmount: Number(transaction.pendingAmount) || 0,
           paidAmount: Number(transaction.paidAmount) || 0,
-          transactionType: location.pathname === '/sales' ? 'sales' : 'purchase'
+          transactionType: location.pathname === '/sales' ? 'sales' : 'purchase',
+          taxAmount: transaction.taxAmount || []
         }
 
         if (!isUpdateExpense) {
@@ -189,39 +209,49 @@ const PurchaseModal = ({
           dispatch(setTransactions(createdTransaction))
           toast.success('Transaction added successfully')
 
-          if (location.pathname === '/purchase') {
-            if (transaction.paymentMethod === 'bank') {
-              const bankReceiptData = {
-                transactionId: createdTransaction.id, // ✅ Correct transaction ID
-                type: 'Payment',
-                bank: transaction.bank || 'IDBI',
-                date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                statusOfTransaction: transaction.statusOfTransaction || 'pending',
-                party:
-                  clients.find((c) => c.id === transaction.clientId)?.clientName ||
-                  'Unknown Client',
-                amount: transaction.purchaseAmount * transaction.quantity || 0,
-                description: `Purchase ${getProductName(transaction.productId)}`
-              }
+          const baseReceipt = {
+            transactionId: createdTransaction.id,
+            type: 'Payment',
+            date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+            statusOfTransaction: createdTransaction.statusOfTransaction,
+            party:
+              clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
+            amount: grandTotal,
+            description: `Purchase ${getProductName(transaction.productId)}`,
+            taxAmount: transaction.taxAmount || []
+          }
 
-              const createdBankReceipt = await window.api.createBankReceipt(bankReceiptData || {})
+          if (transaction.statusOfTransaction === 'completed') {
+            if (transaction.paymentMethod === 'bank') {
+              const createdBankReceipt = await window.api.createBankReceipt({
+                ...baseReceipt,
+                bank: transaction.bank || 'IDBI'
+              })
               dispatch(setBankReceipt(createdBankReceipt))
             } else if (transaction.paymentMethod === 'cash') {
-              const cashReceiptData = {
-                transactionId: createdTransaction.id, // ✅ Correct transaction ID
-                type: 'Payment',
-                cash: transaction.cash || 'Cash',
-                date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                statusOfTransaction: transaction.statusOfTransaction || 'pending',
-                party:
-                  clients.find((c) => c.id === transaction.clientId)?.clientName ||
-                  'Unknown Client',
-                amount: transaction.purchaseAmount * transaction.quantity || 0,
-                description: `Purchase ${getProductName(transaction.productId)}`
-              }
-
-              const createdCashReceipt = await window.api.createCashReceipt(cashReceiptData || {})
+              const createdCashReceipt = await window.api.createCashReceipt({
+                ...baseReceipt,
+                cash: transaction.cash || 'Cash'
+              })
               dispatch(setCashReceipt(createdCashReceipt))
+            }
+          } else if (transaction.statusOfTransaction === 'partial') {
+            if (transaction.paidAmount > 0) {
+              if (transaction.paymentMethod === 'bank') {
+                const createdBankReceipt = await window.api.createBankReceipt({
+                  ...baseReceipt,
+                  amount: transaction.paidAmount,
+                  bank: transaction.bank || 'IDBI'
+                })
+                dispatch(setBankReceipt(createdBankReceipt))
+              } else if (transaction.paymentMethod === 'cash') {
+                const createdCashReceipt = await window.api.createCashReceipt({
+                  ...baseReceipt,
+                  amount: transaction.paidAmount,
+                  cash: transaction.cash || 'Cash'
+                })
+                dispatch(setCashReceipt(createdCashReceipt))
+              }
             }
           }
         } else {
@@ -232,38 +262,51 @@ const PurchaseModal = ({
           dispatch(updateTransaction(updatedTransaction))
           toast.success('Transaction updated successfully')
 
-          if (location.pathname === '/purchase') {
-            // Build bankReceiptData for update
+          const baseReceipt = {
+            transactionId: updatedTransaction.data.id,
+            type: 'Payment',
+            date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+            statusOfTransaction: updatedTransaction.data.statusOfTransaction,
+            party:
+              clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
+            amount: grandTotal,
+            description: `Purchase ${getProductName(transaction.productId)}`,
+            taxAmount: transaction.taxAmount || []
+          }
+
+          if (transaction.statusOfTransaction === 'completed') {
             if (transaction.paymentMethod === 'bank') {
-              const bankReceiptData = {
-                transactionId: updatedTransaction.data.id,
-                type: 'Payment',
-                bank: transaction.bank || 'IDBI',
-                date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                statusOfTransaction: transaction.statusOfTransaction || 'pending',
-                party:
-                  clients.find((c) => c.id === transaction.clientId)?.clientName ||
-                  'Unknown Client',
-                amount: updatedTransaction.data.pendingAmount || 0,
-                description: `Purchase ${getProductName(transaction.productId)}`
-              }
-              const updatedBankReceipt = await window.api.updateBankReceipt(bankReceiptData)
+              const updatedBankReceipt = await window.api.updateBankReceipt({
+                ...baseReceipt,
+                amount: grandTotal,
+                bank: transaction.bank || 'IDBI'
+              })
               dispatch(updateBankReceipt(updatedBankReceipt))
             } else if (transaction.paymentMethod === 'cash') {
-              const cashReceiptData = {
-                transactionId: updatedTransaction.data.id,
-                type: 'Payment',
-                cash: transaction.cash || 'Cash',
-                date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                statusOfTransaction: transaction.statusOfTransaction || 'pending',
-                party:
-                  clients.find((c) => c.id === transaction.clientId)?.clientName ||
-                  'Unknown Client',
-                amount: updatedTransaction.data.pendingAmount || 0,
-                description: `Purchase ${getProductName(transaction.productId)}`
-              }
-              const updatedCashReceipt = await window.api.updateCashReceipt(cashReceiptData)
+              const updatedCashReceipt = await window.api.updateCashReceipt({
+                ...baseReceipt,
+                amount: grandTotal,
+                cash: transaction.cash || 'Cash'
+              })
               dispatch(updateCashReceipt(updatedCashReceipt))
+            }
+          } else if (transaction.paymentType === 'partial') {
+            if (transaction.paidAmount > 0) {
+              if (transaction.paymentMethod === 'bank') {
+                const updatedBankReceipt = await window.api.updateBankReceipt({
+                  ...baseReceipt,
+                  amount: transaction.paidAmount,
+                  bank: transaction.bank || 'IDBI'
+                })
+                dispatch(updateBankReceipt(updatedBankReceipt))
+              } else if (transaction.paymentMethod === 'cash') {
+                const updatedCashReceipt = await window.api.updateCashReceipt({
+                  ...baseReceipt,
+                  amount: transaction.paidAmount,
+                  cash: transaction.cash || 'Cash'
+                })
+                dispatch(updateCashReceipt(updatedCashReceipt))
+              }
             }
           }
         }
@@ -281,7 +324,22 @@ const PurchaseModal = ({
   const handleOnChangeEvent = (value, fieldName) => {
     switch (fieldName) {
       case 'quantity':
-        setTransaction((prev) => ({ ...prev, quantity: value }))
+        const newSubtotal = purchasePrice * value
+        const updatedTaxForQuantity = transaction.taxAmount.map((tax) => {
+          switch (tax.code) {
+            case 'i-18':
+              return { ...tax, value: newSubtotal * 0.18 }
+            case 'i-28':
+              return { ...tax, value: newSubtotal * 0.28 }
+            case 's-9':
+              return { ...tax, value: newSubtotal * 0.09 }
+            case 'c-9':
+              return { ...tax, value: newSubtotal * 0.09 }
+            default:
+              return tax
+          }
+        })
+        setTransaction((prev) => ({ ...prev, quantity: value, taxAmount: updatedTaxForQuantity }))
         break
 
       case 'sellingPrice':
@@ -297,7 +355,8 @@ const PurchaseModal = ({
           ...prev,
           productId: value,
           // Reset quantity when product changes to avoid stock issues
-          quantity: 0
+          quantity: 0,
+          taxAmount: []
         }))
         break
 
@@ -313,6 +372,43 @@ const PurchaseModal = ({
         setTransaction((prev) => ({ ...prev, paymentMethod: value }))
         break
 
+      case 'taxAmount':
+        const selectedValues = value || []
+        let taxObjects = []
+        let preservedFrightValue = 0
+
+        // Preserve fright value if still selected
+        if (selectedValues.includes('frightChanged')) {
+          const existingFright = transaction.taxAmount.find((t) => t.code === 'frightChanged')
+          preservedFrightValue = existingFright?.value || 0
+        }
+
+        taxObjects = selectedValues
+          .map((val) => {
+            switch (val) {
+              case 'i-18':
+                return { code: 'i-18', name: 'IGST 18%', value: subtotal * 0.18 }
+              case 'i-28':
+                return { code: 'i-28', name: 'IGST 28%', value: subtotal * 0.28 }
+              case 's-9':
+                return { code: 's-9', name: 'SGST 9%', value: subtotal * 0.09 }
+              case 'c-9':
+                return { code: 'c-9', name: 'CGST 9%', value: subtotal * 0.09 }
+              case 'frightChanged':
+                return {
+                  code: 'frightChanged',
+                  name: 'Freight Charges',
+                  value: preservedFrightValue
+                }
+              default:
+                return null
+            }
+          })
+          .filter(Boolean)
+
+        setTransaction((prev) => ({ ...prev, taxAmount: taxObjects }))
+        break
+
       case 'pendingAmount':
         setTransaction((prev) => ({
           ...prev,
@@ -321,13 +417,31 @@ const PurchaseModal = ({
         break
 
       case 'paidAmount':
-        setTransaction((prev) => ({ ...prev, paidAmount: Number(value) }))
+        const currentGrandForPaid = subtotal + totalTax
+        setTransaction((prev) => ({
+          ...prev,
+          paidAmount: Number(value || 0),
+          pendingAmount: Math.max(0, currentGrandForPaid - Number(value || 0))
+        }))
+        break
+
+      case 'frightCharges':
+        setTransaction((prev) => ({
+          ...prev,
+          taxAmount: prev.taxAmount.map((t) =>
+            t.code === 'frightChanged' ? { ...t, value: Number(value || 0) } : t
+          )
+        }))
         break
 
       default:
         toast.error('Invalid Field Name')
         break
     }
+  }
+
+  const handleFrightChange = (value) => {
+    handleOnChangeEvent(value, 'frightCharges')
   }
 
   const toThousands = (value) => {
@@ -489,6 +603,28 @@ const PurchaseModal = ({
                 </div>
               )}
 
+              <div className="mb-4">
+                <label htmlFor="tax" className="block text-sm mb-1 text-gray-600">
+                  Tax
+                </label>
+                <CheckPicker
+                  data={[
+                    { label: 'IGST 18', value: 'i-18' },
+                    { label: 'IGST 28', value: 'i-28' },
+                    { label: 'SGST 9', value: 's-9' },
+                    { label: 'CGST 9', value: 'c-9' },
+                    { label: 'Fright Changed', value: 'frightChanged' }
+                  ]}
+                  searchable={false}
+                  size="md"
+                  placeholder="Select Tax"
+                  value={transaction.taxAmount.map((t) => t.code)}
+                  onChange={(value) => handleOnChangeEvent(value, 'taxAmount')}
+                  style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
+                  menuStyle={{ zIndex: clientModal ? 1 : 999 }}
+                />
+              </div>
+
               <div>
                 <label htmlFor="total" className="block text-sm mb-1 text-gray-600">
                   Total
@@ -498,11 +634,7 @@ const PurchaseModal = ({
                   defaultValue={0}
                   disabled
                   size="xs"
-                  value={
-                    location.pathname === '/purchase'
-                      ? selectedProduct?.price * transaction.quantity || 0
-                      : transaction.sellAmount * transaction.quantity || 0
-                  }
+                  value={grandTotal}
                   formatter={toThousands}
                   name="total"
                   id="total"
@@ -510,7 +642,27 @@ const PurchaseModal = ({
                 />
               </div>
 
-              {location.pathname === '/purchase' && <div></div>}
+              <Animation.Collapse
+                in={transaction.taxAmount.find((t) => t.code === 'frightChanged')}
+              >
+                <div className="col-span-2">
+                  <label htmlFor="frightCharges" className="block text-sm mb-1 text-gray-600">
+                    Freight Charges
+                  </label>
+                  <InputNumber
+                    prefix={<div className="">₹</div>}
+                    defaultValue={0}
+                    size="xs"
+                    value={transaction.frightCharges}
+                    onChange={(value) => handleFrightChange(value)}
+                    formatter={toThousands}
+                    min={0}
+                    name="frightCharges"
+                    id="frightCharges"
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
+              </Animation.Collapse>
 
               <div className="text-xs grid-cols-2 grid items-center ">
                 <div>
@@ -546,48 +698,41 @@ const PurchaseModal = ({
                   }
                   className="text-sm text-gray-600 -ml-5 mt-5"
                 >
-                  Cash
+                  Cash Payment
                 </Checkbox>
               </div>
 
               <Animation.Collapse in={transaction.paymentType === 'partial'}>
-                <div>
-                  <label htmlFor="pending" className="block text-sm mb-1 text-gray-600">
-                    Pending
-                  </label>
-                  <InputNumber
-                    prefix={<div className="">₹</div>}
-                    value={transaction.pendingAmount}
-                    size="xs"
-                    formatter={toThousands}
-                    onChange={(val) => handleOnChangeEvent(val ?? 0, 'pendingAmount')}
-                    onBlur={(e) =>
-                      handleOnChangeEvent(Number(e.target.value) || 0, 'pendingAmount')
-                    }
-                    id="pendingAmount"
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 
-                                               focus:outline-none focus:ring-2 focus:ring-blue-400 h-9"
-                  />
-                </div>
-              </Animation.Collapse>
-              <Animation.Collapse in={transaction.paymentType === 'partial'}>
-                <div>
-                  <label htmlFor="paid" className="block text-sm mb-1 text-gray-600">
-                    Paid
-                  </label>
-                  <InputNumber
-                    prefix={<div className="">₹</div>}
-                    value={
-                      transaction.purchaseAmount * transaction.quantity - transaction.pendingAmount
-                    }
-                    size="xs"
-                    formatter={toThousands}
-                    onChange={(val) => handleOnChangeEvent(val ?? 0, 'paidAmount')}
-                    onBlur={(e) => handleOnChangeEvent(Number(e.target.value) || 0, 'paidAmount')}
-                    id="paidAmount"
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 
-                                               focus:outline-none focus:ring-2 focus:ring-blue-400 h-9"
-                  />
+                <div className="col-span-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-200 rounded-lg border border-gray-200">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Paid Amount
+                      </label>
+                      <InputNumber
+                        prefix="₹"
+                        value={transaction.paidAmount}
+                        onChange={(val) => handleOnChangeEvent(val ?? 0, 'paidAmount')}
+                        formatter={toThousands}
+                        size="md"
+                        className="w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pending Amount
+                      </label>
+                      <InputNumber
+                        prefix="₹"
+                        value={transaction.pendingAmount}
+                        formatter={toThousands}
+                        disabled
+                        size="md"
+                        className="w-full bg-gray-100"
+                      />
+                    </div>
+                  </div>
                 </div>
               </Animation.Collapse>
             </div>

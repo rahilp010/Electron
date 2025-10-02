@@ -188,7 +188,9 @@ const PurchaseRow = React.memo(
             {transaction?.quantity || 0}
           </span>
         </td>
-        <td className="px-4 py-3 font-semibold">₹ {toThousands(Number(totalAmount).toFixed(0))}</td>
+        <td className="px-4 py-3 font-semibold">
+          ₹ {toThousands(Number(transaction?.purchaseAmount).toFixed(0))}
+        </td>
         <td className="px-4 py-3">{renderPendingAmount()}</td>
         <td className="px-4 py-3">{renderPaidAmount()}</td>
         <td className="px-4 py-3 tracking-wide">
@@ -432,7 +434,7 @@ const Purchase = () => {
     const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
 
     const totalPurchases = purchaseTransactions.reduce(
-      (total, item) => total + (totalAmountProduct || 0) * (item.quantity || 0),
+      (total, item) => total + (item.purchaseAmount || 0),
       0
     )
 
@@ -487,9 +489,9 @@ const Purchase = () => {
         'Client Name': getClientName(transaction.clientId, clients),
         'Product Name': getProductName(transaction.productId, products),
         Quantity: transaction.quantity,
-        'Total Amount': (transaction.sellAmount || 0) * (transaction.quantity || 0),
-        'Pending Amount': transaction.pendingAmount || 0,
-        'Paid Amount': transaction.paidAmount || 0,
+        'Total Amount': toThousands(transaction.purchaseAmount || 0),
+        'Pending Amount': toThousands(transaction.pendingAmount || 0),
+        'Paid Amount': toThousands(transaction.paidAmount || 0),
         'Payment Status': transaction.statusOfTransaction,
         'Payment Type': transaction.paymentType
       }))
@@ -594,7 +596,7 @@ const Purchase = () => {
 
         {/* Main Content */}
         <div className="w-full h-[calc(100%-40px)] my-3 bg-white overflow-y-auto customScrollbar relative">
-          <div className="mx-7 my-3">
+          <div className="mx-7 my-5">
             {/* Filters */}
             <div className="flex justify-between mb-4">
               <div>

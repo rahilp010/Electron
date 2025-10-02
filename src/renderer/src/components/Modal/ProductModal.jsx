@@ -3,7 +3,7 @@
 /* eslint-disable no-case-declarations */
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/prop-types */
-import React, { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { setProducts, updateProduct } from '../../app/features/electronSlice'
 import { CircleX } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
@@ -329,6 +329,7 @@ const ProductModal = ({
                 <Input
                   size="sm"
                   value={product.saleHSNCode}
+                  placeholder="Enter Sale HSN Code"
                   onChange={(value) => handleOnChangeEvent(value, 'saleHSNCode')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
@@ -340,6 +341,7 @@ const ProductModal = ({
                 <Input
                   size="sm"
                   value={product.purchaseHSNCode}
+                  placeholder="Enter Purchase HSN Code"
                   onChange={(value) => handleOnChangeEvent(value, 'purchaseHSNCode')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
@@ -351,6 +353,7 @@ const ProductModal = ({
                 <Input
                   size="sm"
                   value={product.name}
+                  placeholder="Enter Product Name"
                   onChange={(value) => handleOnChangeEvent(value, 'name')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
@@ -362,6 +365,7 @@ const ProductModal = ({
                 <InputNumber
                   size="sm"
                   value={product.quantity}
+                  placeholder="Enter Quantity"
                   onChange={(value) => handleOnChangeEvent(value, 'quantity')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />

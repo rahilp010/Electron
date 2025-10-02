@@ -186,7 +186,9 @@ const TransactionRow = memo(
             ₹ {toThousands(Number(transaction?.sellAmount).toFixed(0))}
           </td>
         )}
-        <td className="px-4 py-3 font-semibold">₹ {toThousands(Number(totalAmount).toFixed(0))}</td>
+        <td className="px-4 py-3 font-semibold">
+          ₹ {toThousands(Number(transaction?.sellAmount).toFixed(0))}
+        </td>
         <td className="px-4 py-3">{renderPendingAmount()}</td>
         <td className="px-4 py-3">{renderPaidAmount()}</td>
         <td className="px-4 py-3 tracking-wide">{getPaymentStatusComponent(transaction)}</td>
@@ -370,14 +372,11 @@ const Transaction = () => {
   const statistics = useMemo(() => {
     const salesTransactions = transactions.filter((t) => t?.transactionType === 'sales')
 
-    const totalSales = salesTransactions.reduce(
-      (total, item) => total + (item.sellAmount || 0) * (item.quantity || 0),
-      0
-    )
+    const totalSales = salesTransactions.reduce((total, item) => total + (item.totalAmount || 0), 0)
 
     const totalPendingAmount = salesTransactions.reduce((total, item) => {
       if (item.statusOfTransaction === 'pending' && item.paymentType === 'full') {
-        return total + (item.sellAmount || 0) * (item.quantity || 0)
+        return total + (item.totalAmount || 0)
       }
       if (item.statusOfTransaction === 'pending' && item.paymentType === 'partial') {
         return total + (item.pendingAmount || 0)
@@ -427,7 +426,7 @@ const Transaction = () => {
         'Product Name': getProductName(transaction.productId, products),
         Quantity: transaction.quantity,
         'Sell Amount': transaction.sellAmount,
-        'Total Amount': (transaction.sellAmount || 0) * (transaction.quantity || 0),
+        'Total Amount': transaction.sellAmount,
         'Pending Amount': transaction.pendingAmount || 0,
         'Paid Amount': transaction.paidAmount || 0,
         'Payment Status': transaction.statusOfTransaction,

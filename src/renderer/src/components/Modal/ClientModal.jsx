@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
-import React, { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { setClients, updateClient } from '../../app/features/electronSlice'
 import { CircleX } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
@@ -39,9 +39,9 @@ const ClientModal = ({
         phoneNo: existingClient.phoneNo || '',
         gstNo: existingClient.gstNo || '',
         address: existingClient.address || '',
-        pendingAmount: Number(existingClient.pendingAmount) || '',
-        paidAmount: Number(existingClient.paidAmount) || '',
-        pendingFromOurs: existingClient.pendingFromOurs || '',
+        pendingAmount: Number(existingClient.pendingAmount) || 0,
+        paidAmount: Number(existingClient.paidAmount) || 0,
+        pendingFromOurs: Number(existingClient.pendingFromOurs) || 0,
         accountType: existingClient.accountType || ''
       }
     }
@@ -50,9 +50,9 @@ const ClientModal = ({
       phoneNo: '',
       gstNo: '',
       address: '',
-      pendingAmount: '',
-      paidAmount: '',
-      pendingFromOurs: '',
+      pendingAmount: 0,
+      paidAmount: 0,
+      pendingFromOurs: 0,
       accountType: ''
     }
   }
@@ -74,9 +74,9 @@ const ClientModal = ({
         phoneNo: existingClient.phoneNo || '',
         gstNo: existingClient.gstNo || '',
         address: existingClient.address || '',
-        pendingAmount: Number(existingClient.pendingAmount) || '',
-        paidAmount: Number(existingClient.paidAmount) || '',
-        pendingFromOurs: existingClient.pendingFromOurs || '',
+        pendingAmount: Number(existingClient.pendingAmount) || 0,
+        paidAmount: Number(existingClient.paidAmount) || 0,
+        pendingFromOurs: Number(existingClient.pendingFromOurs) || 0,
         accountType: existingClient.accountType || ''
       })
     }
@@ -118,7 +118,7 @@ const ClientModal = ({
           address: client.address,
           pendingAmount: Number(client.pendingAmount),
           paidAmount: Number(client.paidAmount),
-          pendingFromOurs: client.pendingFromOurs,
+          pendingFromOurs: Number(client.pendingFromOurs),
           accountType: client.accountType
         }
 

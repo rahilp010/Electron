@@ -6,6 +6,7 @@ import bank from '../assets/ATM.png'
 import cash from '../assets/cash.png'
 import purchase from '../assets/purchase.png'
 import { useNavigate } from 'react-router-dom'
+import { ReceiptText } from 'lucide-react'
 
 const Dashboard = () => {
   const navigate = useNavigate()
@@ -62,8 +63,13 @@ const Dashboard = () => {
             </div>
 
             {/* Time Tracker */}
-            <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4">
+            <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4 relative">
               <img src={purchase} alt="product" className="w-24 h-24 object-cover" />
+              <ReceiptText
+                className="absolute top-3 right-3 border p-1.5 rounded-full bg-black text-white hover:scale-110 transition-all duration-200 cursor-pointer"
+                size={28}
+                onClick={() => navigate('/purchaseBill')}
+              />
               <button
                 className="mt-4 bg-black text-white px-18 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
                 onClick={() => navigate('/purchase')}

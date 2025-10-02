@@ -20,6 +20,7 @@ import Reports from './Screens/Reports.jsx'
 import PendingPaymentsReport from './Screens/PendingPaymentsReport.jsx'
 import PendingCollectionReport from './Screens/PendingCollectionReport.jsx'
 import Settings from './Screens/Settings.jsx'
+import PurchaseBill from './components/UI/PurchaseBill.jsx'
 
 function App() {
   return (
@@ -60,6 +61,7 @@ function App() {
               <Route path="/pendingCollection" element={<PendingCollectionReport />} />
               <Route path="/pendingPayment" element={<PendingPaymentsReport />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/purchaseBill" element={<PurchaseBill />} />
             </Routes>
           </KeyBind>
         </HashRouter>

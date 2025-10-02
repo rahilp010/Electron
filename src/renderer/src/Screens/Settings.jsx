@@ -1,17 +1,22 @@
 /* eslint-disable prettier/prettier */
 import React, { useState } from 'react'
 import Navbar from '../components/UI/Navbar'
-import { Info, Keyboard, DollarSign, Database } from 'lucide-react'
+import { Info, Keyboard, Banknote, DatabaseBackup } from 'lucide-react'
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('about')
   const [showModal, setShowModal] = useState(false)
 
   const menuItems = [
-    { key: 'about', label: 'About', icon: <Info size={18} /> },
-    { key: 'keys', label: 'Key Bindings', icon: <Keyboard size={18} /> },
-    { key: 'tax', label: 'Tax Configuration', icon: <DollarSign size={18} /> },
-    { key: 'backup', label: 'Backup', icon: <Database size={18} /> }
+    { key: 'about', label: 'About', icon: <Info size={18} />, color: '#FDAAAA' },
+    { key: 'keys', label: 'Key Bindings', icon: <Keyboard size={18} />, color: '#FDAAAA' },
+    {
+      key: 'tax',
+      label: 'Tax Configuration',
+      icon: <Banknote size={18} />,
+      color: '#FDAAAA'
+    },
+    { key: 'backup', label: 'Backup', icon: <DatabaseBackup size={18} />, color: '#FDAAAA' }
   ]
 
   const handleCheckUpdate = () => {
@@ -64,31 +69,32 @@ const Settings = () => {
       </div>
 
       {/* Header */}
-      <div className="flex justify-between mt-5 items-center">
-        <p className="text-3xl font-light mx-7">Settings</p>
-      </div>
-
-      <div>
-        {/* Sidebar */}
+      <div className="flex mt-5 mb-2 justify-between mx-7">
+        <div>
+          <p className="text-3xl font-light">Settings</p>
+        </div>
         <div className="flex justify-center">
-          <ul className="flex items-center p-0.5 px-0.5 rounded-4xl border border-gray-300">
+          <ul className="flex items-center p-0.5 px-0.5 gap-1.5 text-sm">
             {menuItems.map((item) => (
               <li
                 key={item.key}
-                className={`flex items-center justify-center gap-3 px-6 py-2 cursor-pointer text-sm font-medium transition-all
+                className={`flex items-center gap-2 w-fit p-1.5 px-3 rounded-sm transition-all duration-300 cursor-pointer border border-gray-200
                   ${
                     activeTab === item.key
-                      ? 'bg-indigo-500 backdrop-blur-2xl text-white rounded-4xl'
-                      : 'text-gray-300 hover:bg-white/30 rounded-4xl'
+                      ? 'bg-black backdrop-blur-2xl text-white rounded-4xl'
+                      : ''
                   }`}
                 onClick={() => setActiveTab(item.key)}
               >
+                {item.icon}
                 {item.label}
               </li>
             ))}
           </ul>
         </div>
       </div>
+
+      <div>{/* Sidebar */}</div>
       {/* Content */}
       <div className="grid grid-cols-12 mx-7 mt-3 border border-gray-200 rounded-2xl bg-white shadow-md overflow-hidden min-h-[calc(100vh-150px)]">
         {/* Main content */}

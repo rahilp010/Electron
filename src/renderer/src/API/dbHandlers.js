@@ -1,7 +1,6 @@
 import db from './db.js'
 import { ipcMain } from 'electron'
 import * as XLSX from 'xlsx'
-import toast from 'react-toastify'
 import fs from 'fs'
 import PDFDocument from 'pdfkit'
 
@@ -215,240 +214,140 @@ ipcMain.handle('getClientById', (event, id) => {
 
 // -------- Transactions --------
 
+// ----------------- Helpers -----------------
+
+// 🔹 Format date safely for SQLite
+function formatDate(date) {
+  if (!date) return null
+  const parsed = new Date(date)
+  return isNaN(parsed) ? null : parsed.toISOString().slice(0, 19).replace('T', ' ')
+}
+
+// 🔹 Adjust product stock
+function adjustProductStock(productId, qty, type, rollback = false) {
+  const sign = (type === 'sales' ? -1 : 1) * (rollback ? -1 : 1)
+  db.prepare(
+    `UPDATE products SET quantity = quantity + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+  ).run(sign * qty, productId)
+}
+
+// 🔹 Update client balances
+function updateClientBalances(clientId, tx, mode = 'apply') {
+  const factor = mode === 'rollback' ? -1 : 1
+  const total =
+    tx.transactionType === 'sales' ? tx.sellAmount * tx.quantity : tx.purchaseAmount * tx.quantity
+
+  if (tx.transactionType === 'sales') {
+    if (tx.paymentType === 'partial') {
+      db.prepare(
+        `UPDATE clients SET pendingAmount = pendingAmount + ?, paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+      ).run(factor * tx.pendingAmount, factor * tx.paidAmount, clientId)
+    } else if (tx.statusOfTransaction === 'completed') {
+      db.prepare(
+        `UPDATE clients SET paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+      ).run(factor * total, clientId)
+    } else {
+      db.prepare(
+        `UPDATE clients SET pendingAmount = pendingAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+      ).run(factor * total, clientId)
+    }
+  } else if (tx.transactionType === 'purchase') {
+    if (tx.paymentType === 'partial') {
+      db.prepare(
+        `UPDATE clients SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+      ).run(factor * tx.pendingAmount, clientId)
+    } else if (tx.statusOfTransaction === 'pending') {
+      db.prepare(
+        `UPDATE clients SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+      ).run(factor * total, clientId)
+    }
+  }
+}
+
+// 🔹 Insert receipt (bank or cash)
+function handleReceipt(table, transactionId, receipt, clientName, productName, amount) {
+  if (!receipt || !receipt.type || !receipt.amount) return
+  const formattedDate =
+    formatDate(receipt.date) || new Date().toISOString().slice(0, 19).replace('T', ' ')
+
+  db.prepare(
+    `INSERT INTO ${table} (transactionId, type, bank, date, party, amount, description)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    transactionId,
+    receipt.type,
+    receipt.bank || 'IDBI',
+    formattedDate,
+    clientName,
+    amount,
+    receipt.description || `${receipt.type} for ${productName}`
+  )
+}
+
+function calculateTotalWithTax(tx) {
+  const base = (tx.transactionType === 'sales' ? tx.sellAmount : tx.purchaseAmount) * tx.quantity
+  const taxTotal = Array.isArray(tx.taxAmount)
+    ? tx.taxAmount.reduce((sum, t) => sum + (t.value || 0), 0)
+    : 0
+  return base + taxTotal
+}
+
 ipcMain.handle('getAllTransactions', () => {
   const stmt = db.prepare('SELECT * FROM transactions ORDER BY createdAt DESC')
   return stmt.all()
 })
 
 // ✅ Create transaction
-ipcMain.handle('createTransaction', (event, transaction, bankReceipt = {}, cashReceipt = {}) => {
-  const {
-    clientId,
-    productId,
-    quantity,
-    sellAmount,
-    purchaseAmount,
-    paymentMethod,
-    statusOfTransaction,
-    paymentType,
-    pendingAmount,
-    paidAmount,
-    transactionType
-  } = transaction
+ipcMain.handle('createTransaction', (event, tx, bankReceipt = {}, cashReceipt = {}) => {
+  const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(tx.clientId)
+  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(tx.productId)
+  if (!client || !product) throw new Error('Invalid client or product')
 
-  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId)
-  if (!product) {
-    toast.error('Product not Found')
-    return
-  }
-
-  if (transactionType === 'sales' && product.quantity < quantity) {
-    toast.error('Insufficient product quantity')
-    return
-  }
-
-  // Fix: sellAmount is already the total amount, don't multiply by quantity
-  if (transactionType === 'sales' && paymentType === 'partial') {
-    if ((pendingAmount || 0) + (paidAmount || 0) !== sellAmount * quantity) {
-      toast.error('Pending amount and paid amount should be equal to total selling amount')
-      return
-    }
-  }
-
-  // Check if client exists
-  const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId)
-  if (!client) {
-    toast.error('Client not Found')
-    return
-  }
-
-  // Start database transaction
   const dbTransaction = db.transaction(() => {
-    let totalTransactionAmount = 0
-
-    if (transactionType === 'sales') {
-      totalTransactionAmount = sellAmount * quantity
-    } else if (transactionType === 'purchase') {
-      // ✅ For purchase, always calculate from product.price
-      totalTransactionAmount = purchaseAmount * quantity
-    }
-
-    // 1. Create the transaction record
     const stmt = db.prepare(`
-            INSERT INTO transactions (clientId, productId, quantity, sellAmount, purchaseAmount, paymentMethod, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `)
+      INSERT INTO transactions (clientId, productId, quantity, sellAmount, purchaseAmount, paymentMethod, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType, taxAmount, totalAmount)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
     const result = stmt.run(
-      clientId,
-      productId,
-      quantity,
-      sellAmount,
-      purchaseAmount,
-      paymentMethod,
-      statusOfTransaction || 'pending',
-      paymentType || 'cash',
-      pendingAmount || 0,
-      paidAmount || 0,
-      transactionType
+      tx.clientId,
+      tx.productId,
+      tx.quantity,
+      tx.sellAmount,
+      tx.purchaseAmount,
+      tx.paymentMethod,
+      tx.statusOfTransaction || 'pending',
+      tx.paymentType || 'full',
+      tx.pendingAmount || 0,
+      tx.paidAmount || 0,
+      tx.transactionType,
+      JSON.stringify(tx.taxAmount || []),
+      tx.totalAmount || 0
     )
-
-    if (transactionType === 'sales') {
-      // 2. Update product quantity (reduce by sold quantity)
-      const productStmt = db.prepare(`
-            UPDATE products
-            SET quantity = quantity - ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `)
-      productStmt.run(quantity, productId)
-    } else if (transactionType === 'purchase') {
-      // 2. Update product quantity (reduce by sold quantity)
-      const productStmt = db.prepare(`
-            UPDATE products
-            SET quantity = quantity + ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `)
-      productStmt.run(quantity, productId)
-    }
-
-    // 3. Update client amounts based on payment type and transaction status
-    let clientPendingIncrease = 0
-    let clientPaidIncrease = 0
-    let clientPendingFromOursIncrease = 0
-
-    if (transactionType === 'sales') {
-      if (paymentType === 'partial') {
-        clientPendingIncrease = pendingAmount || 0
-        clientPaidIncrease = paidAmount || 0
-      } else if (statusOfTransaction === 'completed') {
-        clientPaidIncrease = totalTransactionAmount
-      } else {
-        clientPendingIncrease = totalTransactionAmount
-      }
-    } else if (transactionType === 'purchase') {
-      if (paymentType === 'partial') {
-        clientPendingFromOursIncrease = pendingAmount || 0
-      } else if (statusOfTransaction === 'completed') {
-        clientPendingFromOursIncrease = totalTransactionAmount
-      } else {
-        clientPendingFromOursIncrease = totalTransactionAmount
-      }
-    }
-
-    if (transactionType === 'sales') {
-      const clientStmt = db.prepare(`
-            UPDATE clients
-            SET pendingAmount = pendingAmount + ?, 
-                paidAmount = paidAmount + ?,
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `)
-      clientStmt.run(clientPendingIncrease, clientPaidIncrease, clientId)
-    } else if (transactionType === 'purchase') {
-      const clientStmt = db.prepare(`
-        UPDATE clients SET pendingFromOurs = pendingFromOurs + ? WHERE id = ?`)
-      clientStmt.run(clientPendingFromOursIncrease, clientId)
-    }
-
     const transactionId = result.lastInsertRowid
 
-    // 4. Create linked bank receipt if purchase
-    if (
-      transactionType === 'purchase' &&
-      bankReceipt &&
-      bankReceipt.type &&
-      bankReceipt.bank &&
-      bankReceipt.amount
-    ) {
-      const { type, bank, date, party, amount, description } = bankReceipt
+    // Stock + balances
+    adjustProductStock(tx.productId, tx.quantity, tx.transactionType)
+    updateClientBalances(tx.clientId, tx, 'apply')
 
-      let formattedDate = null
-      if (date) {
-        const parsedDate = new Date(date)
-        if (!isNaN(parsedDate)) {
-          formattedDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ')
-        }
-      }
-
-      db.prepare(
-        `
-        INSERT INTO bankReceipts (transactionId, type, bank, date, party, amount, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        `
-      ).run(transactionId, type, bank, formattedDate, party, amount, description)
-    } else if (
-      transactionType === 'sales' &&
-      bankReceipt &&
-      bankReceipt.type &&
-      bankReceipt.bank &&
-      bankReceipt.amount
-    ) {
-      const { type, bank, date, party, amount, description } = bankReceipt
-
-      let formattedDate = null
-      if (date) {
-        const parsedDate = new Date(date)
-        if (!isNaN(parsedDate)) {
-          formattedDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ')
-        }
-      }
-
-      db.prepare(
-        `
-        INSERT INTO bankReceipts (transactionId, type, bank, date, party, amount, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        `
-      ).run(transactionId, type, bank, formattedDate, party, amount, description)
-    }
-
-    //cash
-
-    if (
-      transactionType === 'purchase' &&
-      cashReceipt &&
-      cashReceipt.type &&
-      cashReceipt.bank &&
-      cashReceipt.amount
-    ) {
-      const { type, bank, date, party, amount, description } = cashReceipt
-
-      let formattedDate = null
-      if (date) {
-        const parsedDate = new Date(date)
-        if (!isNaN(parsedDate)) {
-          formattedDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ')
-        }
-      }
-
-      db.prepare(
-        `
-        INSERT INTO cashReceipts (transactionId, type, bank, date, party, amount, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        `
-      ).run(transactionId, type, bank, formattedDate, party, amount, description)
-    } else if (
-      transactionType === 'sales' &&
-      cashReceipt &&
-      cashReceipt.type &&
-      cashReceipt.bank &&
-      cashReceipt.amount
-    ) {
-      const { type, bank, date, party, amount, description } = cashReceipt
-
-      let formattedDate = null
-      if (date) {
-        const parsedDate = new Date(date)
-        if (!isNaN(parsedDate)) {
-          formattedDate = parsedDate.toISOString().slice(0, 19).replace('T', ' ')
-        }
-      }
-
-      db.prepare(
-        `
-        INSERT INTO cashReceipts (transactionId, type, bank, date, party, amount, description)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        `
-      ).run(transactionId, type, bank, formattedDate, party, amount, description)
-    }
+    // Receipts
+    const totalAmount = calculateTotalWithTax(tx)
+    handleReceipt(
+      'bankReceipts',
+      transactionId,
+      bankReceipt,
+      client.clientName,
+      product.name,
+      totalAmount
+    )
+    handleReceipt(
+      'cashReceipts',
+      transactionId,
+      cashReceipt,
+      client.clientName,
+      product.name,
+      totalAmount
+    )
 
     return db.prepare('SELECT * FROM transactions WHERE id = ?').get(transactionId)
   })
@@ -457,230 +356,73 @@ ipcMain.handle('createTransaction', (event, transaction, bankReceipt = {}, cashR
 })
 
 // ✅ Update transaction
-ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
+ipcMain.handle('updateTransaction', (event, updatedTx) => {
   try {
-    const {
-      id,
-      clientId,
-      productId,
-      quantity,
-      sellAmount,
-      purchaseAmount,
-      paymentMethod,
-      statusOfTransaction,
-      paymentType,
-      pendingAmount,
-      paidAmount,
-      transactionType
-    } = updatedTransaction
-
     const dbTransaction = db.transaction(() => {
-      // Fetch existing transaction
-      const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id)
-      if (!transaction) throw new Error('Transaction not found')
+      const oldTx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(updatedTx.id)
+      if (!oldTx) throw new Error('Transaction not found')
 
-      // Fetch old product (for rollback math) and new product (for applying new)
-      const newProduct = db.prepare('SELECT * FROM products WHERE id = ?').get(productId)
-
-      // Fetch client and product
-      const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId)
-      if (!client || !newProduct) throw new Error('Client or Product not found')
-      const product = db.prepare('SELECT * FROM products WHERE id = ?').get(productId)
+      const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(updatedTx.clientId)
+      const product = db.prepare('SELECT * FROM products WHERE id = ?').get(updatedTx.productId)
       if (!client || !product) throw new Error('Client or Product not found')
 
-      // Rollback stock changes from previous transaction
-      if (transaction.transactionType === 'sales') {
-        // Add back the stock that was deducted
-        db.prepare('UPDATE products SET quantity = quantity + ? WHERE id = ?').run(
-          transaction.quantity,
-          transaction.productId
-        )
-      } else if (transaction.transactionType === 'purchase') {
-        // Remove the stock that was added
-        db.prepare('UPDATE products SET quantity = quantity - ? WHERE id = ?').run(
-          transaction.quantity,
-          transaction.productId
-        )
-      }
+      // Rollback old
+      adjustProductStock(oldTx.productId, oldTx.quantity, oldTx.transactionType, true)
+      updateClientBalances(oldTx.clientId, oldTx, 'rollback')
 
-      // Calculate previous total amount
-      let previousTotalAmount =
-        transaction.transactionType === 'sales'
-          ? transaction.sellAmount * transaction.quantity
-          : transaction.purchaseAmount * transaction.quantity
-
-      // Rollback client amounts from previous transaction
-      if (transaction.transactionType === 'sales') {
-        if (transaction.paymentType === 'partial') {
-          db.prepare(
-            `UPDATE clients
-            SET pendingAmount = pendingAmount - ?, 
-                paidAmount = paidAmount - ?,
-                updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(transaction.pendingAmount, transaction.paidAmount, transaction.clientId)
-        } else if (transaction.statusOfTransaction === 'completed') {
-          db.prepare(
-            `UPDATE clients
-            SET paidAmount = paidAmount - ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(previousTotalAmount, transaction.clientId)
-        } else {
-          // Previous status was pending
-          db.prepare(
-            `UPDATE clients
-            SET pendingAmount = pendingAmount - ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(previousTotalAmount, transaction.clientId)
-        }
-      } else if (transaction.transactionType === 'purchase') {
-        // Rollback purchase amounts
-        if (transaction.paymentType === 'partial') {
-          // For partial: rollback only the pending amount that was added
-          db.prepare(
-            `UPDATE clients
-            SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(transaction.pendingAmount, transaction.clientId)
-        } else if (transaction.statusOfTransaction === 'pending') {
-          // Previous status was pending: remove the full amount from pendingFromOurs
-          db.prepare(
-            `UPDATE clients
-            SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(previousTotalAmount, transaction.clientId)
-        }
-        // If previous status was 'completed', nothing was in pendingFromOurs, so no rollback needed
-      }
-
-      // Update the transaction record
+      // Update transaction
       db.prepare(
         `UPDATE transactions
-        SET clientId = ?, productId = ?, quantity = ?, sellAmount = ?, purchaseAmount = ?, 
-            paymentMethod = ?, statusOfTransaction = ?, paymentType = ?, 
-            pendingAmount = ?, paidAmount = ?, transactionType = ?, updatedAt = CURRENT_TIMESTAMP
-        WHERE id = ?`
+         SET clientId=?, productId=?, quantity=?, sellAmount=?, purchaseAmount=?,
+             paymentMethod=?, statusOfTransaction=?, paymentType=?, 
+             pendingAmount=?, paidAmount=?, transactionType=?, taxAmount=?, totalAmount=?, updatedAt=CURRENT_TIMESTAMP
+         WHERE id=?`
       ).run(
-        clientId,
-        productId,
-        quantity,
-        sellAmount,
-        purchaseAmount,
-        paymentMethod,
-        statusOfTransaction,
-        paymentType,
-        pendingAmount,
-        paidAmount,
-        transactionType,
-        id
+        updatedTx.clientId,
+        updatedTx.productId,
+        updatedTx.quantity,
+        updatedTx.sellAmount,
+        updatedTx.purchaseAmount,
+        updatedTx.paymentMethod,
+        updatedTx.statusOfTransaction,
+        updatedTx.paymentType,
+        updatedTx.pendingAmount,
+        updatedTx.paidAmount,
+        updatedTx.transactionType,
+        JSON.stringify(updatedTx.taxAmount || []),
+        updatedTx.totalAmount,
+        updatedTx.id
       )
 
-      // Apply new stock changes
-      if (transactionType === 'sales') {
-        // Deduct stock for sales
-        db.prepare(
-          'UPDATE products SET quantity = quantity - ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?'
-        ).run(quantity, productId)
-      } else if (transactionType === 'purchase') {
-        // Add stock for purchase
-        db.prepare(
-          'UPDATE products SET quantity = quantity + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?'
-        ).run(quantity, productId)
-      }
+      // Apply new
+      adjustProductStock(updatedTx.productId, updatedTx.quantity, updatedTx.transactionType)
+      updateClientBalances(updatedTx.clientId, updatedTx, 'apply')
 
-      // Apply new client amount changes
-      const newTotalAmount =
-        transactionType === 'sales'
-          ? (sellAmount || 0) * quantity
-          : (purchaseAmount || 0) * quantity
+      // (Optional) Update receipts if needed — can reuse handleReceipt for simplicity
+      const totalAmount = calculateTotalWithTax(updatedTx)
 
-      if (transactionType === 'sales') {
-        if (paymentType === 'partial') {
-          db.prepare(
-            `UPDATE clients
-            SET pendingAmount = pendingAmount + ?, 
-                paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(pendingAmount, paidAmount, clientId)
-        } else if (statusOfTransaction === 'completed') {
-          db.prepare(
-            `UPDATE clients
-            SET paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(newTotalAmount, clientId)
-        } else {
-          // Status is pending
-          db.prepare(
-            `UPDATE clients
-            SET pendingAmount = pendingAmount + ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(newTotalAmount, clientId)
-        }
-      } else if (transactionType === 'purchase') {
-        // Apply new purchase amounts
-        if (paymentType === 'partial') {
-          // For partial: only add the pending amount to pendingFromOurs
-          db.prepare(
-            `UPDATE clients
-            SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(pendingAmount, clientId)
-        } else if (statusOfTransaction === 'pending') {
-          // Status is pending: add full amount to pendingFromOurs
-          db.prepare(
-            `UPDATE clients
-            SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP
-            WHERE id = ?`
-          ).run(newTotalAmount, clientId)
-        } else if (statusOfTransaction === 'completed') {
-          // For completed: nothing goes to pendingFromOurs (payment is already made)
-          // db.prepare(
-          //   `UPDATE clients
-          //   SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
-          //   WHERE id = ?`
-          // ).run(newTotalAmount, clientId)
-        }
-      }
+      handleReceipt(
+        'bankReceipts',
+        updatedTx.id,
+        updatedTx.bankReceipt,
+        client.clientName,
+        product.name,
+        totalAmount
+      )
+      handleReceipt(
+        'cashReceipts',
+        updatedTx.id,
+        updatedTx.cashReceipt,
+        client.clientName,
+        product.name,
+        totalAmount
+      )
 
-      // After updating transaction amounts
-      if (transactionType === 'purchase') {
-        // Fetch existing bank receipt linked to this transaction
-        const bankReceipt = db.prepare('SELECT * FROM bankReceipts WHERE transactionId = ?').get(id)
-
-        const totalAmount = (purchaseAmount || 0) * quantity
-
-        if (bankReceipt) {
-          // Update existing bank receipt
-          db.prepare(
-            `UPDATE bankReceipts
-       SET type = ?, bank = ?, date = CURRENT_TIMESTAMP, party = ?, amount = ?, description = ?
-       WHERE id = ?`
-          ).run(
-            'Payment',
-            updatedTransaction.bank || 'IDBI',
-            client?.clientName || 'Unknown Client',
-            totalAmount,
-            `Purchase ${newProduct?.name}`,
-            bankReceipt.id
-          )
-        } else {
-          // Create new bank receipt if it didn't exist before
-          db.prepare(
-            `INSERT INTO bankReceipts (transactionId, type, bank, date, party, amount, description)
-       VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)`
-          ).run(
-            id,
-            'Payment',
-            updatedTransaction.bank || 'IDBI',
-            client?.clientName || 'Unknown Client',
-            totalAmount,
-            `Purchase ${newProduct?.name}`
-          )
-        }
-      }
-
-      // Return updated transaction
-      return db.prepare('SELECT * FROM transactions WHERE id = ?').get(id)
+      const transactionUpdate = db
+        .prepare('SELECT * FROM transactions WHERE id = ?')
+        .get(updatedTx.id)
+      transactionUpdate.taxAmount = JSON.parse(transactionUpdate.taxAmount)
+      return transactionUpdate
     })
 
     return { success: true, data: dbTransaction() }
@@ -694,84 +436,18 @@ ipcMain.handle('updateTransaction', (event, updatedTransaction) => {
 ipcMain.handle('deleteTransaction', (event, transactionId) => {
   try {
     const dbTransaction = db.transaction(() => {
-      // Fetch the transaction
-      const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(transactionId)
-      if (!transaction) throw new Error('Transaction not found')
+      const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(transactionId)
+      tx.taxAmount = JSON.parse(tx.taxAmount)
+      if (!tx) throw new Error('Transaction not found')
 
-      // Fetch client and product
-      const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(transaction.clientId)
-      const product = db.prepare('SELECT * FROM products WHERE id = ?').get(transaction.productId)
+      const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(tx.clientId)
+      if (!client) throw new Error('Client not found')
 
-      // Restore product stock
-      if (transaction.transactionType === 'sales') {
-        if (product) {
-          db.prepare(
-            `UPDATE products 
-             SET quantity = quantity + ?, updatedAt = CURRENT_TIMESTAMP 
-             WHERE id = ?`
-          ).run(transaction.quantity, transaction.productId)
-        }
-      } else if (transaction.transactionType === 'purchase') {
-        if (product) {
-          db.prepare(
-            `UPDATE products 
-             SET quantity = quantity - ?, updatedAt = CURRENT_TIMESTAMP 
-             WHERE id = ?`
-          ).run(transaction.quantity, transaction.productId)
-        }
-      }
+      // Rollback stock + balances
+      adjustProductStock(tx.productId, tx.quantity, tx.transactionType, true)
+      updateClientBalances(tx.clientId, tx, 'rollback')
 
-      // Adjust client balances
-      if (client) {
-        let rollbackAmount =
-          transaction.transactionType === 'sales'
-            ? transaction.sellAmount * transaction.quantity
-            : transaction.purchaseAmount * transaction.quantity
-
-        if (transaction.transactionType === 'sales') {
-          if (transaction.paymentType === 'partial') {
-            db.prepare(
-              `UPDATE clients
-               SET pendingAmount = pendingAmount - ?, 
-                   paidAmount = paidAmount - ?, updatedAt = CURRENT_TIMESTAMP
-               WHERE id = ?`
-            ).run(transaction.pendingAmount, transaction.paidAmount, transaction.clientId)
-          } else if (transaction.statusOfTransaction === 'completed') {
-            db.prepare(
-              `UPDATE clients
-               SET paidAmount = paidAmount - ?, updatedAt = CURRENT_TIMESTAMP
-               WHERE id = ?`
-            ).run(rollbackAmount, transaction.clientId)
-          } else {
-            // Status was pending
-            db.prepare(
-              `UPDATE clients
-               SET pendingAmount = pendingAmount - ?, updatedAt = CURRENT_TIMESTAMP
-               WHERE id = ?`
-            ).run(rollbackAmount, transaction.clientId)
-          }
-        } else if (transaction.transactionType === 'purchase') {
-          // Handle purchase transaction rollback
-          if (transaction.paymentType === 'partial') {
-            // For partial: only subtract the pending amount that was actually added
-            db.prepare(
-              `UPDATE clients
-               SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
-               WHERE id = ?`
-            ).run(transaction.pendingAmount, transaction.clientId)
-          } else if (transaction.statusOfTransaction === 'pending') {
-            // For pending: subtract the full amount that was added
-            db.prepare(
-              `UPDATE clients
-               SET pendingFromOurs = pendingFromOurs - ?, updatedAt = CURRENT_TIMESTAMP
-               WHERE id = ?`
-            ).run(rollbackAmount, transaction.clientId)
-          }
-          // For completed status: nothing was in pendingFromOurs, so no rollback needed
-        }
-      }
-
-      // Delete the transaction
+      // Delete
       db.prepare('DELETE FROM transactions WHERE id = ?').run(transactionId)
 
       return { message: 'Transaction deleted successfully' }
@@ -785,7 +461,9 @@ ipcMain.handle('deleteTransaction', (event, transactionId) => {
 })
 
 ipcMain.handle('getTransactionById', (event, id) => {
-  return db.prepare('SELECT * FROM transactions WHERE id = ?').get(id)
+  const transaction = db.prepare('SELECT * FROM transactions WHERE id = ?').get(id)
+  transaction.taxAmount = JSON.parse(transaction.taxAmount)
+  return transaction
 })
 
 // -------- Bank Receipts --------

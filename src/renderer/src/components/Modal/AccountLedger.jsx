@@ -3,7 +3,7 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { clientApi } from '../../API/Api'
 import { setClients } from '../../app/features/electronSlice'
@@ -79,7 +79,9 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
           <div className={`p-1 rounded-full ${isReceipt ? 'bg-emerald-200' : 'bg-red-200'}`}>
             <Calendar size={14} className={isReceipt ? 'text-emerald-600' : 'text-red-600'} />
           </div>
-          <span className="font-medium text-gray-700">{new Date(receipt.date).toLocaleDateString()}</span>
+          <span className="font-medium text-gray-700">
+            {new Date(receipt.date).toLocaleDateString()}
+          </span>
         </div>
       </td>
 
