@@ -765,7 +765,7 @@ const Bank = () => {
             </thead>
             <tbody className="text-sm">
               {recentReceipts.length > 0 ? (
-                recentReceipts.map((receipt, index) => (
+                recentReceipts.slice(0,3).map((receipt, index) => (
                   <ReceiptRow
                     key={receipt.id}
                     receipt={receipt}

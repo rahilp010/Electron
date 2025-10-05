@@ -75,7 +75,7 @@ const ClientRow = memo(({ client, index, onDelete, onEdit }) => {
       <td className="px-4 py-3">{new Date(client.createdAt).toLocaleDateString()}</td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2 px-6 uppercase">
-          <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center border border-blue-300 justify-center text-xs font-medium text-blue-600 mr-3">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
             {getInitials(client.clientName)}
           </div>
           {client.clientName}
@@ -88,7 +88,11 @@ const ClientRow = memo(({ client, index, onDelete, onEdit }) => {
           ₹ {toThousands(Number(client.pendingAmount).toFixed(0))}
         </div>
       </td>
-      <td className="px-4 py-3 font-bold">₹ {toThousands(Number(client.paidAmount).toFixed(0))}</td>
+      <td className="px-4 py-3 font-bold">
+        <div className="border border-indigo-200 text-indigo-600 bg-indigo-100 p-1 rounded-full font-bold text-xs px-2">
+          ₹ {toThousands(Number(client.paidAmount).toFixed(0))}
+        </div>
+      </td>
       <td className="px-4 py-3">
         <div className="text-[#166534] bg-[#dcfce7] border border-[#8ffab5] p-1 rounded-full font-bold text-xs px-2">
           ₹ {toThousands(Number(client.pendingFromOurs).toFixed(0))}
@@ -188,6 +192,7 @@ const ClientList = () => {
   const [importFile, setImportFile] = useState(false)
 
   const clients = useSelector((state) => state.electron.clients.data || [])
+  const transactions = useSelector((state) => state.electron.transaction.data || [])
 
   // Memoized filtered data
   const filteredData = useMemo(() => {
@@ -244,13 +249,25 @@ const ClientList = () => {
       0
     )
 
+    const totalPaidAmountWithTax = transactions
+      .filter((t) => t.clientName === clients.clientName)
+      .reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0)
+    console.log('totalPaidAmount', totalPaidAmount)
+
     const totalPendingFromOurs = filteredData.reduce(
       (sum, client) => sum + Number(client.pendingFromOurs || 0),
       0
     )
 
-    return { totalAssets, totalProducts, totalPendingAmount, totalPaidAmount, totalPendingFromOurs }
-  }, [filteredData])
+    return {
+      totalAssets,
+      totalProducts,
+      totalPendingAmount,
+      totalPaidAmountWithTax,
+      totalPaidAmount,
+      totalPendingFromOurs
+    }
+  }, [filteredData, clients, transactions])
 
   // Event handlers
   const handleAddClient = useCallback(async () => {

@@ -194,7 +194,17 @@ const PurchaseRow = React.memo(
         <td className="px-4 py-3">{renderPendingAmount()}</td>
         <td className="px-4 py-3">{renderPaidAmount()}</td>
         <td className="px-4 py-3 tracking-wide">
-          <PaymentStatusDropdown transaction={transaction} onUpdateStatus={onUpdateStatus} />
+          {/* <PaymentStatusDropdown transaction={transaction} onUpdateStatus={onUpdateStatus} />
+           */}
+          {transaction?.statusOfTransaction === 'completed' ? (
+            <span className="flex items-center text-[#166534] bg-[#dcfce7] border border-[#8ffab5] px-2 py-1 rounded-full justify-center text-xs font-medium">
+              Completed
+            </span>
+          ) : (
+            <span className="flex items-center border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] px-2 py-1 rounded-full justify-center text-xs font-medium">
+              Pending
+            </span>
+          )}
         </td>
 
         <td className="w-28">

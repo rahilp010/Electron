@@ -3,7 +3,7 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState, useRef, forwardRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { clientApi } from '../../API/Api'
 import { setClients } from '../../app/features/electronSlice'
@@ -18,7 +18,8 @@ import {
   DollarSign,
   CreditCard,
   Banknote,
-  BarChart3
+  BarChart3,
+  Printer
 } from 'lucide-react'
 
 // Constants
@@ -32,9 +33,17 @@ const TABLE_HEADERS = [
   { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText }
 ]
 
+const TABLE_HEADERS_PRINT = [
+  { key: 'date', label: 'Date' },
+  { key: 'accountName', label: 'Account Name' },
+  { key: 'debit', label: 'Debit' },
+  { key: 'credit', label: 'Credit' },
+  { key: 'balance', label: 'Balance' }
+]
+
 const LEDGER_TYPES = [
   { label: 'Bank', value: 'Bank', icon: Building2, color: 'blue' },
-  { label: 'Cash', value: 'Cash', icon: Banknote, color: 'blue' }
+  { label: 'Cash', value: 'Cash', icon: Banknote, color: 'green' }
 ]
 
 // Utility functions
@@ -45,16 +54,6 @@ const toThousands = (value) => {
     currency: 'INR'
   }).format(value)
 }
-
-// const formatDate = (dateString) => {
-//   if (!dateString) return '-'
-//   const date = new Date(dateString)
-//   return date.toLocaleDateString('en-IN', {
-//     day: '2-digit',
-//     month: 'short',
-//     year: 'numeric'
-//   })
-// }
 
 const getAmount = (type, amount) => {
   if (!amount) return 0
@@ -219,7 +218,7 @@ const useAccountOperations = () => {
 }
 
 // Main Component
-const AccountLedger = ({ client, onClose }) => {
+const AccountLedger = forwardRef(({ client, onClose }, ref) => {
   const { fetchAllClients, fetchRecentBankReceipts, fetchRecentCashReceipts } =
     useAccountOperations()
 
@@ -245,7 +244,9 @@ const AccountLedger = ({ client, onClose }) => {
     const sourceData = selectedType === 'Bank' ? recentBankReceipts : recentCashReceipts
 
     if (client?.id) {
-      return sourceData.filter((r) => r.clientName === getClientName(client.id))
+      return sourceData.filter(
+        (r) => r.clientName === getClientName(client.id) && r.statusOfTransaction === 'completed'
+      )
     }
 
     return sourceData
@@ -289,6 +290,250 @@ const AccountLedger = ({ client, onClose }) => {
     setSelectedType(type)
   }, [])
 
+  // Utility function to generate dynamic print HTML
+  const generatePrintHTML = (data, headers, title) => {
+    const getCellValue = (row, headerKey) => {
+      switch (headerKey) {
+        case 'date':
+          return new Date(row.date).toLocaleDateString('en-IN')
+        case 'accountName':
+          return row.accountName || ''
+        case 'debit':
+          return row.debit || ''
+        case 'credit':
+          return row.credit || ''
+        case 'balance':
+          return toThousands(row.balance || 0)
+        default:
+          return ''
+      }
+    }
+
+    const tableHeaders = headers.map((h) => `<th class="border px-4 py-2">${h.label}</th>`).join('')
+    const tableRows = data
+      .map((row) => {
+        const cells = headers
+          .map((h) => `<td class="border px-4 py-2 text-left">${getCellValue(row, h.key)}</td>`)
+          .join('')
+        return `<tr>${cells}</tr>`
+      })
+      .join('')
+
+    return `
+      <!DOCTYPE html>
+  <html>
+    <head>
+      <title>${title}</title>
+      <style>
+        body {
+          font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+          margin: 20px;
+          color: #1e293b;
+          background: #fff;
+        }
+  
+        /* ===== HEADER BAR ===== */
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 25px;
+          padding-bottom: 15px;
+          border-bottom: 2px solid #e5e7eb;
+        }
+  
+        .header-left {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+        }
+  
+        .header-left h1 {
+          font-size: 28px;
+          font-weight: 600;
+          margin: 0;
+          color: #111827;
+        }
+  
+        .generated-label {
+          font-size: 12px;
+          color: #64748b;
+          background: #f1f5f9;
+          border: 1px solid #e5e7eb;
+          padding: 2px 8px;
+          border-radius: 6px;
+          margin-bottom: 6px;
+        }
+  
+        .header-right {
+          font-size: 14px;
+          color: #374151;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 5px;
+        }
+  
+        .record-count {
+          font-weight: bold;
+          background: #f3f4f6;
+          border: 1px solid #e2e8f0;
+          padding: 3px 8px;
+          border-radius: 6px;
+          font-size: 13px;
+          color: #1e40af;
+        }
+  
+        /* ===== TABLE ===== */
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 20px;
+          font-size: 14px;
+        }
+  
+        thead th {
+          background: #e5e7eb;
+          color: #111827;
+          padding: 12px 14px;
+          border: 1px solid #e2e8f0;
+          font-weight: 600;
+          text-transform: capitalize;
+          font-size: 15px;
+          text-align: left;
+        }
+  
+        tbody td {
+          padding: 10px 14px;
+          border: 1px solid #e2e8f0;
+          font-size: 14px;
+          color: #374151;
+        }
+  
+        tbody tr:nth-child(even) {
+          background: #f9fafb;
+        }
+  
+        tbody tr:hover {
+          background: #f1f5f9;
+        }
+  
+        .totals-row {
+          font-weight: bold;
+          background: #f3f4f6;
+        }
+  
+        /* ===== FOOTER ===== */
+        .footer {
+          margin-top: 25px;
+          text-align: center;
+          font-size: 12px;
+          color: #64748b;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 10px;
+        }
+  
+        .footer strong {
+          font-size: 15px;
+          color: #1e40af;
+        }
+  
+        @media print {
+          body {
+            margin: 0.8cm;
+          }
+          .footer {
+            position: fixed;
+            bottom: 10px;
+            width: 100%;
+          }
+        }
+      </style>
+    </head>
+    <body onload="window.print(); setTimeout(() => { window.close(); }, 1000);">
+  
+      <!-- ===== HEADER SECTION ===== -->
+      <div class="header">
+        <div class="header-left">
+          <h1>${title}</h1>
+        </div>
+        <div class="header-right">
+        <div class="record-count">Total Records: ${data.length}</div>
+        <div>Generated on: ${new Date().toLocaleString()}</div>
+        </div>
+      </div>
+  
+      <!-- ===== TABLE ===== -->
+      <table>
+        <thead>
+          <tr>
+            ${tableHeaders}
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+      </table>
+  
+      <!-- ===== FOOTER ===== -->
+      <div class="footer">
+        <p>This is a computer-generated report. No signature is required.</p>
+        <p><strong>Powered by Electron</strong></p>
+      </div>
+    </body>
+  </html>  
+    `
+  }
+
+  // Updated handler for printing PDF using iframe to avoid popup blockers
+  const handlePrintPDF = useCallback(() => {
+    let printHeaders = TABLE_HEADERS_PRINT
+    let printData = filteredData.map((row, index) => ({
+      ...row,
+      accountName: row.clientName || '',
+      date: row.date,
+      debit: row.type === 'Payment' ? toThousands(Number(row.amount) || 0) : '-',
+      credit: row.type === 'Receipt' ? toThousands(Number(row.amount) || 0) : '-',
+      balance: balances[index] || 0
+    }))
+
+    const title = `Account Ledger Report - ${client?.clientName || 'All Accounts'} (${selectedType})`
+
+    const printHTML = generatePrintHTML(printData, printHeaders, title)
+
+    // Create iframe for printing
+    try {
+      const printFrame = document.createElement('iframe')
+      printFrame.style.position = 'absolute'
+      printFrame.style.left = '-9999px'
+      printFrame.style.width = '0'
+      printFrame.style.height = '0'
+      printFrame.style.border = '0'
+      document.body.appendChild(printFrame)
+
+      const printDoc = printFrame.contentDocument || printFrame.contentWindow.document
+      printDoc.open()
+      printDoc.write(printHTML)
+      printDoc.close()
+
+      // Wait a bit for content to load
+      setTimeout(() => {
+        printFrame.contentWindow.focus()
+        printFrame.contentWindow.print()
+
+        // Cleanup after print
+        setTimeout(() => {
+          document.body.removeChild(printFrame)
+        }, 1000)
+      }, 500)
+
+      toast.success('Print dialog opened. Choose "Save as PDF" to generate PDF.')
+    } catch (error) {
+      console.error('Error initiating print:', error)
+      toast.error('Failed to initiate print: ' + error.message)
+    }
+  }, [filteredData, balances, client, selectedType])
+
   // Data fetching
   const loadData = useCallback(async () => {
     setShowLoader(true)
@@ -314,31 +559,6 @@ const AccountLedger = ({ client, onClose }) => {
     <div className="space-y-6 mx-7 -mt-4">
       {/* Client Header */}
       <div className="flex items-center justify-between gap-5">
-        {/* <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-5 w-full text-white shadow-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center text-xl font-bold backdrop-blur-sm">
-                {client?.clientName
-                  ?.split(' ')
-                  .map((n) => n[0])
-                  .join('')
-                  .toUpperCase() || '??'}
-              </div>
-              <div>
-                <h2 className="text-xl font-bold">{client?.clientName || 'Unknown Client'}</h2>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-blue-100 text-sm">Current Balance</p>
-              <p
-                className={`text-2xl font-bold ${statistics.netBalance >= 0 ? 'text-emerald-200' : 'text-red-200'}`}
-              >
-                {toThousands(statistics.netBalance)}
-              </p>
-            </div>
-          </div>
-        </div> */}
-
         {/* Type Selector */}
         <div className="flex items-center gap-2">
           {LEDGER_TYPES.map((type) => {
@@ -361,6 +581,16 @@ const AccountLedger = ({ client, onClose }) => {
             )
           })}
         </div>
+
+        {/* Print Button */}
+        <button
+          className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
+          onClick={handlePrintPDF}
+          title="Print Sales Report"
+        >
+          <Printer size={16} />
+          <span className="text-sm">Print</span>
+        </button>
       </div>
 
       {/* Statistics Cards */}
@@ -408,7 +638,11 @@ const AccountLedger = ({ client, onClose }) => {
             </div>
             <div>
               <p className="text-gray-600 text-sm">Net Balance</p>
-              <p className={`text-xl font-light`}>{toThousands(statistics.netBalance)}</p>
+              <p
+                className={`text-xl font-light ${statistics.netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+              >
+                {toThousands(statistics.netBalance)}
+              </p>
             </div>
           </div>
         </div>
@@ -518,6 +752,6 @@ const AccountLedger = ({ client, onClose }) => {
       `}</style>
     </div>
   )
-}
+})
 
 export default AccountLedger

@@ -1,15 +1,16 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable prettier/prettier */
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/no-unknown-property */
 /* eslint-disable react/display-name */
-import React, { useEffect, useState, useCallback, useMemo, memo } from 'react'
-import { FileUp, Import, Users, Search } from 'lucide-react'
+import React, { useEffect, useState, useCallback, useMemo, memo, useRef } from 'react'
+import { FileUp, Import, Users, Search, Printer } from 'lucide-react'
 import Loader from '../components/Loader'
 import 'rsuite/dist/rsuite-no-reset.min.css'
-import { setClients } from '../app/features/electronSlice'
+import { setClients, setTransactions } from '../app/features/electronSlice'
 import { useDispatch, useSelector } from 'react-redux'
-import { clientApi } from '../API/Api'
+import { clientApi, transactionApi } from '../API/Api'
 import { toast } from 'react-toastify'
 import Navbar from '../components/UI/Navbar'
 import { DateRangePicker, Input, InputGroup, SelectPicker, Tooltip, Whisper } from 'rsuite'
@@ -132,12 +133,22 @@ const useAccountOperations = () => {
     }
   }, [dispatch])
 
-  return { fetchAllClients }
+  const fetchAllTransactions = useCallback(async () => {
+    try {
+      const response = await transactionApi.getAllTransactions()
+      dispatch(setTransactions(response))
+    } catch (error) {
+      console.error('Error fetching transactions:', error)
+      toast.error('Failed to fetch transactions')
+    }
+  }, [dispatch])
+
+  return { fetchAllClients, fetchAllTransactions }
 }
 
 // Main Component
 const LedgerReport = () => {
-  const { fetchAllClients } = useAccountOperations()
+  const { fetchAllClients, fetchAllTransactions } = useAccountOperations()
 
   // State management
   const [showLoader, setShowLoader] = useState(false)
@@ -150,7 +161,9 @@ const LedgerReport = () => {
   const [showSideBar, setShowSideBar] = useState(false)
   const [sidebarSearch, setSidebarSearch] = useState('')
 
-  const clients = useSelector((state) => state.electron.clients.data || [])
+  const clients = useSelector((state) => state.electron.clients?.data || [])
+  const transactions = useSelector((state) => state.electron.transaction?.data || [])
+  const products = useSelector((state) => state.electron.products?.data || [])
 
   // Memoized filtered sidebar clients
   const filteredSidebarClients = useMemo(() => {
@@ -203,10 +216,10 @@ const LedgerReport = () => {
       return acc
     }, {})
 
-    const totalPaidAmount = filteredData.reduce(
-      (sum, client) => sum + (Number(client.paidAmount) || 0),
-      0
-    )
+    const totalPaidAmount = transactions
+      .filter((t) => t.clientName === clients.clientName)
+      .reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0)
+    console.log('totalPaidAmount', totalPaidAmount)
 
     return {
       totalAccounts,
@@ -214,7 +227,7 @@ const LedgerReport = () => {
       totalPaidAmount,
       accountsByType
     }
-  }, [filteredData])
+  }, [filteredData, clients, transactions])
 
   // Event handlers
   const handleSearchChange = useCallback((value) => {
@@ -223,10 +236,6 @@ const LedgerReport = () => {
 
   const handleSidebarSearchChange = useCallback((value) => {
     setSidebarSearch(value)
-  }, [])
-
-  const handlePrint = useCallback(() => {
-    window.print()
   }, [])
 
   const handleImportExcel = useCallback(
@@ -535,13 +544,6 @@ const LedgerReport = () => {
                   />
                 </div>
               )}
-              <button
-                onClick={handlePrint}
-                className="p-2 rounded-lg bg-gradient-to-r from-gray-800 to-gray-900 hover:from-gray-900 hover:to-black transition-all duration-200 cursor-pointer shadow-md hover:shadow-lg transform hover:scale-105"
-                title="Print ledger"
-              >
-                <PrintIcon className="text-white" fontSize="small" />
-              </button>
             </div>
           </div>
 
@@ -593,7 +595,12 @@ const LedgerReport = () => {
 
         {/* Ledger Modal */}
         {openLedgerClient && (
-          <AccountLedger client={openLedgerClient} onClose={() => setOpenLedgerClient(null)} />
+          <AccountLedger
+            client={openLedgerClient}
+            onClose={() => setOpenLedgerClient(null)}
+            transactions={transactions}
+            toThousands={toThousands}
+          />
         )}
       </div>
 

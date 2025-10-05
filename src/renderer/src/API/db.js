@@ -65,6 +65,7 @@ db.prepare(
     pendingAmount REAL NOT NULL DEFAULT 0,
     paidAmount REAL NOT NULL DEFAULT 0,
     taxAmount TEXT,
+    dueDate DATETIME,
     transactionType TEXT CHECK (transactionType IN ('purchase', 'sales')),
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -86,6 +87,7 @@ db.prepare(
     description TEXT,
     taxAmount TEXT,
     statusOfTransaction TEXT NOT NULL DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
+    dueDate DATETIME,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
@@ -107,9 +109,22 @@ db.prepare(
     description TEXT,
     taxAmount TEXT,
     statusOfTransaction TEXT NOT NULL DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
+    dueDate DATETIME,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
+  )
+`
+).run()
+
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    taxName TEXT NOT NULL,
+    taxValue TEXT NOT NULL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `
 ).run()

@@ -17,20 +17,28 @@ import {
   BarChart3,
   Search,
   Users,
-  X
+  X,
+  Printer
 } from 'lucide-react'
 import { clientApi } from '../API/Api'
 import { setClients } from '../app/features/electronSlice'
 import Navbar from '../components/UI/Navbar'
+import { IoLogoWhatsapp } from 'react-icons/io5'
 
 // Constants
 const TABLE_HEADERS = [
   { key: 'date', label: 'Date', width: 'w-[170px]', icon: Calendar },
   { key: 'bank', label: 'Bank', width: 'w-[200px]', icon: Building2 },
   { key: 'accountName', label: 'Account Name', width: 'w-[250px]', icon: CreditCard },
-  { key: 'credit', label: 'Credit', width: 'w-[200px]', icon: TrendingUp },
+  { key: 'credit', label: 'Pending', width: 'w-[200px]', icon: TrendingUp },
   { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
   { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText }
+]
+
+const TABLE_HEADERS_PRINT = [
+  { key: 'date', label: 'Date' },
+  { key: 'accountName', label: 'Account Name' },
+  { key: 'credit', label: 'Pending Amount' }
 ]
 
 const LEDGER_TYPES = [
@@ -59,6 +67,16 @@ const getInitials = (name) => {
     .map((n) => n[0])
     .join('')
     .toUpperCase()
+}
+
+const getClientName = (clientId, clients) => {
+  const client = clients.find((c) => c.id === clientId)
+  return client ? client.clientName : 'Unknown Client'
+}
+
+const getProductName = (productId, products) => {
+  const product = products.find((p) => p.id === productId)
+  return product ? product.name : 'Unknown Product'
 }
 
 // Memoized Transaction Row Component
@@ -224,7 +242,10 @@ const PendingCollectionReport = ({ client, onClose }) => {
   // Memoized filtered data
   const filteredData = useMemo(() => {
     const sourceData = selectedType === 'Bank' ? recentBankReceipts : recentCashReceipts
-    const receipts = sourceData.filter((r) => r.type === 'Receipt')
+    const receipts = sourceData.filter(
+      (r) => r.type === 'Receipt' && r.statusOfTransaction === 'pending'
+    )
+    console.log('receipts', receipts)
 
     if (selectedClient?.id) {
       return receipts.filter((r) => r.clientName === getClientName(selectedClient.id))
@@ -247,6 +268,8 @@ const PendingCollectionReport = ({ client, onClose }) => {
 
     return calculatedBalances
   }, [filteredData])
+
+  const transaction = useSelector((state) => state.electron.transaction.data || [])
 
   // Memoized statistics
   const statistics = useMemo(() => {
@@ -292,6 +315,278 @@ const PendingCollectionReport = ({ client, onClose }) => {
       setShowLoader(false)
     }
   }, [fetchAllClients, fetchRecentBankReceipts, fetchRecentCashReceipts])
+
+  // Utility function to generate dynamic print HTML
+  const generatePrintHTML = (data, headers, title, totalPending) => {
+    const getCellValue = (row, headerKey) => {
+      switch (headerKey) {
+        case 'date':
+          return new Date(row.date).toLocaleDateString('en-IN')
+        case 'accountName':
+          return row.accountName || ''
+        case 'credit':
+          return row.credit || ''
+        default:
+          return ''
+      }
+    }
+
+    const tableHeaders = headers.map((h) => `<th class="border px-4 py-2">${h.label}</th>`).join('')
+    const tableRows = data
+      .map((row) => {
+        const cells = headers
+          .map((h) => `<td class="border px-4 py-2 text-left">${getCellValue(row, h.key)}</td>`)
+          .join('')
+        return `<tr>${cells}</tr>`
+      })
+      .join('')
+
+    const totalsRow = `
+      <tr class="totals-row">
+        <td colspan="2" class="border px-4 py-2 font-bold text-right">Total Pending Amount:</td>
+        <td class="border px-4 py-2 font-bold text-right">${toThousands(totalPending)}</td>
+      </tr>
+    `
+
+    return `
+      <!DOCTYPE html>
+  <html>
+    <head>
+      <title>${title}</title>
+      <style>
+        body {
+          font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+          margin: 20px;
+          color: #1e293b;
+          background: #fff;
+        }
+  
+        /* ===== HEADER BAR ===== */
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 25px;
+          padding-bottom: 15px;
+          border-bottom: 2px solid #e5e7eb;
+        }
+  
+        .header-left {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+        }
+  
+        .header-left h1 {
+          font-size: 28px;
+          font-weight: 600;
+          margin: 0;
+          color: #111827;
+        }
+  
+        .generated-label {
+          font-size: 12px;
+          color: #64748b;
+          background: #f1f5f9;
+          border: 1px solid #e5e7eb;
+          padding: 2px 8px;
+          border-radius: 6px;
+          margin-bottom: 6px;
+        }
+  
+        .header-right {
+          font-size: 14px;
+          color: #374151;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 5px;
+        }
+  
+        .record-count {
+          font-weight: bold;
+          background: #f3f4f6;
+          border: 1px solid #e2e8f0;
+          padding: 3px 8px;
+          border-radius: 6px;
+          font-size: 13px;
+          color: #1e40af;
+        }
+  
+        /* ===== TABLE ===== */
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 20px;
+          font-size: 14px;
+        }
+  
+        thead th {
+          background: #e5e7eb;
+          color: #111827;
+          padding: 12px 14px;
+          border: 1px solid #e2e8f0;
+          font-weight: 600;
+          text-transform: capitalize;
+          font-size: 15px;
+          text-align: left;
+        }
+  
+        tbody td {
+          padding: 10px 14px;
+          border: 1px solid #e2e8f0;
+          font-size: 14px;
+          color: #374151;
+        }
+  
+        tbody tr:nth-child(even) {
+          background: #f9fafb;
+        }
+  
+        tbody tr:hover {
+          background: #f1f5f9;
+        }
+  
+        .totals-row {
+          font-weight: bold;
+          background: #f3f4f6;
+        }
+  
+        /* ===== FOOTER ===== */
+        .footer {
+          margin-top: 25px;
+          text-align: center;
+          font-size: 12px;
+          color: #64748b;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 10px;
+        }
+  
+        .footer strong {
+          font-size: 15px;
+          color: #1e40af;
+        }
+  
+        @media print {
+          body {
+            margin: 0.8cm;
+          }
+          .footer {
+            position: fixed;
+            bottom: 10px;
+            width: 100%;
+          }
+        }
+      </style>
+    </head>
+    <body onload="window.print(); setTimeout(() => { window.close(); }, 1000);">
+  
+      <!-- ===== HEADER SECTION ===== -->
+      <div class="header">
+        <div class="header-left">
+          <h1>${title}</h1>
+        </div>
+        <div class="header-right">
+        <div class="record-count">Total Records: ${data.length}</div>
+        <div>Generated on: ${new Date().toLocaleString()}</div>
+        </div>
+      </div>
+  
+      <!-- ===== TABLE ===== -->
+      <table>
+        <thead>
+          <tr>
+            ${tableHeaders}
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+          ${totalsRow}
+        </tbody>
+      </table>
+  
+      <!-- ===== FOOTER ===== -->
+      <div class="footer">
+        <p>This is a computer-generated report. No signature is required.</p>
+        <p><strong>Powered by Electron</strong></p>
+      </div>
+    </body>
+  </html>  
+    `
+  }
+
+  // Updated handler for printing PDF using iframe to avoid popup blockers
+  const handlePrintPDF = useCallback(() => {
+    // Aggregate by accountName if no specific client selected
+    let printData = []
+    let totalPending = 0
+
+    if (!selectedClient) {
+      // Group by clientName and sum
+      const grouped = filteredData.reduce((acc, row) => {
+        const name = row.clientName
+        if (!acc[name]) {
+          acc[name] = { accountName: name, credit: 0, date: '' }
+        }
+        acc[name].credit += Number(row.amount) || 0
+        return acc
+      }, {})
+
+      printData = Object.values(grouped).map((item) => ({
+        ...item,
+        credit: toThousands(item.credit),
+        date: ''
+      }))
+    } else {
+      // Single client: just one row with sum
+      const clientSum = filteredData.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+      printData = [
+        {
+          accountName: selectedClient.clientName || '',
+          credit: toThousands(clientSum),
+          date: ''
+        }
+      ]
+    }
+
+    totalPending = filteredData.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+
+    const title = `Pending Collection Report <br> ${selectedClient?.clientName || 'All Accounts'} (${selectedType})`
+
+    const printHTML = generatePrintHTML(printData, TABLE_HEADERS_PRINT, title, totalPending)
+
+    // Create iframe for printing
+    try {
+      const printFrame = document.createElement('iframe')
+      printFrame.style.position = 'absolute'
+      printFrame.style.left = '-9999px'
+      printFrame.style.width = '0'
+      printFrame.style.height = '0'
+      printFrame.style.border = '0'
+      document.body.appendChild(printFrame)
+
+      const printDoc = printFrame.contentDocument || printFrame.contentWindow.document
+      printDoc.open()
+      printDoc.write(printHTML)
+      printDoc.close()
+
+      // Wait a bit for content to load
+      setTimeout(() => {
+        printFrame.contentWindow.focus()
+        printFrame.contentWindow.print()
+
+        // Cleanup after print
+        setTimeout(() => {
+          document.body.removeChild(printFrame)
+        }, 1000)
+      }, 500)
+
+      toast.success('Print dialog opened. Choose "Save as PDF" to generate PDF.')
+    } catch (error) {
+      console.error('Error initiating print:', error)
+      toast.error('Failed to initiate print: ' + error.message)
+    }
+  }, [filteredData, selectedClient, selectedType])
 
   // Effects
   useEffect(() => {
@@ -456,6 +751,14 @@ const PendingCollectionReport = ({ client, onClose }) => {
                 </button>
               )
             })}
+            <button
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 hover:bg-gradient-to-r from-blue-400 to-blue-600 hover:text-white hover:shadow-lg bg-white border border-blue-200 text-blue-600 hover:bg-blue-50`}
+              onClick={handlePrintPDF}
+              title="Print Sales Report"
+            >
+              <Printer size={18} />
+              <span className="text-sm">Print</span>
+            </button>
           </div>
         </div>
 
@@ -472,17 +775,47 @@ const PendingCollectionReport = ({ client, onClose }) => {
               </div>
             </div>
           </div>
-          <div className="mx-4 w-52 flex-shrink-0">
+          <div className="mx-4 border-r w-52 flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg">
                 <TrendingUp size={20} className="text-emerald-600" />
               </div>
               <div>
-                <p className="text-gray-600 text-sm">Total Credits</p>
+                <p className="text-gray-600 text-sm">Total Pending Amount</p>
                 <p className="text-xl font-light">{toThousands(statistics.totalReceipts)}</p>
               </div>
             </div>
           </div>
+          {selectedClient && (
+            <div
+              className="w-52 flex flex-shrink-0 items-center justify-center transition-all duration-200 transform hover:scale-105 cursor-pointer"
+              onClick={() => {
+                try {
+                  const clientName = selectedClient?.clientName
+                  const amount = toThousands(Number(selectedClient?.pendingAmount).toFixed(0))
+
+                  const message = `Hello ${clientName},\n\njust a reminder that the ${amount} amount is still pending till ${new Date(selectedClient?.createdAt).toLocaleDateString('en-US', { month: 'long' })}.\n\nPlease make the payment as soon as possible.\n\nThank you for your business!`
+
+                  // Replace with client’s phone number if available in DB
+                  if (selectedClient?.phoneNo) {
+                    const phoneNumber = selectedClient?.phoneNo
+                    const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
+                    window.open(url, '_blank')
+                  }
+                } catch (error) {
+                  console.log(error)
+                  toast.error('Failed to share to WhatsApp : ', error)
+                }
+              }}
+            >
+              <div className="flex items-center gap-1">
+                <div className="p-2 rounded-lg">
+                  <IoLogoWhatsapp size={22} className="text-emerald-600" />
+                </div>
+                <div>Share to WhatsApp</div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Transaction Table */}

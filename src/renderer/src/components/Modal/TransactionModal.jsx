@@ -224,39 +224,39 @@ const TransactionModal = ({
             taxAmount: transaction.taxAmount || []
           }
 
-          if (transaction.statusOfTransaction === 'completed') {
-            if (transaction.paymentMethod === 'bank') {
-              const createdBankReceipt = await window.api.createBankReceipt({
-                ...baseReceipt,
-                bank: transaction.bank || 'IDBI'
-              })
-              dispatch(setBankReceipt(createdBankReceipt))
-            } else if (transaction.paymentMethod === 'cash') {
-              const createdCashReceipt = await window.api.createCashReceipt({
-                ...baseReceipt,
-                cash: transaction.cash || 'Cash'
-              })
-              dispatch(setCashReceipt(createdCashReceipt))
-            }
-          } else if (transaction.statusOfTransaction === 'partial') {
-            if (transaction.paidAmount > 0) {
-              if (transaction.paymentMethod === 'bank') {
-                const createdBankReceipt = await window.api.createBankReceipt({
-                  ...baseReceipt,
-                  amount: transaction.paidAmount,
-                  bank: transaction.bank || 'IDBI'
-                })
-                dispatch(setBankReceipt(createdBankReceipt))
-              } else if (transaction.paymentMethod === 'cash') {
-                const createdCashReceipt = await window.api.createCashReceipt({
-                  ...baseReceipt,
-                  amount: transaction.paidAmount,
-                  cash: transaction.cash || 'Cash'
-                })
-                dispatch(setCashReceipt(createdCashReceipt))
-              }
-            }
+          // if (transaction.statusOfTransaction === 'completed') {
+          if (transaction.paymentMethod === 'bank') {
+            const createdBankReceipt = await window.api.createBankReceipt({
+              ...baseReceipt,
+              bank: transaction.bank || 'IDBI'
+            })
+            dispatch(setBankReceipt(createdBankReceipt))
+          } else if (transaction.paymentMethod === 'cash') {
+            const createdCashReceipt = await window.api.createCashReceipt({
+              ...baseReceipt,
+              cash: transaction.cash || 'Cash'
+            })
+            dispatch(setCashReceipt(createdCashReceipt))
           }
+          // else if (transaction.statusOfTransaction === 'partial') {
+          //   if (transaction.paidAmount > 0) {
+          //     if (transaction.paymentMethod === 'bank') {
+          //       const createdBankReceipt = await window.api.createBankReceipt({
+          //         ...baseReceipt,
+          //         amount: transaction.paidAmount,
+          //         bank: transaction.bank || 'IDBI'
+          //       })
+          //       dispatch(setBankReceipt(createdBankReceipt))
+          //     } else if (transaction.paymentMethod === 'cash') {
+          //       const createdCashReceipt = await window.api.createCashReceipt({
+          //         ...baseReceipt,
+          //         amount: transaction.paidAmount,
+          //         cash: transaction.cash || 'Cash'
+          //       })
+          //       dispatch(setCashReceipt(createdCashReceipt))
+          //     }
+          //   }
+          // }
         } else {
           const updatedTransaction = await window.api.updateTransaction({
             id: safeTransaction.id,
@@ -277,41 +277,40 @@ const TransactionModal = ({
             taxAmount: transaction.taxAmount || []
           }
 
-          if (transaction.statusOfTransaction === 'completed') {
-            if (transaction.paymentMethod === 'bank') {
-              const updatedBankReceipt = await window.api.updateBankReceipt({
-                ...baseReceipt,
-                amount: grandTotal,
-                bank: transaction.bank || 'IDBI'
-              })
-              dispatch(updateBankReceipt(updatedBankReceipt))
-            } else if (transaction.paymentMethod === 'cash') {
-              const updatedCashReceipt = await window.api.updateCashReceipt({
-                ...baseReceipt,
-                amount: grandTotal,
-                cash: transaction.cash || 'Cash'
-              })
-              dispatch(updateCashReceipt(updatedCashReceipt))
-            }
-          } else if (transaction.paymentType === 'partial') {
-            if (transaction.paidAmount > 0) {
-              if (transaction.paymentMethod === 'bank') {
-                const updatedBankReceipt = await window.api.updateBankReceipt({
-                  ...baseReceipt,
-                  amount: transaction.paidAmount,
-                  bank: transaction.bank || 'IDBI'
-                })
-                dispatch(updateBankReceipt(updatedBankReceipt))
-              } else if (transaction.paymentMethod === 'cash') {
-                const updatedCashReceipt = await window.api.updateCashReceipt({
-                  ...baseReceipt,
-                  amount: transaction.paidAmount,
-                  cash: transaction.cash || 'Cash'
-                })
-                dispatch(updateCashReceipt(updatedCashReceipt))
-              }
-            }
+          if (transaction.paymentMethod === 'bank') {
+            const updatedBankReceipt = await window.api.updateBankReceipt({
+              ...baseReceipt,
+              amount: grandTotal,
+              bank: transaction.bank || 'IDBI'
+            })
+            dispatch(updateBankReceipt(updatedBankReceipt))
+          } else if (transaction.paymentMethod === 'cash') {
+            const updatedCashReceipt = await window.api.updateCashReceipt({
+              ...baseReceipt,
+              amount: grandTotal,
+              cash: transaction.cash || 'Cash'
+            })
+            dispatch(updateCashReceipt(updatedCashReceipt))
           }
+          // } else if (transaction.paymentType === 'partial') {
+          //   if (transaction.paidAmount > 0) {
+          //     if (transaction.paymentMethod === 'bank') {
+          //       const updatedBankReceipt = await window.api.updateBankReceipt({
+          //         ...baseReceipt,
+          //         amount: transaction.paidAmount,
+          //         bank: transaction.bank || 'IDBI'
+          //       })
+          //       dispatch(updateBankReceipt(updatedBankReceipt))
+          //     } else if (transaction.paymentMethod === 'cash') {
+          //       const updatedCashReceipt = await window.api.updateCashReceipt({
+          //         ...baseReceipt,
+          //         amount: transaction.paidAmount,
+          //         cash: transaction.cash || 'Cash'
+          //       })
+          //       dispatch(updateCashReceipt(updatedCashReceipt))
+          //     }
+          //   }
+          // }
         }
         await fetchTransaction() // Refresh data
         setShowModal(false)

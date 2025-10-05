@@ -55,6 +55,19 @@ export const electronSlice = createSlice({
       })(),
       isLoading: false
     },
+    settings: {
+      data: (() => {
+        try {
+          const stored = localStorage.getItem('settings')
+          return stored ? JSON.parse(stored) : []
+        } catch (error) {
+          console.error('Error parsing settings from localStorage:', error)
+          localStorage.removeItem('settings') // Clear corrupted data
+          return []
+        }
+      })(),
+      isLoading: false
+    },
     bankReceipt: {
       data: (() => {
         try {
@@ -396,6 +409,76 @@ export const electronSlice = createSlice({
         state.cashReceipt.data = []
         localStorage.removeItem('cashReceipt')
       }
+    },
+    createSettings: (state, action) => {
+      if (!Array.isArray(state.settings.data)) {
+        state.settings.data = []
+      }
+
+      const newSetting = action.payload
+      if (newSetting && newSetting.id) {
+        // Avoid duplicates (in case backend re-sends same record)
+        const exists = state.settings.data.some((s) => s.id === newSetting.id)
+        if (!exists) {
+          state.settings.data.push(newSetting)
+        }
+      }
+
+      localStorage.setItem('settings', JSON.stringify(state.settings.data))
+    },
+
+    updateSettings: (state, action) => {
+      if (!Array.isArray(state.settings.data)) {
+        state.settings.data = []
+        return
+      }
+
+      const updatedSetting = action.payload
+      const index = state.settings.data.findIndex((s) => s.id === updatedSetting.id)
+
+      if (index !== -1) {
+        state.settings.data[index] = updatedSetting
+      } else {
+        // if not found, push it (optional)
+        state.settings.data.push(updatedSetting)
+      }
+
+      localStorage.setItem('settings', JSON.stringify(state.settings.data))
+    },
+
+    setSettings: (state, action) => {
+      if (Array.isArray(action.payload)) {
+        // When loading full list from DB
+        state.settings.data = action.payload
+      } else if (action.payload && typeof action.payload === 'object') {
+        // When adding a single record
+        if (!Array.isArray(state.settings.data)) {
+          state.settings.data = []
+        }
+
+        const exists = state.settings.data.some((s) => s.id === action.payload.id)
+        if (!exists) {
+          state.settings.data.push(action.payload)
+        }
+      }
+
+      localStorage.setItem('settings', JSON.stringify(state.settings.data))
+    },
+
+    getSettings: (state) => {
+      try {
+        const data = localStorage.getItem('settings')
+        if (data) {
+          const parsed = JSON.parse(data)
+          state.settings.data = Array.isArray(parsed) ? parsed : []
+        } else {
+          state.settings.data = []
+        }
+      } catch (error) {
+        console.error('Error loading settings from localStorage:', error)
+        state.settings.data = []
+        localStorage.removeItem('settings')
+      }
     }
   }
 })
@@ -423,6 +506,10 @@ export const {
   createCashReceipt,
   updateCashReceipt,
   setCashReceipt,
-  getCashReceipt
+  getCashReceipt,
+  createSettings,
+  updateSettings,
+  setSettings,
+  getSettings
 } = electronSlice.actions
 export default electronSlice.reducer

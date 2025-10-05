@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useState, useMemo, useCallback, memo } from 'react'
-import { FileUp, Import, PenLine, Plus, Trash, X } from 'lucide-react'
+import { FileUp, Import, PenLine, Plus, Trash, X, Printer } from 'lucide-react'
 import Loader from '../components/Loader'
 import SearchIcon from '@mui/icons-material/Search'
 import { DateRangePicker, SelectPicker, Whisper, Tooltip, InputGroup, Input } from 'rsuite'
@@ -23,6 +23,7 @@ import Navbar from '../components/UI/Navbar'
 import { useLocation } from 'react-router-dom'
 import ImportExcel from '../components/UI/ImportExcel'
 import * as XLSX from 'xlsx'
+import { IoLogoWhatsapp } from 'react-icons/io5'
 
 // Constants
 const TABLE_HEADERS = [
@@ -169,7 +170,7 @@ const TransactionRow = memo(
         <td className="px-4 py-3">{new Date(transaction?.createdAt).toLocaleDateString()}</td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-2 px-6">
-            <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center border border-blue-300 justify-center text-xs font-medium text-blue-600 mr-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
               {getInitials(clientName)}
             </div>
             {clientName}
@@ -207,6 +208,30 @@ const TransactionRow = memo(
               title="Delete transaction"
             >
               <Trash size={12} />
+            </button>
+            <button
+              className="text-green-600 p-2 border border-green-600 rounded-full hover:bg-green-600 hover:text-white transition-all duration-300 hover:scale-110"
+              onClick={() => {
+                const clientName = getClientName(transaction?.clientId, clients)
+                const productName = getProductName(transaction?.productId, products)
+                const amount = toThousands(Number(transaction?.sellAmount).toFixed(0))
+
+                const message = `Hello ${clientName},\n\nHere are your transaction details:\n📦 Product: ${productName}\n💰 Amount: ₹${amount}\n📅 Date: ${new Date(
+                  transaction?.createdAt
+                ).toLocaleDateString()}\n\nThank you for your business!`
+
+                // Replace with client’s phone number if available in DB
+                console.log(clients.find((c) => c.id === transaction.clientId).phoneNo)
+
+                if (clients.find((c) => c.id === transaction.clientId)?.phoneNo) {
+                  const phoneNumber = clients.find((c) => c.id === transaction.clientId)?.phoneNo
+                  const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
+                  window.open(url, '_blank')
+                }
+              }}
+              title="Send on WhatsApp"
+            >
+              <IoLogoWhatsapp size={16} />
             </button>
           </div>
         </td>
@@ -287,6 +312,234 @@ const useTransactionOperations = () => {
     handleDeleteTransaction,
     handleEditTransaction
   }
+}
+
+// Utility function to generate dynamic print HTML
+const generatePrintHTML = (
+  data,
+  headers,
+  title,
+  reportType = 'default',
+  clients = [],
+  products = []
+) => {
+  const getCellValue = (row, headerKey) => {
+    switch (headerKey) {
+      case 'date':
+        return new Date(row.createdAt).toLocaleDateString()
+      case 'clientName':
+        return getClientName(row.clientId, clients)
+      case 'productName':
+        return getProductName(row.productId, products)
+      case 'quantity':
+        return row.quantity || 0
+      case 'totalAmount':
+        return `₹ ${toThousands(Number((row.sellAmount || 0) * (row.quantity || 0)).toFixed(0))}`
+      case 'pendingAmount':
+        if (row.statusOfTransaction === 'pending' && row.paymentType === 'partial') {
+          return `₹ ${toThousands(Number(row.pendingAmount).toFixed(0))}`
+        }
+        return row.statusOfTransaction === 'completed' ? '-' : 'Pending'
+      default:
+        return ''
+    }
+  }
+
+  const tableHeaders = headers.map((h) => `<th class="border px-4 py-2">${h.label}</th>`).join('')
+  const tableRows = data
+    .map((row) => {
+      const cells = headers
+        .map((h) => `<td class="border px-4 py-2 text-center">${getCellValue(row, h.key)}</td>`)
+        .join('')
+      return `<tr>${cells}</tr>`
+    })
+    .join('')
+
+  let ledgerSpecificContent = ''
+  if (reportType === 'ledger') {
+    // Example for ledger: Add balance columns or specific ledger logic
+    // Customize based on your ledger data structure
+    ledgerSpecificContent = `
+      <tr>
+        <td colspan="${headers.length}" class="border px-4 py-2 font-bold text-right">Running Balance</td>
+      </tr>
+      ${data
+        .map((row, index) => {
+          // Assume ledger data has 'balance' field; adjust as needed
+          const balance = row.balance || 0
+          return `<tr><td colspan="${headers.length - 1}" class="border px-4 py-2"></td><td class="border px-4 py-2 text-right">₹ ${toThousands(balance)}</td></tr>`
+        })
+        .join('')}
+    `
+  }
+
+  return `
+    <!DOCTYPE html>
+<html>
+  <head>
+    <title>${title} Report</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        margin: 20px;
+        color: #1e293b;
+        background: #fff;
+      }
+
+      /* ===== HEADER BAR ===== */
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #e5e7eb;
+      }
+
+      .header-left {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .header-left h1 {
+        font-size: 28px;
+        font-weight: 600;
+        margin: 0;
+        color: #111827;
+      }
+
+      .generated-label {
+        font-size: 12px;
+        color: #64748b;
+        background: #f1f5f9;
+        border: 1px solid #e5e7eb;
+        padding: 2px 8px;
+        border-radius: 6px;
+        margin-bottom: 6px;
+      }
+
+      .header-right {
+        font-size: 14px;
+        color: #374151;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 5px;
+      }
+
+      .record-count {
+        font-weight: bold;
+        background: #f3f4f6;
+        border: 1px solid #e2e8f0;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #1e40af;
+      }
+
+      /* ===== TABLE ===== */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        font-size: 14px;
+      }
+
+      thead th {
+        background: #e5e7eb;
+        color: #111827;
+        padding: 12px 14px;
+        border: 1px solid #e2e8f0;
+        font-weight: 600;
+        text-transform: capitalize;
+        font-size: 15px;
+        text-align: left;
+      }
+
+      tbody td {
+        padding: 10px 14px;
+        border: 1px solid #e2e8f0;
+        font-size: 14px;
+        color: #374151;
+      }
+
+      tbody tr:nth-child(even) {
+        background: #f9fafb;
+      }
+
+      tbody tr:hover {
+        background: #f1f5f9;
+      }
+
+      .totals-row {
+        font-weight: bold;
+        background: #f3f4f6;
+      }
+
+      /* ===== FOOTER ===== */
+      .footer {
+        margin-top: 25px;
+        text-align: center;
+        font-size: 12px;
+        color: #64748b;
+        border-top: 1px solid #e2e8f0;
+        padding-top: 10px;
+      }
+
+      .footer strong {
+        font-size: 15px;
+        color: #1e40af;
+      }
+
+      @media print {
+        body {
+          margin: 0.8cm;
+        }
+        .footer {
+          position: fixed;
+          bottom: 10px;
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body onload="window.print(); setTimeout(() => { window.close(); }, 1000);">
+
+    <!-- ===== HEADER SECTION ===== -->
+    <div class="header">
+      <div class="header-left">
+        <h1>${title}</h1>
+      </div>
+      <div class="header-right">
+      <div class="record-count">Total Records: ${data.length}</div>
+      <div>Generated on: ${new Date().toLocaleString()}</div>
+      </div>
+    </div>
+
+    <!-- ===== TABLE ===== -->
+    <table>
+      <thead>
+        <tr>
+          ${tableHeaders}
+        </tr>
+      </thead>
+      <tbody>
+        ${tableRows}
+        ${ledgerSpecificContent}
+      </tbody>
+    </table>
+
+    <!-- ===== FOOTER ===== -->
+    <div class="footer">
+      <p>This is a computer-generated report. No signature is required.</p>
+      <p><strong>Powered by Electron</strong></p>
+    </div>
+  </body>
+</html>
+
+
+  `
 }
 
 // Main Component
@@ -444,6 +697,90 @@ const Transaction = () => {
     }
   }, [filteredData, clients, products])
 
+  const TABLE_HEADERS_PRINT = [
+    { key: 'date', label: 'Date', width: 'w-[100px]' },
+    { key: 'clientName', label: 'Client Name', width: 'w-[250px]' },
+    { key: 'productName', label: 'Product Name', width: 'w-[230px]' },
+    { key: 'quantity', label: 'Quantity', width: 'w-[150px]' },
+    { key: 'totalAmount', label: 'Total Amount', width: 'w-[200px]' },
+    { key: 'pendingAmount', label: 'Status', width: 'w-[150px]' }
+  ]
+
+  // Updated handler for printing PDF using iframe to avoid popup blockers
+  const handlePrintPDF = useCallback(
+    (reportType = 'default') => {
+      // Define columns to print (customize per report type)
+      let printHeaders = TABLE_HEADERS_PRINT.filter((h) => h.key !== 'action') // Exclude action column by default
+      let printData = filteredData
+
+      if (reportType === 'ledger') {
+        // Example: For ledger report, filter to specific client/product and add balance logic
+        // Assume you pass clientId or adjust data here; customize as needed
+        printHeaders = printHeaders.filter((h) =>
+          [
+            'date',
+            'clientName',
+            'productName',
+            'quantity',
+            'totalAmount',
+            'pendingAmount'
+          ].includes(h.key)
+        ) // Only specific columns for ledger
+        // Simulate ledger data with balance (adjust based on your data)
+        printData = filteredData.map((row, index) => ({
+          ...row,
+          balance:
+            index % 2 === 0
+              ? (row.sellAmount || 0) * (row.quantity || 0)
+              : -((row.sellAmount || 0) * (row.quantity || 0)) // Dummy balance; replace with real logic
+        }))
+      }
+
+      const title = reportType === 'ledger' ? 'Ledger Report' : 'Sales Report'
+      const printHTML = generatePrintHTML(
+        printData,
+        printHeaders,
+        title,
+        reportType,
+        clients,
+        products
+      )
+
+      // Create iframe for printing
+      try {
+        const printFrame = document.createElement('iframe')
+        printFrame.style.position = 'absolute'
+        printFrame.style.left = '-9999px'
+        printFrame.style.width = '0'
+        printFrame.style.height = '0'
+        printFrame.style.border = '0'
+        document.body.appendChild(printFrame)
+
+        const printDoc = printFrame.contentDocument || printFrame.contentWindow.document
+        printDoc.open()
+        printDoc.write(printHTML)
+        printDoc.close()
+
+        // Wait a bit for content to load
+        setTimeout(() => {
+          printFrame.contentWindow.focus()
+          printFrame.contentWindow.print()
+
+          // Cleanup after print
+          setTimeout(() => {
+            document.body.removeChild(printFrame)
+          }, 1000)
+        }, 500)
+
+        toast.success('Print dialog opened. Choose "Save as PDF" to generate PDF.')
+      } catch (error) {
+        console.error('Error initiating print:', error)
+        toast.error('Failed to initiate print: ' + error.message)
+      }
+    },
+    [filteredData, clients, products]
+  )
+
   // Effects
   useEffect(() => {
     setShowLoader(true)
@@ -473,18 +810,26 @@ const Transaction = () => {
         <p className="text-3xl font-light mx-7">Sales</p>
         <div className="mx-7 flex gap-2">
           <button
-            className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm hover:bg-gray-50 transition-colors"
+            className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
             onClick={() => setImportFile(!importFile)}
           >
             <Import size={16} />
             <span className="text-sm">Import</span>
           </button>
           <button
-            className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm hover:bg-gray-50 transition-colors"
+            className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
             onClick={handleExportExcel}
           >
             <FileUp size={16} />
             <span className="text-sm">Export</span>
+          </button>
+          <button
+            className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
+            onClick={() => handlePrintPDF('default')}
+            title="Print Sales Report"
+          >
+            <Printer size={16} />
+            <span className="text-sm">Print</span>
           </button>
           <button
             className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"

@@ -44,7 +44,13 @@ contextBridge.exposeInMainWorld('api', {
   exportExcel: (tableName, savePath) => ipcRenderer.invoke('exportExcel', tableName, savePath),
 
   // PDF Export
-  generatePDF: (options) => ipcRenderer.invoke('generate-pdf', options)
+  generatePDF: (options) => ipcRenderer.invoke('generate-pdf', options),
+
+  // Settings
+  getSettings: () => ipcRenderer.invoke('getSettings'),
+  createSettings: (settings) => ipcRenderer.invoke('createSettings', settings),
+  updateSettings: (settings) => ipcRenderer.invoke('updateSettings', settings),
+  deleteSettings: (id) => ipcRenderer.invoke('deleteSettings', id)
 })
 
 // Version information
