@@ -50,7 +50,17 @@ contextBridge.exposeInMainWorld('api', {
   getSettings: () => ipcRenderer.invoke('getSettings'),
   createSettings: (settings) => ipcRenderer.invoke('createSettings', settings),
   updateSettings: (settings) => ipcRenderer.invoke('updateSettings', settings),
-  deleteSettings: (id) => ipcRenderer.invoke('deleteSettings', id)
+  deleteSettings: (id) => ipcRenderer.invoke('deleteSettings', id),
+
+  getKeyBindings: () => ipcRenderer.invoke('getKeyBindings'),
+  createKeyBinding: (data) => ipcRenderer.invoke('createKeyBinding', data),
+  updateKeyBinding: (data) => ipcRenderer.invoke('updateKeyBinding', data),
+  deleteKeyBinding: (id) => ipcRenderer.invoke('deleteKeyBinding', id),
+
+  // Backup methods
+  restoreBackup: (backupFilePath) => ipcRenderer.invoke('restoreBackup', backupFilePath),
+  selectBackupFile: () => ipcRenderer.invoke('selectBackupFile'),
+  manualBackup: () => ipcRenderer.invoke('manualBackup')
 })
 
 // Version information

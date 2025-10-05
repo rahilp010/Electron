@@ -33,7 +33,6 @@ const ClientModal = ({
 
   const getInitialClient = () => {
     if (isUpdateExpense && existingClient) {
-      console.log('Initializing with existing client:', existingClient)
       return {
         clientName: existingClient.clientName || '',
         phoneNo: existingClient.phoneNo || '',
@@ -101,16 +100,6 @@ const ClientModal = ({
           return
         }
 
-        if (!client.pendingAmount || client.pendingAmount < 0) {
-          toast.error('Please enter a valid pending amount')
-          return
-        }
-
-        if (!client.paidAmount || client.paidAmount < 0) {
-          toast.error('Please enter a valid paid amount')
-          return
-        }
-
         const clientData = {
           clientName: client.clientName,
           phoneNo: client.phoneNo,
@@ -122,12 +111,9 @@ const ClientModal = ({
           accountType: client.accountType
         }
 
-        console.log('Submitting client:', clientData)
-
         if (!isUpdateExpense) {
           try {
             const response = await window.api.createClient(clientData)
-            console.log(response)
             dispatch(setClients(response))
             toast.success('Client added successfully')
             fetchClients()

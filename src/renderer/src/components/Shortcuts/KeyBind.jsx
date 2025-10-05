@@ -1,23 +1,75 @@
-/* eslint-disable react/prop-types */
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 
 function KeyBind({ children }) {
   const navigate = useNavigate()
+  const keyBindings = useSelector((state) => state.electron.keyBindings?.data || [])
 
   useEffect(() => {
-    const handleEsc = (event) => {
+    const handleKeyPress = (event) => {
+      // Check for ESC key (always enabled)
       if (event.key === 'Escape') {
-        navigate('/') // go to homepage
-      } else if (event.ctrlKey && event.key.toLowerCase() === 'l') {
-        event.preventDefault()
-        navigate('/ledger')
+        const activeElement = document.activeElement
+        // Close modal if any input/textarea is focused or if there's a modal
+        if (
+          activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          document.querySelector('[role="dialog"]')
+        ) {
+          return // Let modal handle ESC
+        }
+        navigate('/')
+        return
       }
+
+      // Check custom key bindings
+      keyBindings.forEach((binding) => {
+        if (!binding.enabled) return
+
+        const modifiers = binding.modifiers || []
+        const key = binding.key?.toLowerCase()
+
+        // Check if all required modifiers are pressed
+        const ctrlMatch = modifiers.includes('ctrl') ? event.ctrlKey : !event.ctrlKey
+        const shiftMatch = modifiers.includes('shift') ? event.shiftKey : !event.shiftKey
+        const altMatch = modifiers.includes('alt') ? event.altKey : !event.altKey
+        const metaMatch = modifiers.includes('meta') ? event.metaKey : !event.metaKey
+
+        // Check if the key matches
+        const keyMatch = event.key.toLowerCase() === key
+
+        if (ctrlMatch && shiftMatch && altMatch && metaMatch && keyMatch) {
+          event.preventDefault()
+
+          // Execute the action
+          switch (binding.action) {
+            case 'navigate':
+              navigate(binding.value)
+              break
+            case 'callback':
+              if (typeof window[binding.value] === 'function') {
+                window[binding.value]()
+              }
+              break
+            case 'custom':
+              // Dispatch custom event for other components to listen
+              window.dispatchEvent(
+                new CustomEvent('customKeyBinding', {
+                  detail: { bindingId: binding.id, value: binding.value }
+                })
+              )
+              break
+            default:
+              break
+          }
+        }
+      })
     }
 
-    window.addEventListener('keydown', handleEsc)
-    return () => window.removeEventListener('keydown', handleEsc)
-  }, [navigate])
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [navigate, keyBindings])
 
   return <>{children}</>
 }

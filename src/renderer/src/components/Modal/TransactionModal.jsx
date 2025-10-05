@@ -11,7 +11,8 @@ import {
   setBankReceipt,
   updateBankReceipt,
   updateCashReceipt,
-  setCashReceipt
+  setCashReceipt,
+  setSettings
 } from '../../app/features/electronSlice'
 import { CircleX } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
@@ -50,8 +51,14 @@ const TransactionModal = ({
     dispatch(setBankReceipt(response))
   }
 
+  const fetchSettings = async () => {
+    const response = await window.api.getSettings()
+    dispatch(setSettings(response))
+  }
+
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
+  const settings = useSelector((state) => state.electron.settings.data || [])
   const safeTransaction = existingTransaction || {}
 
   const [productModal, setProductModal] = useState(false)
@@ -74,7 +81,8 @@ const TransactionModal = ({
         paidAmount: Number(existingTransaction.paidAmount) || 0,
         transactionType: existingTransaction.transactionType || '',
         taxAmount: existingTransaction.taxAmount || [],
-        totalAmount: Number(existingTransaction.totalAmount) || 0
+        totalAmount: Number(existingTransaction.totalAmount) || 0,
+        dueDate: existingTransaction.dueDate || ''
       }
     }
     return {
@@ -90,7 +98,8 @@ const TransactionModal = ({
       paidAmount: 0,
       transactionType: '',
       taxAmount: [],
-      totalAmount: 0
+      totalAmount: 0,
+      dueDate: ''
     }
   }
 
@@ -101,6 +110,7 @@ const TransactionModal = ({
     fetchClients()
     fetchBankReceipt()
     fetchTransaction()
+    fetchSettings()
   }, [])
 
   useEffect(() => {
@@ -204,7 +214,8 @@ const TransactionModal = ({
           paidAmount: Number(transaction.paidAmount) || 0,
           transactionType: location.pathname === '/sales' ? 'sales' : 'purchase',
           taxAmount: transaction.taxAmount || [],
-          totalAmount: Number(grandTotal || 0)
+          totalAmount: Number(grandTotal || 0),
+          dueDate: new Date().setMonth(new Date().getMonth() + 1)
         }
 
         if (!isUpdateExpense) {
@@ -221,7 +232,8 @@ const TransactionModal = ({
               clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
             amount: grandTotal,
             description: `Sale ${getProductName(transaction.productId)}`,
-            taxAmount: transaction.taxAmount || []
+            taxAmount: transaction.taxAmount || [],
+            dueDate: new Date().setMonth(new Date().getMonth() + 1)
           }
 
           // if (transaction.statusOfTransaction === 'completed') {
@@ -274,7 +286,8 @@ const TransactionModal = ({
               clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
             amount: grandTotal,
             description: `Sale ${getProductName(transaction.productId)}`,
-            taxAmount: transaction.taxAmount || []
+            taxAmount: transaction.taxAmount || [],
+            dueDate: new Date().setMonth(new Date().getMonth() + 1)
           }
 
           if (transaction.paymentMethod === 'bank') {
@@ -338,22 +351,15 @@ const TransactionModal = ({
   const handleOnChangeEvent = (value, fieldName) => {
     switch (fieldName) {
       case 'quantity':
-        const newSubtotal = (transaction.sellAmount || selectedProduct?.price || 0) * value
+        const newSubtotal = transaction.sellAmount * value
         const updatedTaxForQuantity = transaction.taxAmount.map((tax) => {
-          switch (tax.code) {
-            case 'i-18':
-              return { ...tax, value: newSubtotal * 0.18 }
-            case 'i-28':
-              return { ...tax, value: newSubtotal * 0.28 }
-            case 's-9':
-              return { ...tax, value: newSubtotal * 0.09 }
-            case 'c-9':
-              return { ...tax, value: newSubtotal * 0.09 }
-            default:
-              return tax
-          }
+          settings.map((setting) => {})
         })
-        setTransaction((prev) => ({ ...prev, quantity: value, taxAmount: updatedTaxForQuantity }))
+        setTransaction((prev) => ({
+          ...prev,
+          quantity: Number(value),
+          taxAmount: updatedTaxForQuantity
+        }))
         break
 
       case 'sellingPrice':
@@ -411,35 +417,30 @@ const TransactionModal = ({
         break
 
       case 'taxAmount':
-        const selectedValues = value || []
+        const selectedTaxCodes = value || []
         let taxObjects = []
-        let preservedFrightValue = 0
 
-        // Preserve fright value if still selected
-        if (selectedValues.includes('frightChanged')) {
-          const existingFright = transaction.taxAmount.find((t) => t.code === 'frightChanged')
-          preservedFrightValue = existingFright?.value || 0
-        }
+        taxObjects = selectedTaxCodes
+          .map((taxCode) => {
+            // Check if it's a custom tax from settings
+            const customTax = settings.find((s) => `custom-${s.id}` === taxCode)
 
-        taxObjects = selectedValues
-          .map((val) => {
-            switch (val) {
-              case 'i-18':
-                return { code: 'i-18', name: 'IGST 18%', value: subtotal * 0.18 }
-              case 'i-28':
-                return { code: 'i-28', name: 'IGST 28%', value: subtotal * 0.28 }
-              case 's-9':
-                return { code: 's-9', name: 'SGST 9%', value: subtotal * 0.09 }
-              case 'c-9':
-                return { code: 'c-9', name: 'CGST 9%', value: subtotal * 0.09 }
-              case 'frightChanged':
-                return {
-                  code: 'frightChanged',
-                  name: 'Freight Charges',
-                  value: preservedFrightValue
-                }
-              default:
-                return null
+            if (customTax) {
+              return {
+                code: `custom-${customTax.id}`,
+                name: customTax.taxName,
+                value: (subtotal * customTax.taxValue) / 100,
+                percentage: customTax.taxValue
+              }
+            }
+
+            if (taxCode === 'frightChanged') {
+              return {
+                code: 'frightChanged',
+                name: 'Freight Charges',
+                value: Number(transaction.frightCharges),
+                percentage: 0
+              }
             }
           })
           .filter(Boolean)
@@ -461,6 +462,15 @@ const TransactionModal = ({
     if (!value) return value
     return new Intl.NumberFormat('en-IN').format(value)
   }
+
+  // Prepare tax options from settings
+  const taxOptions = [
+    ...settings.map((setting) => ({
+      label: `${setting.taxName} (${setting.taxValue}%)`,
+      value: `custom-${setting.id}`
+    })),
+    { label: 'Freight Charges', value: 'frightChanged' }
+  ]
 
   return (
     <div
@@ -619,14 +629,8 @@ const TransactionModal = ({
                   Tax
                 </label>
                 <CheckPicker
-                  data={[
-                    { label: 'IGST 18', value: 'i-18' },
-                    { label: 'IGST 28', value: 'i-28' },
-                    { label: 'SGST 9', value: 's-9' },
-                    { label: 'CGST 9', value: 'c-9' },
-                    { label: 'Fright Changed', value: 'frightChanged' }
-                  ]}
-                  searchable={false}
+                  data={taxOptions}
+                  searchable={taxOptions.length > 5}
                   size="md"
                   placeholder="Select Tax"
                   value={transaction.taxAmount.map((t) => t.code)}

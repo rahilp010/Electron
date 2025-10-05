@@ -1,13 +1,392 @@
-/* eslint-disable react/no-unknown-property */
-/* eslint-disable react/jsx-key */
 /* eslint-disable prettier/prettier */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react/no-unescaped-entities */
+/* eslint-disable react/no-unknown-property */
+
 import React, { useEffect, useState } from 'react'
 import Navbar from '../components/UI/Navbar'
 import { Info, Keyboard, Banknote, DatabaseBackup, Plus, X, Check, Trash2 } from 'lucide-react'
-import { Input, InputNumber } from 'rsuite'
+import { Input, InputNumber, SelectPicker } from 'rsuite'
 import { toast } from 'react-toastify'
 import { useDispatch, useSelector } from 'react-redux'
-import { setSettings } from '../app/features/electronSlice'
+import {
+  deleteKeyBinding,
+  setKeyBindings,
+  setSettings,
+  updateKeyBinding
+} from '../app/features/electronSlice'
+
+const KeyBindingsSection = () => {
+  const dispatch = useDispatch()
+  const keyBindings = useSelector((state) => state.electron.keyBindings?.data || [])
+  const [isAddingKey, setIsAddingKey] = useState(false)
+  const [editingKey, setEditingKey] = useState(null)
+  const [keyForm, setKeyForm] = useState({
+    name: '',
+    description: '',
+    key: '',
+    modifiers: [],
+    action: 'navigate',
+    value: '',
+    enabled: true
+  })
+
+  useEffect(() => {
+    fetchKeyBindings()
+  }, [])
+
+  const fetchKeyBindings = async () => {
+    try {
+      const response = await window.api.getKeyBindings()
+      dispatch(setKeyBindings(response))
+    } catch (error) {
+      console.error('Failed to fetch key bindings:', error)
+    }
+  }
+
+  const handleSaveKeyBinding = async (e) => {
+    e.preventDefault()
+
+    if (!keyForm.name || !keyForm.key) {
+      toast.error('Please fill in name and key')
+      return
+    }
+
+    try {
+      if (editingKey) {
+        const updated = await window.api.updateKeyBinding({ id: editingKey, ...keyForm })
+        dispatch(updateKeyBinding(updated))
+        toast.success('Key binding updated successfully')
+      } else {
+        const created = await window.api.createKeyBinding(keyForm)
+        dispatch(setKeyBindings(created))
+        toast.success('Key binding added successfully')
+      }
+
+      resetForm()
+    } catch (error) {
+      toast.error('Failed to save key binding')
+      console.error(error)
+    }
+  }
+
+  const handleDeleteKeyBinding = async (id) => {
+    if (window.confirm('Are you sure you want to delete this key binding?')) {
+      try {
+        await window.api.deleteKeyBinding(id)
+        dispatch(deleteKeyBinding(id))
+        toast.success('Key binding deleted successfully')
+      } catch (error) {
+        toast.error('Failed to delete key binding', error)
+      }
+    }
+  }
+
+  const handleEditKeyBinding = (binding) => {
+    setKeyForm({
+      name: binding.name,
+      description: binding.description || '',
+      key: binding.key,
+      modifiers: binding.modifiers || [],
+      action: binding.action,
+      value: binding.value,
+      enabled: binding.enabled
+    })
+    setEditingKey(binding.id)
+    setIsAddingKey(true)
+  }
+
+  const resetForm = () => {
+    setKeyForm({
+      name: '',
+      description: '',
+      key: '',
+      modifiers: [],
+      action: 'navigate',
+      value: '',
+      enabled: true
+    })
+    setIsAddingKey(false)
+    setEditingKey(null)
+  }
+
+  const toggleModifier = (modifier) => {
+    setKeyForm((prev) => ({
+      ...prev,
+      modifiers: prev.modifiers.includes(modifier)
+        ? prev.modifiers.filter((m) => m !== modifier)
+        : [...prev.modifiers, modifier]
+    }))
+  }
+
+  const routes = [
+    { label: 'Dashboard', value: '/' },
+    { label: 'Sales', value: '/sales' },
+    { label: 'Purchase', value: '/purchase' },
+    { label: 'Products', value: '/products' },
+    { label: 'Clients', value: '/clients' },
+    { label: 'Ledger', value: '/ledger' },
+    { label: 'Settings', value: '/settings' }
+  ]
+
+  return (
+    <div className="animate-fadeIn">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
+            <Keyboard size={24} className="text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+              Keyboard Shortcuts
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Customize your workflow with keyboard shortcuts
+            </p>
+          </div>
+        </div>
+
+        {!isAddingKey && (
+          <button
+            onClick={() => setIsAddingKey(true)}
+            className="group relative px-6 py-3 font-medium text-white rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 hover:shadow-xl hover:shadow-blue-500/50 transition-all duration-300 hover:scale-105 flex items-center gap-2"
+          >
+            <Plus size={20} />
+            <span>Add Shortcut</span>
+          </button>
+        )}
+      </div>
+
+      {/* Add/Edit Form */}
+      {isAddingKey && (
+        <form onSubmit={handleSaveKeyBinding} className="mb-8 animate-slideDown">
+          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-2xl p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-800">
+                {editingKey ? 'Edit Key Binding' : 'Add New Key Binding'}
+              </h3>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="p-2 hover:bg-red-100 rounded-lg transition-colors duration-200"
+              >
+                <X size={20} className="text-red-500" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Name */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Shortcut Name *</label>
+                <Input
+                  className="bg-white border-2 border-blue-200 focus:border-blue-500 rounded-xl"
+                  value={keyForm.name}
+                  onChange={(value) => setKeyForm((prev) => ({ ...prev, name: value }))}
+                  placeholder="e.g., Go to Dashboard"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Description</label>
+                <Input
+                  className="bg-white border-2 border-blue-200 focus:border-blue-500 rounded-xl"
+                  value={keyForm.description}
+                  onChange={(value) => setKeyForm((prev) => ({ ...prev, description: value }))}
+                  placeholder="Brief description"
+                />
+              </div>
+
+              {/* Key */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Key *</label>
+                <Input
+                  className="bg-white border-2 border-blue-200 focus:border-blue-500 rounded-xl uppercase"
+                  value={keyForm.key}
+                  onChange={(value) =>
+                    setKeyForm((prev) => ({ ...prev, key: value.toLowerCase() }))
+                  }
+                  placeholder="e.g., d, s, p"
+                  maxLength={1}
+                />
+              </div>
+
+              {/* Modifiers */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Modifiers</label>
+                <div className="flex gap-2">
+                  {['ctrl', 'shift', 'alt'].map((mod) => (
+                    <button
+                      key={mod}
+                      type="button"
+                      onClick={() => toggleModifier(mod)}
+                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                        keyForm.modifiers.includes(mod)
+                          ? 'bg-blue-500 text-white shadow-lg'
+                          : 'bg-white text-gray-600 border-2 border-gray-300 hover:border-blue-300'
+                      }`}
+                    >
+                      {mod.charAt(0).toUpperCase() + mod.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Type */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Action Type</label>
+                <SelectPicker
+                  data={[
+                    { label: 'Navigate to Page', value: 'navigate' },
+                    { label: 'Custom Function', value: 'callback' },
+                    { label: 'Custom Event', value: 'custom' }
+                  ]}
+                  value={keyForm.action}
+                  onChange={(value) => setKeyForm((prev) => ({ ...prev, action: value }))}
+                  className="w-full"
+                  searchable={false}
+                />
+              </div>
+
+              {/* Action Value */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  {keyForm.action === 'navigate' ? 'Route' : 'Function/Event Name'}
+                </label>
+                {keyForm.action === 'navigate' ? (
+                  <SelectPicker
+                    data={routes}
+                    value={keyForm.value}
+                    onChange={(value) => setKeyForm((prev) => ({ ...prev, value }))}
+                    className="w-full"
+                    searchable={false}
+                  />
+                ) : (
+                  <Input
+                    className="bg-white border-2 border-blue-200 focus:border-blue-500 rounded-xl"
+                    value={keyForm.value}
+                    onChange={(value) => setKeyForm((prev) => ({ ...prev, value }))}
+                    placeholder={keyForm.action === 'callback' ? 'functionName' : 'eventName'}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div className="mt-6 p-4 bg-white rounded-xl border-2 border-blue-200">
+              <p className="text-sm text-gray-600 mb-2">Shortcut Preview:</p>
+              <div className="flex items-center gap-2">
+                {keyForm.modifiers.map((mod) => (
+                  <React.Fragment key={mod}>
+                    <kbd className="px-3 py-2 bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg text-sm font-mono font-semibold shadow-md">
+                      {mod.charAt(0).toUpperCase() + mod.slice(1)}
+                    </kbd>
+                    <span className="text-gray-400 font-bold">+</span>
+                  </React.Fragment>
+                ))}
+                {keyForm.key && (
+                  <kbd className="px-3 py-2 bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg text-sm font-mono font-semibold shadow-md uppercase">
+                    {keyForm.key}
+                  </kbd>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                type="submit"
+                className="flex-1 group relative px-6 py-3 font-medium text-white rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 hover:shadow-xl hover:shadow-blue-500/50 transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2"
+              >
+                <Check size={20} />
+                <span>{editingKey ? 'Update' : 'Save'} Shortcut</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={resetForm}
+                className="px-6 py-3 font-medium text-gray-700 rounded-xl border-2 border-gray-300 hover:bg-gray-100 transition-all duration-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {/* Key Bindings List */}
+      <div className="grid grid-cols-1 gap-4">
+        {keyBindings.map((binding, index) => (
+          <div
+            key={binding.id}
+            className="group bg-white rounded-2xl p-6 border-2 border-gray-100 hover:border-blue-300 hover:shadow-xl transition-all duration-300 animate-fadeIn"
+            style={{ animationDelay: `${index * 50}ms` }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="text-lg font-bold text-gray-800">{binding.name}</h3>
+                  {!binding.enabled && (
+                    <span className="px-2 py-1 bg-red-100 text-red-600 text-xs font-semibold rounded-full">
+                      Disabled
+                    </span>
+                  )}
+                </div>
+                {binding.description && (
+                  <p className="text-sm text-gray-600 mb-3">{binding.description}</p>
+                )}
+                <div className="flex items-center gap-2">
+                  {binding.modifiers?.map((mod) => (
+                    <React.Fragment key={mod}>
+                      <kbd className="px-3 py-1.5 bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg text-xs font-mono font-semibold shadow">
+                        {mod.charAt(0).toUpperCase() + mod.slice(1)}
+                      </kbd>
+                      <span className="text-gray-400 font-bold text-sm">+</span>
+                    </React.Fragment>
+                  ))}
+                  <kbd className="px-3 py-1.5 bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg text-xs font-mono font-semibold shadow uppercase">
+                    {binding.key}
+                  </kbd>
+                  <span className="mx-2 text-gray-400">→</span>
+                  <span className="text-sm text-gray-600 font-medium">
+                    {binding.action === 'navigate' ? `Go to ${binding.value}` : binding.value}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 ml-4">
+                <button
+                  onClick={() => handleEditKeyBinding(binding)}
+                  className="p-2 hover:bg-blue-100 rounded-lg transition-colors duration-200"
+                >
+                  <Check size={18} className="text-blue-600" />
+                </button>
+                <button
+                  onClick={() => handleDeleteKeyBinding(binding.id)}
+                  className="p-2 hover:bg-red-100 rounded-lg transition-colors duration-200"
+                >
+                  <Trash2 size={18} className="text-red-500" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {keyBindings.length === 0 && !isAddingKey && (
+        <div className="text-center py-16 animate-fadeIn">
+          <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center">
+            <Keyboard size={40} className="text-gray-400" />
+          </div>
+          <p className="text-xl text-gray-500 mb-4">No keyboard shortcuts configured</p>
+          <p className="text-gray-400 mb-8">
+            Click "Add Shortcut" to create your first keyboard shortcut
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('about')
@@ -91,14 +470,39 @@ const Settings = () => {
     fetchSettings()
   }
 
+  const handleManualBackup = async () => {
+    const result = await window.api.manualBackup()
+    if (result.success) toast.success(result.message)
+    else toast.error(result.message)
+  }
+
+  const handleRestoreBackup = async () => {
+    try {
+      // Let user select a .enc file
+      const { canceled, filePaths } = await window.api.selectBackupFile()
+      if (canceled || !filePaths?.length) return
+
+      const filePath = filePaths[0]
+      const result = await window.api.restoreBackup(filePath)
+
+      if (result.success) {
+        toast.success('Database restored successfully! Restart app to apply changes.')
+      } else {
+        toast.error(result.message || 'Restore failed.')
+      }
+    } catch (err) {
+      console.error('Restore backup error:', err)
+      toast.error('Failed to restore backup.')
+    }
+  }
+
   const renderContent = () => {
     switch (activeTab) {
       case 'about':
         return (
           <div className="text-gray-700 text-center max-w-2xl mx-auto animate-fadeIn">
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 blur-3xl opacity-20 animate-pulse"></div>
-              <div className="relative bg-white rounded-3xl p-6 shadow-xl border border-gray-100">
+              <div className="relative bg-white rounded-3xl p-4 border border-gray-100">
                 <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center transform hover:rotate-12 transition-transform duration-500">
                   <Info size={30} className="text-white" />
                 </div>
@@ -135,18 +539,7 @@ const Settings = () => {
         )
 
       case 'keys':
-        return (
-          <div className="animate-fadeIn max-w-3xl mx-auto">
-            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-3xl p-12 border border-blue-100">
-              <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center">
-                <Keyboard size={32} className="text-white" />
-              </div>
-              <p className="text-xl text-gray-700 text-center">
-                ⌨️ Define your custom keyboard shortcuts here.
-              </p>
-            </div>
-          </div>
-        )
+        return <KeyBindingsSection />
 
       case 'tax':
         return (
@@ -314,9 +707,30 @@ const Settings = () => {
               <div className="w-16 h-16 mx-auto mb-6 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center">
                 <DatabaseBackup size={32} className="text-white" />
               </div>
-              <p className="text-xl text-gray-700 text-center">
+
+              <p className="text-xl text-gray-700 text-center mb-6">
                 💾 Backup and restore your application data.
               </p>
+
+              <div className="flex flex-col md:flex-row justify-center gap-4">
+                {/* Manual Backup */}
+                <button
+                  onClick={handleManualBackup}
+                  className="px-6 py-3 font-medium text-white rounded-xl bg-gradient-to-r from-orange-500 to-red-500 hover:shadow hover:shadow-orange-500/50 transition-all duration-300 flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus size={20} />
+                  <span>Create Backup</span>
+                </button>
+
+                {/* Restore Backup */}
+                <button
+                  onClick={handleRestoreBackup}
+                  className="px-6 py-3 font-medium text-white rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 hover:shadow hover:shadow-green-500/50 transition-all duration-300 flex items-center gap-2 cursor-pointer"
+                >
+                  <DatabaseBackup size={20} />
+                  <span>Restore Backup</span>
+                </button>
+              </div>
             </div>
           </div>
         )

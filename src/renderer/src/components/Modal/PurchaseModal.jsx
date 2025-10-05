@@ -216,8 +216,8 @@ const PurchaseModal = ({
           pendingAmount: Number(transaction.pendingAmount) || 0,
           paidAmount: Number(transaction.paidAmount) || 0,
           transactionType: location.pathname === '/sales' ? 'sales' : 'purchase',
-          taxAmount: transaction.taxAmount || [],
-          dueDate: new Date().setMonth(new Date().getMonth() + 1)
+          taxAmount: transaction?.taxAmount || [],
+          dueDate: new Date()?.setMonth(new Date().getMonth() + 1)
         }
 
         if (!isUpdateExpense) {

@@ -252,7 +252,6 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
     return sourceData
   }, [selectedType, recentBankReceipts, recentCashReceipts, client, getClientName])
 
-  console.log('filteredData', filteredData)
 
   // Memoized running balance calculation
   const balances = useMemo(() => {

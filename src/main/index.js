@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { fileURLToPath } from 'url'
 import icon from '../../resources/icon.png?asset'
 import '../renderer/src/API/dbHandlers.js'
+import { autoBackupOncePerDay } from './autoBackup.js'
 
 // Get directory name in ES module
 const currentFilename = fileURLToPath(import.meta.url)
@@ -60,6 +61,8 @@ app.whenReady().then(() => {
   ipcMain.on('ping', () => console.log('pong'))
 
   createWindow()
+
+  autoBackupOncePerDay()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

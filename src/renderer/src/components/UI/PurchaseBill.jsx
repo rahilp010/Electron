@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 /* eslint-disable no-case-declarations */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable prettier/prettier */
@@ -11,6 +12,7 @@ import {
   setCashReceipt,
   setClients,
   setProducts,
+  setSettings,
   setTransactions
 } from '../../app/features/electronSlice'
 import { useDispatch } from 'react-redux'
@@ -40,8 +42,14 @@ const PurchaseBill = () => {
     dispatch(setBankReceipt(response))
   }
 
+  const fetchSettings = async () => {
+    const response = await window.api.getSettings()
+    dispatch(setSettings(response))
+  }
+
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
+  const settings = useSelector((state) => state.electron.settings.data || [])
 
   const [productModal, setProductModal] = useState(false)
   const [clientModal, setClientModal] = useState(false)
@@ -60,7 +68,8 @@ const PurchaseBill = () => {
       pendingAmount: 0,
       paidAmount: 0,
       transactionType: '',
-      taxAmount: []
+      taxAmount: [],
+      dueDate: ''
     }
   }
 
@@ -71,6 +80,7 @@ const PurchaseBill = () => {
     fetchClients()
     fetchBankReceipt()
     fetchTransaction()
+    fetchSettings()
   }, [])
 
   useEffect(() => {
@@ -174,7 +184,8 @@ const PurchaseBill = () => {
           pendingAmount: Number(transaction.pendingAmount) || 0,
           paidAmount: Number(transaction.paidAmount) || 0,
           transactionType: location.pathname === '/sales' ? 'sales' : 'purchase',
-          taxAmount: transaction.taxAmount || []
+          taxAmount: transaction.taxAmount || [],
+          dueDate: new Date().setMonth(new Date().getMonth() + 1)
         }
 
         const createdTransaction = await window.api.createTransaction(transactionData)
@@ -190,41 +201,22 @@ const PurchaseBill = () => {
           party: clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
           amount: grandTotal,
           description: `Purchase ${getProductName(transaction.productId)}`,
-          taxAmount: transaction.taxAmount || []
+          taxAmount: transaction.taxAmount || [],
+          dueDate: new Date().setMonth(new Date().getMonth() + 1)
         }
 
-        if (transaction.statusOfTransaction === 'completed') {
-          if (transaction.paymentMethod === 'bank') {
-            const createdBankReceipt = await window.api.createBankReceipt({
-              ...baseReceipt,
-              bank: transaction.bank || 'IDBI'
-            })
-            dispatch(setBankReceipt(createdBankReceipt))
-          } else if (transaction.paymentMethod === 'cash') {
-            const createdCashReceipt = await window.api.createCashReceipt({
-              ...baseReceipt,
-              cash: transaction.cash || 'Cash'
-            })
-            dispatch(setCashReceipt(createdCashReceipt))
-          }
-        } else if (transaction.statusOfTransaction === 'partial') {
-          if (transaction.paidAmount > 0) {
-            if (transaction.paymentMethod === 'bank') {
-              const createdBankReceipt = await window.api.createBankReceipt({
-                ...baseReceipt,
-                amount: transaction.paidAmount,
-                bank: transaction.bank || 'IDBI'
-              })
-              dispatch(setBankReceipt(createdBankReceipt))
-            } else if (transaction.paymentMethod === 'cash') {
-              const createdCashReceipt = await window.api.createCashReceipt({
-                ...baseReceipt,
-                amount: transaction.paidAmount,
-                cash: transaction.cash || 'Cash'
-              })
-              dispatch(setCashReceipt(createdCashReceipt))
-            }
-          }
+        if (transaction.paymentMethod === 'bank') {
+          const createdBankReceipt = await window.api.createBankReceipt({
+            ...baseReceipt,
+            bank: transaction.bank || 'IDBI'
+          })
+          dispatch(setBankReceipt(createdBankReceipt))
+        } else if (transaction.paymentMethod === 'cash') {
+          const createdCashReceipt = await window.api.createCashReceipt({
+            ...baseReceipt,
+            cash: transaction.cash || 'Cash'
+          })
+          dispatch(setCashReceipt(createdCashReceipt))
         }
 
         await fetchTransaction() // Refresh data
@@ -243,18 +235,7 @@ const PurchaseBill = () => {
       case 'quantity':
         const newSubtotal = purchasePrice * value
         const updatedTaxForQuantity = transaction.taxAmount.map((tax) => {
-          switch (tax.code) {
-            case 'i-18':
-              return { ...tax, value: newSubtotal * 0.18 }
-            case 'i-28':
-              return { ...tax, value: newSubtotal * 0.28 }
-            case 's-9':
-              return { ...tax, value: newSubtotal * 0.09 }
-            case 'c-9':
-              return { ...tax, value: newSubtotal * 0.09 }
-            default:
-              return tax
-          }
+          settings.map((setting) => {})
         })
         setTransaction((prev) => ({ ...prev, quantity: value, taxAmount: updatedTaxForQuantity }))
         break
@@ -298,35 +279,30 @@ const PurchaseBill = () => {
         break
 
       case 'taxAmount':
-        const selectedValues = value || []
+        const selectedTaxCodes = value || []
         let taxObjects = []
-        let preservedFrightValue = 0
 
-        // Preserve fright value if still selected
-        if (selectedValues.includes('frightChanged')) {
-          const existingFright = transaction.taxAmount.find((t) => t.code === 'frightChanged')
-          preservedFrightValue = existingFright?.value || 0
-        }
+        taxObjects = selectedTaxCodes
+          .map((taxCode) => {
+            // Check if it's a custom tax from settings
+            const customTax = settings.find((s) => `custom-${s.id}` === taxCode)
 
-        taxObjects = selectedValues
-          .map((val) => {
-            switch (val) {
-              case 'i-18':
-                return { code: 'i-18', name: 'IGST 18%', value: subtotal * 0.18 }
-              case 'i-28':
-                return { code: 'i-28', name: 'IGST 28%', value: subtotal * 0.28 }
-              case 's-9':
-                return { code: 's-9', name: 'SGST 9%', value: subtotal * 0.09 }
-              case 'c-9':
-                return { code: 'c-9', name: 'CGST 9%', value: subtotal * 0.09 }
-              case 'frightChanged':
-                return {
-                  code: 'frightChanged',
-                  name: 'Freight Charges',
-                  value: preservedFrightValue
-                }
-              default:
-                return null
+            if (customTax) {
+              return {
+                code: `custom-${customTax.id}`,
+                name: customTax.taxName,
+                value: (subtotal * customTax.taxValue) / 100,
+                percentage: customTax.taxValue
+              }
+            }
+
+            if (taxCode === 'frightChanged') {
+              return {
+                code: 'frightChanged',
+                name: 'Freight Charges',
+                value: Number(transaction.frightCharges),
+                percentage: 0
+              }
             }
           })
           .filter(Boolean)
@@ -357,6 +333,15 @@ const PurchaseBill = () => {
   const handleFrightChange = (value) => {
     handleOnChangeEvent(value, 'frightCharges')
   }
+
+  // Prepare tax options from settings
+  const taxOptions = [
+    ...settings.map((setting) => ({
+      label: `${setting.taxName} (${setting.taxValue}%)`,
+      value: `custom-${setting.id}`
+    })),
+    { label: 'Freight Charges', value: 'frightChanged' }
+  ]
 
   return (
     <div className="select-none flex flex-col h-screen overflow-hidden bg-gray-50 min-w-0">
@@ -471,14 +456,8 @@ const PurchaseBill = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-900 mb-2">Taxes</label>
                       <CheckPicker
-                        data={[
-                          { label: 'IGST 18%', value: 'i-18' },
-                          { label: 'IGST 28%', value: 'i-28' },
-                          { label: 'SGST 9%', value: 's-9' },
-                          { label: 'CGST 9%', value: 'c-9' },
-                          { label: 'Freight Charges', value: 'frightChanged' }
-                        ]}
-                        searchable={false}
+                        data={taxOptions}
+                        searchable={taxOptions.length > 5}
                         placeholder="Select Applicable Taxes"
                         value={transaction.taxAmount.map((t) => t.code)}
                         onChange={(value) => handleOnChangeEvent(value, 'taxAmount')}

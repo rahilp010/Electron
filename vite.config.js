@@ -17,7 +17,8 @@ export default defineConfig({
         '@babel/plugin-proposal-throw-expressions',
         '@babel/plugin-syntax-import-meta',
         '@babel/plugin-proposal-json-strings',
-        'dmg-license'
+        'dmg-license',
+        'moment-timezone'
       ]
     }
   },

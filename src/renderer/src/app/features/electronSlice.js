@@ -29,6 +29,19 @@ export const electronSlice = createSlice({
       })(),
       isLoading: false
     },
+    clientProducts: {
+      data: (() => {
+        try {
+          const stored = localStorage.getItem('clientProducts')
+          return stored ? JSON.parse(stored) : []
+        } catch (error) {
+          console.error('Error parsing clientProducts from localStorage:', error)
+          localStorage.removeItem('clientProducts') // Clear corrupted data
+          return []
+        }
+      })(),
+      isLoading: false
+    },
     transaction: {
       data: (() => {
         try {
@@ -67,6 +80,11 @@ export const electronSlice = createSlice({
         }
       })(),
       isLoading: false
+    },
+    keyBindings: {
+      data: [],
+      loading: false,
+      error: null
     },
     bankReceipt: {
       data: (() => {
@@ -225,6 +243,19 @@ export const electronSlice = createSlice({
         console.error('Error loading clients from localStorage:', error)
         state.clients.data = []
         localStorage.removeItem('clients')
+      }
+    },
+
+    clientProducts: (state, action) => {
+      if (!Array.isArray(state.clientProducts.data)) {
+        state.clientProducts.data = []
+        return
+      }
+      const clientProducts = action.payload
+      const index = state.clientProducts.data.findIndex((client) => client.id === clientProducts.id)
+      if (index !== -1) {
+        state.clientProducts.data[index] = clientProducts
+        localStorage.setItem('clientProducts', JSON.stringify(state.clientProducts.data))
       }
     },
 
@@ -479,6 +510,20 @@ export const electronSlice = createSlice({
         state.settings.data = []
         localStorage.removeItem('settings')
       }
+    },
+
+    setKeyBindings: (state, action) => {
+      state.keyBindings.data = action.payload
+      state.keyBindings.loading = false
+    },
+    updateKeyBinding: (state, action) => {
+      const index = state.keyBindings.data.findIndex((kb) => kb.id === action.payload.id)
+      if (index !== -1) {
+        state.keyBindings.data[index] = action.payload
+      }
+    },
+    deleteKeyBinding: (state, action) => {
+      state.keyBindings.data = state.keyBindings.data.filter((kb) => kb.id !== action.payload)
     }
   }
 })
@@ -510,6 +555,10 @@ export const {
   createSettings,
   updateSettings,
   setSettings,
-  getSettings
+  getSettings,
+  setKeyBindings,
+  updateKeyBinding,
+  deleteKeyBinding,
+  clientProducts
 } = electronSlice.actions
 export default electronSlice.reducer

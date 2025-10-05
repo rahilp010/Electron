@@ -225,10 +225,7 @@ const Analytics = () => {
       (sum, t) => sum + (t.sellAmount * t.quantity || 0),
       0
     )
-    const totalPurchases = purchaseTransactions.reduce(
-      (sum, t) => sum + (t.purchaseAmount * t.quantity || 0),
-      0
-    )
+    const totalPurchases = purchaseTransactions.reduce((sum, t) => sum + (t.purchaseAmount || 0), 0)
 
     const totalRevenue = totalSales
     const totalExpenses = totalPurchases
@@ -284,7 +281,7 @@ const Analytics = () => {
       if (t.transactionType === 'sales') {
         amount = (t.sellAmount || 0) * (t.quantity || 0)
       } else if (t.transactionType === 'purchase') {
-        amount = (t.purchaseAmount || 0) * (t.quantity || 0)
+        amount = t.purchaseAmount || 0
       }
 
       if (t.transactionType === 'sales') {
@@ -997,9 +994,7 @@ const Analytics = () => {
                               </span>
                             ) : (
                               <span className="bg-indigo-100 px-2 py-0.5 rounded-full text-xs">
-                                {formatCurrency(
-                                  (transaction.purchaseAmount || 0) * (transaction.quantity || 0)
-                                )}
+                                {formatCurrency(transaction.purchaseAmount || 0)}
                               </span>
                             )}
                           </p>

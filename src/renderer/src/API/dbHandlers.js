@@ -1,8 +1,67 @@
 import db from './db.js'
-import { ipcMain } from 'electron'
+import { ipcMain, dialog } from 'electron'
 import * as XLSX from 'xlsx'
-import fs from 'fs'
+import fs from 'fs-extra'
 import PDFDocument from 'pdfkit'
+import crypto from 'crypto'
+import { app } from 'electron'
+import path from 'path'
+// import cron from 'node-cron'
+
+const dbPath = app.isPackaged
+  ? path.join(process.resourcesPath, 'data.db')
+  : path.join(process.cwd(), 'data.db')
+
+const backupDir = path.join(process.cwd(), 'backups')
+
+// AES-256-GCM setup
+const ENCRYPTION_KEY = crypto
+  .createHash('sha256')
+  .update('YourStrongSecretKeyHere') // choose your secret key
+  .digest()
+const ALGO = 'aes-256-gcm'
+
+// Ensure backup directory exists
+fs.ensureDirSync(backupDir)
+
+// --- Encryption Helper ---
+function encryptFile(input, output) {
+  const iv = crypto.randomBytes(16)
+  const cipher = crypto.createCipheriv(ALGO, ENCRYPTION_KEY, iv)
+  const data = fs.readFileSync(input)
+  const encrypted = Buffer.concat([cipher.update(data), cipher.final()])
+  const tag = cipher.getAuthTag()
+  fs.writeFileSync(output, Buffer.concat([iv, tag, encrypted]))
+}
+
+// --- Decryption Helper ---
+function decryptFile(input, output) {
+  const data = fs.readFileSync(input)
+  const iv = data.slice(0, 16)
+  const tag = data.slice(16, 32)
+  const encrypted = data.slice(32)
+  const decipher = crypto.createDecipheriv(ALGO, ENCRYPTION_KEY, iv)
+  decipher.setAuthTag(tag)
+  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()])
+  fs.writeFileSync(output, decrypted)
+}
+
+// --- Create Backup ---
+function createBackup() {
+  try {
+    if (!fs.existsSync(dbPath)) {
+      console.warn('⚠️ Database file not found at', dbPath)
+      return
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const backupFile = path.join(backupDir, `backup-${timestamp}.bak`)
+    encryptFile(dbPath, backupFile)
+    console.log('✅ Backup created:', backupFile)
+  } catch (err) {
+    console.error('❌ Backup failed:', err)
+  }
+}
 
 const toInt = (val, fallback = 0) => {
   const n = parseInt(val, 10)
@@ -916,9 +975,78 @@ ipcMain.handle('deleteSettings', async (event, id) => {
   db.prepare(`DELETE FROM settings WHERE id = ?`).run(id)
 })
 
+ipcMain.handle('getKeyBindings', async () => {
+  // Fetch from database
+  return await db.getAllKeyBindings()
+})
+
+ipcMain.handle('createKeyBinding', async (event, data) => {
+  // Save to database
+  return await db.createKeyBinding(data)
+})
+
+ipcMain.handle('updateKeyBinding', async (event, data) => {
+  // Update in database
+  return await db.updateKeyBinding(data)
+})
+
+ipcMain.handle('deleteKeyBinding', async (event, id) => {
+  // Delete from database
+  return await db.deleteKeyBinding(id)
+})
+
+// --- Restore Backup ---
+ipcMain.handle('restoreBackup', async (_, backupFilePath) => {
+  try {
+    decryptFile(backupFilePath, dbPath)
+    return { success: true, message: 'Database restored successfully.' }
+  } catch (err) {
+    return { success: false, message: err.message }
+  }
+})
+
+// --- List Backups ---
+ipcMain.handle('selectBackupFile', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select Backup File',
+    defaultPath: backupDir,
+    // filters: [{ name: 'Encrypted Backups', extensions: ['enc'] }],
+    properties: ['openFile']
+  })
+  return result
+})
+
+// --- Manual Backup (on demand) ---
+ipcMain.handle('manualBackup', async () => {
+  try {
+    createBackup()
+    return { success: true, message: 'Manual backup created.' }
+  } catch (err) {
+    return { success: false, message: err.message }
+  }
+})
+
+// --- Schedule Daily Backup at 12:01 AM ---
+// cron.schedule(
+//   '8 23 * * *',
+//   () => {
+//     const now = moment().tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss')
+//     console.log(`🕐 Running backup at ${now} (IST)`)
+//     createBackup()
+//   },
+//   {
+//     scheduled: true,
+//     timezone: 'Asia/Kolkata'
+//   }
+// )
+
+// console.log('✅ Daily backup job scheduled for 23:07 AM IST')
+
 db.exec(`
     CREATE INDEX IF NOT EXISTS idx_transactions_clientId ON transactions(clientId);
     CREATE INDEX IF NOT EXISTS idx_transactions_productId ON transactions(productId);
     CREATE INDEX IF NOT EXISTS idx_bankReceipts_bank ON bankReceipts(bank);
     CREATE INDEX IF NOT EXISTS idx_cashReceipts_cash ON cashReceipts(cash);
   `)
+
+export default db
