@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import icon from '../../resources/icon.png?asset'
 import '../renderer/src/API/dbHandlers.js'
 import { autoBackupOncePerDay } from './autoBackup.js'
+import checkForUpdate from './version.js'
 
 // Get directory name in ES module
 const currentFilename = fileURLToPath(import.meta.url)
@@ -48,6 +49,7 @@ function createWindow() {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
+  checkForUpdate()
   electronApp.setAppUserModelId('com.electron')
 
   // Default open or close DevTools by F12 in development

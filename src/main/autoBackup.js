@@ -2,7 +2,6 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
-import { app } from 'electron'
 
 // --- Encryption setup ---
 const ENCRYPTION_KEY = crypto

@@ -509,7 +509,7 @@ const Settings = () => {
                 <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
                   Electron
                 </p>
-                <p className="text-lg font-light text-gray-500 mb-5">v1.0.0</p>
+                <p className="text-lg font-light text-gray-500 mb-5">v1.2.0</p>
 
                 <p className="text-gray-600 mb-8 leading-relaxed">
                   Thanks for choosing our application! If you run into any problems, feel free to
