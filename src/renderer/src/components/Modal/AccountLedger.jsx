@@ -21,6 +21,7 @@ import {
   BarChart3,
   Printer
 } from 'lucide-react'
+import { IoLogoWhatsapp } from 'react-icons/io5'
 
 // Constants
 const TABLE_HEADERS = [
@@ -251,7 +252,6 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
 
     return sourceData
   }, [selectedType, recentBankReceipts, recentCashReceipts, client, getClientName])
-
 
   // Memoized running balance calculation
   const balances = useMemo(() => {

@@ -22,11 +22,11 @@ import AccountLedger from '../components/Modal/AccountLedger'
 
 // Constants
 const TABLE_HEADERS = [
-  { key: 'accountName', label: 'Account Name', width: 'w-[300px]' },
+  { key: 'accountName', label: 'Account Name', width: 'w-[350px]' },
   { key: 'accountType', label: 'Account Type', width: 'w-[200px]' },
   { key: 'gstNo', label: 'GST No', width: 'w-[200px]' },
   { key: 'businessAddress', label: 'Business Address', width: 'w-[250px]' },
-  { key: 'pendingAmount', label: 'Pending Amount', width: 'w-[200px]' }
+  { key: 'pendingAmount', label: 'Pending Amount', width: 'w-[250px]' }
 ]
 
 const ACCOUNT_TYPES = [
@@ -160,6 +160,8 @@ const LedgerReport = () => {
   const [openLedgerClient, setOpenLedgerClient] = useState(null)
   const [showSideBar, setShowSideBar] = useState(false)
   const [sidebarSearch, setSidebarSearch] = useState('')
+  const [visibleCount, setVisibleCount] = useState(30)
+  const tableContainerRef = useRef(null)
 
   const clients = useSelector((state) => state.electron.clients?.data || [])
   const transactions = useSelector((state) => state.electron.transaction?.data || [])
@@ -200,6 +202,39 @@ const LedgerReport = () => {
       return matchesSearch && matchesType && matchesClient && matchesDate
     })
   }, [searchQuery, accountTypeFilter, clientFilter, dateRange, clients])
+
+  const loadMore = useCallback(() => {
+    if (visibleCount < filteredData.length) {
+      setVisibleCount((prev) => prev + 30)
+    }
+  }, [visibleCount, filteredData.length])
+
+  const handleScroll = useCallback(() => {
+    if (tableContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = tableContainerRef.current
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        loadMore()
+      }
+    }
+  }, [loadMore])
+
+  useEffect(() => {
+    const container = tableContainerRef?.current
+    if (container) {
+      container?.addEventListener('scroll', handleScroll)
+      return () => container.removeEventListener('scroll', handleScroll)
+    }
+  }, [handleScroll])
+
+  // Memoized visible data for rendering
+  const visibleData = useMemo(() => {
+    return filteredData.slice(0, visibleCount)
+  }, [filteredData, visibleCount])
+
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(30)
+  }, [filteredData])
 
   // Memoized statistics
   const statistics = useMemo(() => {
@@ -327,19 +362,6 @@ const LedgerReport = () => {
             className={`h-full flex flex-col transition-all duration-500 ease-out
               ${showSideBar ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}`}
           >
-            {/* Header */}
-            {/* <div className="p-6 border-b border-blue-200 bg-gradient-to-r from-blue-500 to-indigo-600 mt-96">
-              <div className="flex items-center gap-3 text-white">
-                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                  <Users size={20} />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Client Accounts</h3>
-                  <p className="text-blue-100 text-sm">{clients.length} total accounts</p>
-                </div>
-              </div>
-            </div> */}
-
             {/* Search Bar */}
             <div className="p-4 mt-18">
               <div className="relative">
@@ -521,6 +543,7 @@ const LedgerReport = () => {
                 placement="bottomEnd"
                 container={() => document.body}
                 className="w-[250px]"
+                menuStyle={{ zIndex: 99999, position: 'absolute' }}
               />
               {!openLedgerClient && (
                 <div className="flex gap-2">
@@ -528,9 +551,9 @@ const LedgerReport = () => {
                     data={clients.map((client) => ({ value: client.id, label: client.clientName }))}
                     onChange={setClientFilter}
                     placeholder="Select Client"
-                    searchable={false}
                     placement="bottomEnd"
                     container={() => document.body}
+                    menuStyle={{ zIndex: 99999, position: 'absolute' }}
                     className="w-[200px]"
                   />
                   <SelectPicker
@@ -540,6 +563,7 @@ const LedgerReport = () => {
                     searchable={false}
                     placement="bottomEnd"
                     container={() => document.body}
+                    menuStyle={{ zIndex: 99999, position: 'absolute' }}
                     className="w-[200px]"
                   />
                 </div>
@@ -549,9 +573,12 @@ const LedgerReport = () => {
 
           {/* Table */}
           {!openLedgerClient && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-x-auto customScrollbar max-h-screen relative border border-gray-200">
+            <div
+              ref={tableContainerRef}
+              className="bg-white rounded-2xl shadow-lg overflow-auto customScrollbar max-h-[60vh] relative border border-gray-200"
+            >
               <table className="min-w-max border-collapse text-sm">
-                <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0">
+                <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-20">
                   <tr className="text-gray-700 border-b border-gray-200">
                     {TABLE_HEADERS.map((header) => (
                       <th
@@ -579,7 +606,7 @@ const LedgerReport = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredData.map((client) => (
+                    visibleData.map((client) => (
                       <AccountRow
                         key={client.id}
                         client={client}

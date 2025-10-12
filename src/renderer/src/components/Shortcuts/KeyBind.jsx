@@ -24,17 +24,17 @@ function KeyBind({ children }) {
       }
 
       // Check custom key bindings
-      keyBindings.forEach((binding) => {
+      keyBindings?.forEach((binding) => {
         if (!binding.enabled) return
 
         const modifiers = binding.modifiers || []
         const key = binding.key?.toLowerCase()
 
         // Check if all required modifiers are pressed
-        const ctrlMatch = modifiers.includes('ctrl') ? event.ctrlKey : !event.ctrlKey
-        const shiftMatch = modifiers.includes('shift') ? event.shiftKey : !event.shiftKey
-        const altMatch = modifiers.includes('alt') ? event.altKey : !event.altKey
-        const metaMatch = modifiers.includes('meta') ? event.metaKey : !event.metaKey
+        const ctrlMatch = !modifiers.includes('ctrl') || event.ctrlKey
+        const shiftMatch = !modifiers.includes('shift') || event.shiftKey
+        const altMatch = !modifiers.includes('alt') || event.altKey
+        const metaMatch = !modifiers.includes('meta') || event.metaKey
 
         // Check if the key matches
         const keyMatch = event.key.toLowerCase() === key

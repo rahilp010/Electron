@@ -36,9 +36,9 @@ const Reports = () => {
       description: 'Monitor receivables and collection status',
       icon: '📈',
       route: '/pendingCollection',
-      gradient: 'from-emerald-500/80 to-green-600/80',
-      hoverGradient: 'from-emerald-600/90 to-green-700/90',
-      bgPattern: 'from-emerald-50/20 to-green-50/10'
+      gradient: 'from-rose-500/80 to-pink-600/80',
+      hoverGradient: 'from-rose-600/90 to-pink-700/90',
+      bgPattern: 'from-rose-50/20 to-pink-50/10'
     },
     {
       id: 4,

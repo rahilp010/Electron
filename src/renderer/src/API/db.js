@@ -28,7 +28,8 @@ db.prepare(
     quantity INTEGER DEFAULT 0,
     addParts INTEGER DEFAULT 0 CHECK (addParts IN (0,1)),
     parts TEXT DEFAULT '[]',
-    assetsType TEXT NOT NULL CHECK (assetsType IN ('Raw Material', 'Finished Goods', 'Assets')),
+    taxAmount REAL,
+    assetsType TEXT DEFAULT 'Raw Material' CHECK (assetsType IN ('Raw Material', 'Finished Goods', 'Assets')),
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`
@@ -44,7 +45,7 @@ db.prepare(
     pendingAmount REAL DEFAULT 0,
     paidAmount REAL DEFAULT 0,
     pendingFromOurs REAL DEFAULT 0,
-    accountType TEXT NOT NULL CHECK (accountType IN ('Creditors', 'Debtors')),
+    accountType TEXT CHECK (accountType IN ('Creditors', 'Debtors')),
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`

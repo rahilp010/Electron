@@ -42,6 +42,7 @@ const ProductModal = ({
   const [clientModal, setClientModal] = useState(false)
   const [quantities, setQuantities] = useState({})
   const [selectedParts, setSelectedParts] = useState([])
+  const [baseQuantities, setBaseQuantities] = useState({})
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
   const safeProduct = existingProduct || {}
@@ -108,10 +109,19 @@ const ProductModal = ({
       setSelectedParts(parsedParts)
 
       const qtyMap = {}
+      const baseQtyMap = {}
+
       parsedParts.forEach((part) => {
         qtyMap[part.partId] = part.quantity
+        // Calculate base quantity by dividing by main product quantity
+        baseQtyMap[part.partId] =
+          existingProduct.quantity > 0
+            ? Math.round(part.quantity / existingProduct.quantity)
+            : part.quantity
       })
+
       setQuantities(qtyMap)
+      setBaseQuantities(baseQtyMap)
     }
   }, [existingProduct, isUpdateExpense])
 
@@ -236,11 +246,115 @@ const ProductModal = ({
     }
   }
 
-  const handleQuantityChange = (value, delta) => {
-    setQuantities((prev) => ({
-      ...prev,
-      [value]: Math.max((prev[value] || 0) + delta, 0)
-    }))
+  const handleQuantityChange = (partId, delta) => {
+    setBaseQuantities((prev) => {
+      const newBaseQty = Math.max((prev[partId] || 0) + delta, 0)
+      return { ...prev, [partId]: newBaseQty }
+    })
+
+    // Also update actual quantities
+    if (product.assetsType === 'Finished Goods' && product.addParts === 1) {
+      setQuantities((prev) => ({
+        ...prev,
+        [partId]: Math.max((prev[partId] || 0) + delta * (Number(product.quantity) || 1), 0)
+      }))
+    } else {
+      setQuantities((prev) => ({
+        ...prev,
+        [partId]: Math.max((prev[partId] || 0) + delta, 0)
+      }))
+    }
+  }
+
+  useEffect(() => {
+    if (product.assetsType === 'Finished Goods' && product.addParts === 1) {
+      setQuantities(() => {
+        const updated = {}
+        for (const [partId, baseQty] of Object.entries(baseQuantities)) {
+          // Multiply base quantity by main product quantity
+          updated[partId] = (baseQty || 0) * (Number(product.quantity) || 1)
+        }
+        return updated
+      })
+    }
+  }, [product.quantity, baseQuantities, product.assetsType, product.addParts])
+
+  // 3. Update the initialization useEffect for existing products
+  useEffect(() => {
+    if (existingProduct && isUpdateExpense) {
+      let parsedParts = []
+      try {
+        parsedParts =
+          typeof existingProduct.parts === 'string'
+            ? JSON.parse(existingProduct.parts)
+            : existingProduct.parts
+      } catch (e) {
+        parsedParts = []
+      }
+
+      setSelectedParts(parsedParts)
+
+      const qtyMap = {}
+      const baseQtyMap = {}
+
+      parsedParts.forEach((part) => {
+        qtyMap[part.partId] = part.quantity
+        // Calculate base quantity by dividing by main product quantity
+        baseQtyMap[part.partId] =
+          existingProduct.quantity > 0
+            ? Math.round(part.quantity / existingProduct.quantity)
+            : part.quantity
+      })
+
+      setQuantities(qtyMap)
+      setBaseQuantities(baseQtyMap)
+    }
+  }, [existingProduct, isUpdateExpense])
+
+  useEffect(() => {
+    if (
+      product.assetsType === 'Finished Goods' &&
+      product.addParts === 1 &&
+      selectedParts.length > 0
+    ) {
+      let totalCost = 0
+      const mainQty = Number(product.quantity) || 1
+
+      selectedParts.forEach((part) => {
+        const partProduct = products.find((p) => p.id === part.partId)
+        if (partProduct) {
+          const totalPartQty = quantities[part.partId] || 0
+          totalCost += (partProduct.price || 0) * totalPartQty
+        }
+      })
+
+      // // 🔹 update the price dynamically
+      // if (totalCost !== product.price) {
+      //   setProduct((prev) => ({
+      //     ...prev,
+      //     price: totalCost
+      //   }))
+      // }
+    }
+  }, [selectedParts, quantities, products, product.assetsType, product.addParts, product.quantity])
+
+  const checkPartsStock = () => {
+    if (product.assetsType === 'Finished Goods' && product.addParts === 1) {
+      for (const part of selectedParts) {
+        const partProduct = products.find((p) => p.id === part.partId)
+        const requiredQty = quantities[part.partId] || 0
+
+        if (partProduct && partProduct.quantity < requiredQty) {
+          return {
+            isValid: false,
+            productName: partProduct.name,
+            available: partProduct.quantity,
+            required: requiredQty
+          }
+        }
+      }
+    }
+    return { isValid: true }
   }
 
   const toThousands = (value) => {
@@ -262,8 +376,10 @@ const ProductModal = ({
         />
       )}
       {type === 'product' ? (
-        <form onSubmit={handleSubmitProduct}>
-          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-3xl relative">
+        <form onSubmit={handleSubmitProduct} className="grid grid-cols-12 gap-3">
+          <div
+            className={`${product.assetsType === 'Finished Goods' && product.addParts === 1 ? 'col-span-8' : 'col-span-12'} bg-white p-6 rounded-lg shadow-2xl w-full max-w-3xl relative`}
+          >
             <p className="text-lg font-semibold mb-4">
               {isUpdateExpense ? 'Update Product' : 'Add Product'}
             </p>
@@ -289,6 +405,7 @@ const ProductModal = ({
                   style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
                   menuStyle={{ zIndex: clientModal ? 1 : 999 }}
                   menuMaxHeight={200}
+                  virtualized={true}
                   renderExtraFooter={() => (
                     <div className="px-3 py-1 border-t border-gray-200">
                       <p
@@ -320,6 +437,7 @@ const ProductModal = ({
                   style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
                   menuStyle={{ zIndex: clientModal ? 1 : 999 }}
                   menuMaxHeight={200}
+                  searchable={false}
                 />
               </div>
               <div>
@@ -334,18 +452,20 @@ const ProductModal = ({
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
               </div>
-              <div>
-                <label htmlFor="client" className="block text-sm mb-1 text-gray-600">
-                  Purchase HSN Code
-                </label>
-                <Input
-                  size="sm"
-                  value={product.purchaseHSNCode}
-                  placeholder="Enter Purchase HSN Code"
-                  onChange={(value) => handleOnChangeEvent(value, 'purchaseHSNCode')}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
-                />
-              </div>
+              {product.assetsType === 'Finished Goods' ? null : (
+                <div>
+                  <label htmlFor="client" className="block text-sm mb-1 text-gray-600">
+                    Purchase HSN Code
+                  </label>
+                  <Input
+                    size="sm"
+                    value={product.purchaseHSNCode}
+                    placeholder="Enter Purchase HSN Code"
+                    onChange={(value) => handleOnChangeEvent(value, 'purchaseHSNCode')}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
+                  />
+                </div>
+              )}
               <div>
                 <label htmlFor="name" className="block text-sm mb-1 text-gray-600">
                   Product Name
@@ -397,48 +517,88 @@ const ProductModal = ({
                     menuStyle={{ zIndex: 999 }}
                     container={() => document.getElementById('modal-body-container')}
                     placeholder="Select products"
-                    renderMenuItem={(label, item) => (
-                      <div className="flex items-center justify-between w-full">
-                        <span>{label}</span>
-                        <InputGroup size="xs" style={{ width: 80, zIndex: 999 }}>
-                          <IconButton
-                            size="xs"
-                            icon={<MinusIcon />}
-                            onClick={(e) => {
-                              e.stopPropagation() // prevent auto select
-                              handleQuantityChange(item.value, -1)
-                            }}
-                            style={{ zIndex: 999 }}
-                          />
-                          <input
-                            readOnly
-                            value={quantities[item.value] || 0}
-                            style={{
-                              zIndex: 999,
-                              width: 30,
-                              textAlign: 'center',
-                              border: 'none',
-                              background: 'transparent'
-                            }}
-                          />
-                          <IconButton
-                            size="xs"
-                            icon={<PlusIcon />}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleQuantityChange(item.value, 1)
-                            }}
-                            style={{ zIndex: 999 }}
-                          />
-                        </InputGroup>
-                      </div>
-                    )}
+                    virtualized={true}
+                    renderMenuItem={(label, item) => {
+                      const partProduct = products.find((p) => p.id === item.value)
+                      const requiredQty =
+                        product.assetsType === 'Finished Goods' && product.addParts === 1
+                          ? (baseQuantities[item.value] || 0) * (Number(product.quantity) || 1)
+                          : quantities[item.value] || 0
+                      const hasEnoughStock = partProduct && partProduct.quantity >= requiredQty
+
+                      return (
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex flex-col">
+                            <span className={!hasEnoughStock ? 'text-red-500' : ''}>{label}</span>
+                            {!hasEnoughStock && (
+                              <span className="text-xs text-red-500">
+                                Stock: {partProduct?.quantity || 0} (Need: {requiredQty})
+                              </span>
+                            )}
+                          </div>
+                          <InputGroup size="xs" style={{ width: 120, zIndex: 999 }}>
+                            <IconButton
+                              size="xs"
+                              icon={<MinusIcon />}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleQuantityChange(item.value, -1)
+                              }}
+                              style={{ zIndex: 999 }}
+                            />
+                            <input
+                              readOnly
+                              value={
+                                product.assetsType === 'Finished Goods' && product.addParts === 1
+                                  ? `${baseQuantities[item.value] || 0} × ${product.quantity || 1}`
+                                  : quantities[item.value] || 0
+                              }
+                              style={{
+                                zIndex: 999,
+                                width: 60,
+                                textAlign: 'center',
+                                border: 'none',
+                                background: 'transparent',
+                                fontSize: '11px'
+                              }}
+                            />
+                            <IconButton
+                              size="xs"
+                              icon={<PlusIcon />}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleQuantityChange(item.value, 1)
+                              }}
+                              style={{ zIndex: 999 }}
+                            />
+                          </InputGroup>
+                        </div>
+                      )
+                    }}
+                    // 5. Update renderValue to show calculated quantities
                     renderValue={(value, items) =>
-                      items.map((item) => (
-                        <span key={item.value} className="bg-gray-200 rounded-lg p-2 m-2">
-                          <Badge content={quantities[item.value] || 1}>{item.label}</Badge>
-                        </span>
-                      ))
+                      items.map((item) => {
+                        const partProduct = products.find((p) => p.id === item.value)
+                        const requiredQty =
+                          product.assetsType === 'Finished Goods' && product.addParts === 1
+                            ? quantities[item.value] || 0
+                            : baseQuantities[item.value] || quantities[item.value] || 1
+                        const hasEnoughStock = partProduct && partProduct.quantity >= requiredQty
+
+                        return (
+                          <span
+                            key={item.value}
+                            className={`rounded-lg p-2 m-2 ${hasEnoughStock ? 'bg-gray-200' : 'bg-red-100'}`}
+                          >
+                            <Badge
+                              content={requiredQty}
+                              style={{ backgroundColor: hasEnoughStock ? undefined : '#ef4444' }}
+                            >
+                              {item.label}
+                            </Badge>
+                          </span>
+                        )
+                      })
                     }
                   />
                 </div>
@@ -512,6 +672,79 @@ const ProductModal = ({
               </button>
             </div>
           </div>
+          {product.assetsType === 'Finished Goods' && product.addParts === 1 && (
+            <div className="col-span-4 bg-white py-6 px-3 rounded-lg shadow-2xl w-full max-w-3xl relative overflow-y-auto">
+              <p className="text-lg font-semibold mb-3 text-gray-700">Rate Breakdown</p>
+
+              {selectedParts.length === 0 ? (
+                <p className="text-sm text-gray-400 flex items-center justify-center border border-gray-400 h-36 p-2 rounded-lg">
+                  No parts selected yet.
+                </p>
+              ) : (
+                <table className="w-full text-sm border-collapse border border-gray-200">
+                  <thead>
+                    <tr className="bg-gray-100 text-gray-700">
+                      <th className="p-2 border border-gray-200 text-left w-40">Part</th>
+                      <th className="p-2 border border-gray-200 text-center">Qty</th>
+                      <th className="p-2 border border-gray-200 text-right">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedParts.map((part) => {
+                      const partProduct = products.find((p) => p.id === part.partId)
+                      const partQty = quantities[part.partId] || 0
+                      const partPrice = partProduct?.price || 0
+
+                      return (
+                        <tr key={part.partId} className="hover:bg-gray-50 transition-all">
+                          <td className="p-2 border border-gray-200">
+                            {partProduct?.name || 'Unknown'}
+                          </td>
+                          <td className="p-2 border border-gray-200 text-center">{partQty}</td>
+                          <td className="p-2 border border-gray-200 text-right">
+                            {partPrice.toFixed(2)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="font-semibold bg-gray-100">
+                      <td colSpan="2" className="p-2 border border-gray-200 text-right">
+                        Total Cost
+                      </td>
+                      <td className="p-2 border border-gray-200 text-right">
+                        ₹
+                        {selectedParts
+                          .reduce((acc, part) => {
+                            const partProduct = products.find((p) => p.id === part.partId)
+                            const partQty = quantities[part.partId] || 0
+                            return acc + (partProduct?.price || 0) * partQty
+                          }, 0)
+                          .toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+
+              <div className="mt-4 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-gray-600">
+                  <strong>Auto-calculated Price:</strong>{' '}
+                  <span className="text-blue-700 font-semibold">
+                    ₹
+                    {selectedParts
+                      .reduce((acc, part) => {
+                        const partProduct = products.find((p) => p.id === part.partId)
+                        const partQty = quantities[part.partId] || 0
+                        return acc + (partProduct?.price || 0) * partQty
+                      }, 0)
+                      .toFixed(2)}
+                  </span>
+                </p>
+              </div>
+            </div>
+          )}
         </form>
       ) : null}
     </div>

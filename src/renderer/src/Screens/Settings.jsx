@@ -19,6 +19,7 @@ import {
 const KeyBindingsSection = () => {
   const dispatch = useDispatch()
   const keyBindings = useSelector((state) => state.electron.keyBindings?.data || [])
+  console.log(keyBindings)
   const [isAddingKey, setIsAddingKey] = useState(false)
   const [editingKey, setEditingKey] = useState(null)
   const [keyForm, setKeyForm] = useState({
@@ -31,10 +32,6 @@ const KeyBindingsSection = () => {
     enabled: true
   })
 
-  useEffect(() => {
-    fetchKeyBindings()
-  }, [])
-
   const fetchKeyBindings = async () => {
     try {
       const response = await window.api.getKeyBindings()
@@ -43,6 +40,10 @@ const KeyBindingsSection = () => {
       console.error('Failed to fetch key bindings:', error)
     }
   }
+
+  useEffect(() => {
+    fetchKeyBindings()
+  }, [])
 
   const handleSaveKeyBinding = async (e) => {
     e.preventDefault()
@@ -59,7 +60,7 @@ const KeyBindingsSection = () => {
         toast.success('Key binding updated successfully')
       } else {
         const created = await window.api.createKeyBinding(keyForm)
-        dispatch(setKeyBindings(created))
+        dispatch(setKeyBindings([...keyBindings, created]))
         toast.success('Key binding added successfully')
       }
 
@@ -316,7 +317,7 @@ const KeyBindingsSection = () => {
 
       {/* Key Bindings List */}
       <div className="grid grid-cols-1 gap-4">
-        {keyBindings.map((binding, index) => (
+        {keyBindings?.map((binding, index) => (
           <div
             key={binding.id}
             className="group bg-white rounded-2xl p-6 border-2 border-gray-100 hover:border-blue-300 hover:shadow-xl transition-all duration-300 animate-fadeIn"

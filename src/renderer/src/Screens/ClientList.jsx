@@ -2,7 +2,7 @@
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useMemo, useState, useCallback, memo } from 'react'
+import React, { useEffect, useMemo, useState, useCallback, memo, useRef } from 'react'
 import {
   Trash,
   PenLine,
@@ -16,7 +16,9 @@ import {
   Receipt,
   User,
   Calendar1,
-  Box
+  Box,
+  Phone,
+  MoreHorizontal
 } from 'lucide-react'
 import Loader from '../components/Loader'
 import { useDispatch, useSelector } from 'react-redux'
@@ -27,22 +29,22 @@ import { DateRangePicker, SelectPicker, InputGroup, Input, Whisper, Tooltip, Mod
 import ClientModal from '../components/Modal/ClientModal'
 import Navbar from '../components/UI/Navbar'
 import * as XLSX from 'xlsx'
-import fs from 'fs'
 import ImportExcel from '../components/UI/ImportExcel'
+import { IoLogoWhatsapp } from 'react-icons/io'
 
 // Constants
 const TABLE_HEADERS = [
-  { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
-  { key: 'date', label: 'Date', width: 'w-[150px]' },
-  { key: 'clientName', label: 'Client Name', width: 'w-[300px]' },
-  { key: 'gstNo', label: 'GST No', width: 'w-[200px]' },
-  { key: 'phoneNo', label: 'Phone No', width: 'w-[200px]' },
-  { key: 'pendingAmount', label: 'Pending Payment', width: 'w-[170px]' },
-  { key: 'paidAmount', label: 'Paid Amount', width: 'w-[170px]' },
-  { key: 'pendingFromOurs', label: 'Our Pendings', width: 'w-[150px]' },
-  { key: 'accountType', label: 'Account Type', width: 'w-[150px]' },
-  { key: 'totalWorth', label: 'Total Worth', width: 'w-[150px]' },
-  { key: 'action', label: 'Action', width: 'w-[150px]' }
+  // { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
+  { key: 'date', label: 'Date', width: 'w-[120px]', icon: Calendar1 },
+  { key: 'clientName', label: 'Client Name', width: 'w-[300px]', icon: User },
+  { key: 'gstNo', label: 'GST No', width: 'w-[200px]', icon: Package },
+  { key: 'phoneNo', label: 'Phone No', width: 'w-[200px]', icon: Phone },
+  { key: 'pendingAmount', label: 'Pending Payment', width: 'w-[200px]', icon: TrendingUp },
+  { key: 'paidAmount', label: 'Paid Amount', width: 'w-[200px]', icon: Receipt },
+  { key: 'pendingFromOurs', label: 'Our Pendings', width: 'w-[200px]', icon: Box },
+  { key: 'accountType', label: 'Account Type', width: 'w-[200px]', icon: Info },
+  { key: 'totalWorth', label: 'Total Worth', width: 'w-[200px]', icon: IndianRupee },
+  { key: 'action', label: 'Action', width: 'w-[150px]', icon: MoreHorizontal }
 ]
 
 // Utility functions
@@ -77,10 +79,32 @@ const calculateTotalWorth = (pendingFromOurs, pendingAmount, paidAmount) => {
   )
 }
 
+const getClientName = (clientId, clients) => {
+  if (!clientId) return 'Unknown Client'
+
+  // Handle both direct ID and nested object structure
+  const id = typeof clientId === 'object' ? clientId.id : clientId
+  const client = clients.find((c) => String(c?.id) === String(id))
+  return client ? client.clientName : 'Unknown Client'
+}
+
+const getProductName = (productId, products) => {
+  if (!productId) return 'Unknown Product'
+
+  // Handle both direct ID and nested object structure
+  const id = typeof productId === 'object' ? productId.id : productId
+  const product = products.find((p) => String(p?.id) === String(id))
+  return product ? product.name : 'Unknown Product'
+}
+
 // Memoized ClientRow component
 const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, setOpen }) => {
   const isEven = index % 2 === 0
   const rowBg = isEven ? 'bg-white' : 'bg-[#f0f0f0]'
+
+  const clients = useSelector((state) => state.electron.clients.data || [])
+  const products = useSelector((state) => state.electron.products.data || [])
+  const transactions = useSelector((state) => state.electron.transaction.data || [])
 
   const handleHistory = async (id) => {
     try {
@@ -95,16 +119,13 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
 
   return (
     <tr className={`text-sm text-center ${rowBg}`}>
-      <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
-        {formatClientId(client?.id)}
-      </td>
       <td className="px-4 py-3">{new Date(client.createdAt).toLocaleDateString()}</td>
       <td className="px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 px-6 uppercase">
+        <div className="flex items-center gap-2 px-6 uppercase truncate">
           <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
             {getInitials(client.clientName)}
           </div>
-          {client.clientName}
+          <div className="truncate">{client.clientName}</div>
         </div>
         <Whisper
           trigger="hover"
@@ -136,8 +157,16 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
           />
         </Whisper>
       </td>
-      <td className="px-4 py-3 uppercase">{client.gstNo === '' ? '-' : client.gstNo}</td>
-      <td className="px-4 py-3">{client.phoneNo === '' ? '-' : client.phoneNo}</td>
+      <td className="px-4 py-3 uppercase">
+        {client.gstNo === '' || client.gstNo === null || client.gstNo === undefined
+          ? '-'
+          : client.gstNo}
+      </td>
+      <td className="px-4 py-3">
+        {client.phoneNo === '' || client.phoneNo === null || client.phoneNo === 'undefined'
+          ? '-'
+          : client.phoneNo}
+      </td>
       <td className="px-4 py-3">
         <div className="border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] p-1 rounded-full font-bold text-xs px-2">
           ₹ {toThousands(Number(client.pendingAmount).toFixed(0))}
@@ -179,6 +208,45 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
             title="Edit client"
           >
             <PenLine size={12} />
+          </button>
+          <button
+            className="text-green-600 p-1.5 border border-green-600 rounded-full hover:bg-green-600 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+            onClick={() => {
+              // Get all transactions for this client
+              const clientTransactions = transactions.filter((t) => t.clientId === client.id)
+
+              if (!clientTransactions.length) {
+                toast.info('No transactions found for this client.')
+                return
+              }
+
+              const targetClient = clients.find((c) => c.id === client.id)
+
+              if (!targetClient?.phoneNo) {
+                toast.error('Client phone number not available.')
+                return
+              }
+
+              // Build a WhatsApp message
+              let message = `Hello ${targetClient.clientName},\n\nHere are your recent transaction details:\n\n`
+
+              clientTransactions.forEach((t, index) => {
+                const productName = getProductName(t.productId, products)
+                const amount = toThousands(Number(t.sellAmount).toFixed(0))
+                message += `${index + 1}. 📦 ${productName}\n💰 ₹${amount}\n📅 ${new Date(
+                  t.createdAt
+                ).toLocaleDateString('en-IN')}\n\n`
+              })
+
+              message += `Thank you for your business!\n- RO Team`
+
+              // Open WhatsApp with the encoded message
+              const url = `https://wa.me/${targetClient.phoneNo}?text=${encodeURIComponent(message)}`
+              window.open(url, '_blank')
+            }}
+            title="Send on WhatsApp"
+          >
+            <IoLogoWhatsapp size={18} />
           </button>
         </div>
       </td>
@@ -254,10 +322,13 @@ const ClientList = () => {
   const [isUpdateExpense, setIsUpdateExpense] = useState(false)
   const [dateRange, setDateRange] = useState([])
   const [clientFilter, setClientFilter] = useState('')
+  const [accountTypeFilter, setAccountTypeFilter] = useState('')
   const [importFile, setImportFile] = useState(false)
   const [open, setOpen] = useState(false)
   const [overflow, setOverflow] = useState(true)
   const [clientHistory, setClientHistory] = useState([])
+  const [visibleCount, setVisibleCount] = useState(30)
+  const tableContainerRef = useRef(null)
 
   const clients = useSelector((state) => state.electron.clients.data || [])
   const products = useSelector((state) => state.electron.products.data || [])
@@ -268,6 +339,11 @@ const ClientList = () => {
     { key: 'product', label: 'Product', width: 'w-[150px]', icon: Package },
     { key: 'quantity', label: 'Quantity', width: 'w-[150px]', icon: Box },
     { key: 'status', label: 'Status', width: 'w-[50px]', icon: TrendingUp }
+  ]
+
+  const ACCOUNT_TYPE_OPTIONS = [
+    { label: 'Creditors', value: 'Creditors' },
+    { label: 'Debtors', value: 'Debtors' }
   ]
 
   // Memoized filtered data
@@ -299,9 +375,45 @@ const ClientList = () => {
         matchesDate = createdDate >= new Date(start) && createdDate <= new Date(end)
       }
 
-      return matchesSearch && matchesClient && matchesDate
+      // Account type filter
+      const matchesAccountType = !accountTypeFilter || data.accountType === accountTypeFilter
+
+      return matchesSearch && matchesClient && matchesDate && matchesAccountType
     })
-  }, [clients, searchQuery, clientFilter, dateRange])
+  }, [clients, searchQuery, clientFilter, dateRange, accountTypeFilter])
+
+  const loadMore = useCallback(() => {
+    if (visibleCount < filteredData.length) {
+      setVisibleCount((prev) => prev + 30)
+    }
+  }, [visibleCount, filteredData.length])
+
+  const handleScroll = useCallback(() => {
+    if (tableContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = tableContainerRef.current
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        loadMore()
+      }
+    }
+  }, [loadMore])
+
+  useEffect(() => {
+    const container = tableContainerRef?.current
+    if (container) {
+      container?.addEventListener('scroll', handleScroll)
+      return () => container.removeEventListener('scroll', handleScroll)
+    }
+  }, [handleScroll])
+
+  // Memoized visible data for rendering
+  const visibleData = useMemo(() => {
+    return filteredData.slice(0, visibleCount)
+  }, [filteredData, visibleCount])
+
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(30)
+  }, [filteredData])
 
   // Memoized statistics
   const statistics = useMemo(() => {
@@ -373,24 +485,6 @@ const ClientList = () => {
     },
     [fetchClients]
   )
-
-  const getClientName = (clientId, clients) => {
-    if (!clientId) return 'Unknown Client'
-
-    // Handle both direct ID and nested object structure
-    const id = typeof clientId === 'object' ? clientId.id : clientId
-    const client = clients.find((c) => String(c?.id) === String(id))
-    return client ? client.clientName : 'Unknown Client'
-  }
-
-  const getProductName = (productId, products) => {
-    if (!productId) return 'Unknown Product'
-
-    // Handle both direct ID and nested object structure
-    const id = typeof productId === 'object' ? productId.id : productId
-    const product = products.find((p) => String(p?.id) === String(id))
-    return product ? product.name : 'Unknown Product'
-  }
 
   const handleExportExcel = useCallback(() => {
     try {
@@ -478,7 +572,7 @@ const ClientList = () => {
         <div className="border border-gray-200 shadow px-5 py-3 mx-6 rounded-3xl my-4 flex">
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light">Total Assets Value</p>
-            <p className="text-2xl font-bold">₹ {toThousands(statistics.totalAssets)}</p>
+            <p className="text-2xl ">₹ {toThousands(statistics.totalAssets)}</p>
           </div>
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light">Total Clients</p>
@@ -489,17 +583,13 @@ const ClientList = () => {
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light">Total Pending Amount</p>
             <p className="font-light text-sm">
-              <span className="font-bold text-2xl">
-                ₹ {toThousands(statistics.totalPendingAmount)}
-              </span>
+              <span className=" text-2xl">₹ {toThousands(statistics.totalPendingAmount)}</span>
             </p>
           </div>
           <div className="mx-5 w-52">
             <p className="text-sm font-light">Total Pending From Ours</p>
             <p className="font-light text-sm">
-              <span className="font-bold text-2xl">
-                ₹ {toThousands(statistics.totalPendingFromOurs)}
-              </span>
+              <span className=" text-2xl">₹ {toThousands(statistics.totalPendingFromOurs)}</span>
             </p>
           </div>
         </div>
@@ -529,6 +619,8 @@ const ClientList = () => {
                   placeholder="Select Date Range"
                   onChange={setDateRange}
                   placement="bottomEnd"
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
                 <SelectPicker
                   data={clients.map((client) => ({
@@ -537,26 +629,49 @@ const ClientList = () => {
                   }))}
                   onChange={setClientFilter}
                   placeholder="Select Client"
+                  placement="bottomEnd"
+                  style={{ width: 250 }}
+                  searchable
+                  virtualized={true}
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
+                />
+                <SelectPicker
+                  data={ACCOUNT_TYPE_OPTIONS}
+                  onChange={setAccountTypeFilter}
+                  placeholder="Select Account Type"
+                  placement="bottomEnd"
+                  searchable={false}
                   style={{ width: 150 }}
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
               </div>
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5">
+            <div
+              ref={tableContainerRef}
+              className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-2xl h-screen mt-5"
+            >
               <table className="min-w-max border-collapse table-fixed">
-                <thead className="bg-gray-200">
-                  <tr className="text-sm sticky top-0">
-                    {TABLE_HEADERS.map((header) => (
-                      <th
-                        key={header.key}
-                        className={`px-4 py-3 border-r border-gray-300 ${header.width} ${
-                          header.sticky ? 'sticky left-0 bg-gray-200 z-10' : ''
-                        }`}
-                      >
-                        {header.label}
-                      </th>
-                    ))}
+                <thead className="bg-gradient-to-r from-gray-50 to-gray-100  relative z-20">
+                  <tr className="text-sm sticky top-0 z-20 p-3">
+                    {TABLE_HEADERS.map((header) => {
+                      const IconTable = header.icon
+                      return (
+                        <th
+                          key={header.key}
+                          className={`px-4 py-3 border-r border-gray-300 ${header.width} ${header.sticky ? 'sticky left-0 z-30 bg-gray-200 shadow-md' : 'bg-gray-200'}
+        `}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <IconTable size={16} className="text-gray-500" />
+                            {header.label}
+                          </div>
+                        </th>
+                      )
+                    })}
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-200">
@@ -570,7 +685,7 @@ const ClientList = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredData.map((client, index) => (
+                    visibleData.map((client, index) => (
                       <ClientRow
                         key={client.id}
                         client={client}

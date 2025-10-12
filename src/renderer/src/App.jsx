@@ -21,6 +21,7 @@ import PendingPaymentsReport from './Screens/PendingPaymentsReport.jsx'
 import PendingCollectionReport from './Screens/PendingCollectionReport.jsx'
 import Settings from './Screens/Settings.jsx'
 import PurchaseBill from './components/UI/PurchaseBill.jsx'
+import NotFound from './components/UI/NotFound.jsx'
 
 function App() {
   return (
@@ -46,6 +47,7 @@ function App() {
         <HashRouter>
           <KeyBind>
             <Routes>
+              <Route path="*" element={<NotFound />} />
               <Route path="/" element={<Dashboard />} />
               <Route path="/products" element={<Products />} />
               <Route path="/clients" element={<ClientList />} />

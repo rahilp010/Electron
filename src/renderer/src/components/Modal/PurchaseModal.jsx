@@ -355,9 +355,9 @@ const PurchaseModal = ({
                 value: (subtotal * customTax.taxValue) / 100,
                 percentage: customTax.taxValue
               }
-            } 
+            }
 
-            if(taxCode === 'frightChanged') {
+            if (taxCode === 'frightChanged') {
               return {
                 code: 'frightChanged',
                 name: 'Freight Charges',
@@ -492,17 +492,30 @@ const PurchaseModal = ({
                     qty: product.quantity
                   }))}
                   value={transaction.productId}
-                  onChange={(value) => handleOnChangeEvent(value, 'productId')}
+                  onChange={(value) => {
+                    handleOnChangeEvent(value, 'productId')
+                  }}
                   placeholder="Select Products"
                   style={{
                     width: 300,
                     zIndex: productModal ? 1 : 999
                   }}
                   menuStyle={{ zIndex: productModal ? 1 : 999 }}
-                  menuMaxHeight={200}
+                  menuMaxHeight={300}
                   renderMenuItem={(label, item) => (
-                    <div className="flex justify-between w-full">
-                      <span>{label}</span>
+                    <div className="flex justify-between w-full items-center">
+                      <span
+                        className="truncate"
+                        style={{
+                          maxWidth: '200px',
+                          display: 'inline-block',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                      >
+                        {label}
+                      </span>
                       <span
                         className={`text-gray-500 text-xs font-thin tracking-wider ${
                           item.qty > 0 ? 'text-green-400' : 'text-red-400'
@@ -511,6 +524,19 @@ const PurchaseModal = ({
                         Qty: {item.qty}
                       </span>
                     </div>
+                  )}
+                  renderValue={(value, item) => (
+                    <span
+                      style={{
+                        maxWidth: '250px',
+                        display: 'inline-block',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}
+                    >
+                      {item?.label}
+                    </span>
                   )}
                   renderExtraFooter={() => (
                     <div className="px-3 py-1 border-t border-gray-200">

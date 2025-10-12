@@ -1,7 +1,7 @@
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useMemo, useState, useCallback, memo } from 'react'
+import React, { useEffect, useMemo, useState, useCallback, memo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileUp, Import, PenLine, Plus, Trash } from 'lucide-react'
 import Loader from '../components/Loader'
@@ -17,7 +17,7 @@ import * as XLSX from 'xlsx'
 
 // Constants
 const TABLE_HEADERS = [
-  { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
+  // { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
   { key: 'date', label: 'Date', width: 'w-[150px]' },
   { key: 'client', label: 'Client', width: 'w-[250px]' },
   { key: 'product', label: 'Product', width: 'w-[250px]' },
@@ -71,9 +71,7 @@ const ProductRow = memo(({ product, index, clients, onDelete, onEdit }) => {
 
   return (
     <tr className={`text-sm text-center ${rowBg}`}>
-      <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
-        {formatProductId(product?.id)}
-      </td>
+      {/* <td className="px-4 py-3">{formatProductId(product?.id)}</td> */}
       <td className="px-4 py-3">{new Date(product?.createdAt).toLocaleDateString()}</td>
       <td className="px-4 py-3 tracking-wide">{getClientName(product?.clientId, clients)}</td>
       <td className="px-4 py-3 tracking-wide font-medium">
@@ -192,6 +190,9 @@ const Products = () => {
   const [productFilter, setProductFilter] = useState('')
   const [assetsTypeFilter, setAssetsTypeFilter] = useState('')
   const [importFile, setImportFile] = useState(false)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+  const [visibleCount, setVisibleCount] = useState(30)
+  const tableContainerRef = useRef(null)
 
   const products = useSelector((state) => state.electron.products?.data || [])
   const clients = useSelector((state) => state.electron.clients?.data || [])
@@ -201,8 +202,7 @@ const Products = () => {
     if (!Array.isArray(products)) return []
     const query = searchQuery?.toLowerCase()
 
-    return products.filter((data) => {
-      // Search filter
+    const filtered = products.filter((data) => {
       const matchesSearch =
         !query ||
         [
@@ -214,13 +214,9 @@ const Products = () => {
           getClientName(data?.clientId, clients)?.toLowerCase()
         ].some((field) => field?.includes(query))
 
-      // Product filter
       const matchesProduct = !productFilter || data.id === productFilter
-
-      // Assets type filter
       const matchesAssetsType = !assetsTypeFilter || data.assetsType === assetsTypeFilter
 
-      // Date filter
       let matchesDate = true
       if (dateRange?.length === 2) {
         const createdDate = new Date(data.createdAt)
@@ -230,15 +226,69 @@ const Products = () => {
 
       return matchesSearch && matchesProduct && matchesDate && matchesAssetsType
     })
-  }, [products, searchQuery, productFilter, dateRange, assetsTypeFilter, clients])
 
-  // Memoized statistics
+    // ✅ Sorting logic
+    if (sortConfig.key) {
+      filtered.sort((a, b) => {
+        const aVal = a[sortConfig.key] || 0
+        const bVal = b[sortConfig.key] || 0
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
+        return 0
+      })
+    }
+
+    return filtered
+  }, [products, searchQuery, productFilter, dateRange, assetsTypeFilter, clients, sortConfig])
+
+  const handleSort = useCallback((key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        // toggle direction
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, direction: 'asc' }
+    })
+    // Reset visible count when sorting to start from top
+    setVisibleCount(30)
+  }, [])
+
+  const loadMore = useCallback(() => {
+    if (visibleCount < filteredData.length) {
+      setVisibleCount((prev) => prev + 30)
+    }
+  }, [visibleCount, filteredData.length])
+
+  const handleScroll = useCallback(() => {
+    if (tableContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = tableContainerRef.current
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        loadMore()
+      }
+    }
+  }, [loadMore])
+
+  useEffect(() => {
+    const container = tableContainerRef?.current
+    if (container) {
+      container?.addEventListener('scroll', handleScroll)
+      return () => container.removeEventListener('scroll', handleScroll)
+    }
+  }, [handleScroll])
+
+  // Memoized visible data for rendering
+  const visibleData = useMemo(() => {
+    return filteredData.slice(0, visibleCount)
+  }, [filteredData, visibleCount])
+
+  // Memoized statistics (based on full filtered data)
   const statistics = useMemo(() => {
     const totalAssetsValue = filteredData.reduce(
       (acc, item) => acc + (item?.price || 0) * (item?.quantity || 0),
       0
     )
-    const totalQuantity = filteredData.reduce((acc, item) => acc + (item?.quantity || 0), 0)
+    const totalQuantity = filteredData.length
 
     return { totalAssetsValue, totalQuantity }
   }, [filteredData])
@@ -247,6 +297,11 @@ const Products = () => {
     fetchProducts()
     fetchClients()
   }, [fetchProducts, fetchClients])
+
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(30)
+  }, [filteredData])
 
   // Event handlers
   const handleAddProduct = useCallback(() => {
@@ -288,7 +343,10 @@ const Products = () => {
         Price: product.price,
         Quantity: product.quantity,
         'Assets Type': product.assetsType,
-        'Total Worth': (product.price || 0) * (product.quantity || 0)
+        'Total Worth':
+          product.assetsType === 'Finished Goods'
+            ? product.quantity
+            : (product.price || 0) * (product.quantity || 0)
       }))
 
       const ws = XLSX.utils.json_to_sheet(exportData)
@@ -354,7 +412,7 @@ const Products = () => {
         {/* Statistics Cards */}
         <div className="border border-gray-200 shadow px-5 py-3 mx-6 rounded-3xl my-4 flex">
           <div className="mx-5 border-r w-52">
-            <p className="text-sm font-light mb-1">Total Assets Value</p>
+            <p className="text-sm font-light mb-1">Total Product Value</p>
             <p className="text-2xl font-light">₹ {toThousands(statistics.totalAssetsValue)}</p>
           </div>
           <div className="mx-5 border-r w-52">
@@ -390,6 +448,8 @@ const Products = () => {
                   placeholder="Select Date Range"
                   onChange={setDateRange}
                   placement="bottomEnd"
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
                 <SelectPicker
                   data={products.map((product) => ({
@@ -399,27 +459,38 @@ const Products = () => {
                   onChange={setProductFilter}
                   placeholder="Select Product"
                   style={{ width: 150 }}
+                  placement="bottomEnd"
+                  searchable
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
                 <SelectPicker
                   data={ASSETS_TYPE_OPTIONS}
                   onChange={setAssetsTypeFilter}
                   placeholder="Select Assets Type"
                   style={{ width: 150 }}
+                  searchable={false}
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
               </div>
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5">
+            <div
+              ref={tableContainerRef}
+              className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5"
+            >
               <table className="min-w-max border-collapse table-fixed">
-                <thead className="bg-gray-200">
-                  <tr className="text-sm sticky top-0">
+                <thead className="bg-gray-200 relative z-20">
+                  <tr className="text-sm sticky top-0 z-20">
                     {TABLE_HEADERS.map((header) => (
                       <th
                         key={header.key}
-                        className={`px-4 py-3 border-r border-gray-300 ${header.width} ${
-                          header.sticky ? 'sticky left-0 bg-gray-200 z-10' : ''
-                        }`}
+                        className={`px-4 py-3 border-r border-gray-300 ${header.width}
+          ${header.sticky ? 'sticky left-0 z-30 bg-gray-200 shadow-md' : 'bg-gray-200'}
+          
+        `}
                       >
                         {header.label}
                       </th>
@@ -437,7 +508,7 @@ const Products = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredData.map((product, index) => (
+                    visibleData.map((product, index) => (
                       <ProductRow
                         key={product?.id || index}
                         product={product}

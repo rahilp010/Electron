@@ -7,9 +7,26 @@ import cash from '../assets/cash.png'
 import purchase from '../assets/purchase.png'
 import { useNavigate } from 'react-router-dom'
 import { ReceiptText } from 'lucide-react'
+import { useDispatch } from 'react-redux'
+import { setKeyBindings } from '../app/features/electronSlice'
+import { useEffect } from 'react'
 
 const Dashboard = () => {
   const navigate = useNavigate()
+  const dispatch = useDispatch()
+
+  const fetchKeyBindings = async () => {
+    try {
+      const response = await window.api.getKeyBindings()
+      dispatch(setKeyBindings(response))
+    } catch (error) {
+      console.error('Failed to fetch key bindings:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchKeyBindings()
+  }, [])
 
   const date = new Date()
   const year = date.getFullYear()

@@ -93,8 +93,22 @@ ipcMain.handle('createProduct', (event, product = {}) => {
   } = product
 
   const partsStr = typeof parts === 'string' ? parts : JSON.stringify(parts)
+  const parsedParts = parseParts(partsStr)
 
   const tx = db.transaction(() => {
+    let finalPrice = toInt(price, 0)
+
+    // 🔹 Auto-calculate price for Finished Goods
+    if (assetsType === 'Finished Goods' && toInt(addParts) === 1 && parsedParts.length > 0) {
+      finalPrice = 0
+      for (const part of parsedParts) {
+        const partRow = db.prepare(`SELECT * FROM products WHERE id = ?`).get(toInt(part.partId))
+        if (partRow) {
+          finalPrice += (partRow.price || 0) * toInt(part.quantity, 0)
+        }
+      }
+    }
+
     const res = db
       .prepare(
         `
@@ -102,19 +116,20 @@ ipcMain.handle('createProduct', (event, product = {}) => {
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `
       )
-      .run(name, price, quantity, clientId, assetsType, addParts, partsStr)
+      .run(name, finalPrice, quantity, clientId, assetsType, addParts, partsStr)
 
+    // 🔹 Deduct sub-part stock for Finished Goods
     if (assetsType === 'Finished Goods' && toInt(addParts) === 1) {
-      const parsed = parseParts(partsStr)
       const stmt = db.prepare(`
-          UPDATE products
-          SET quantity = MAX(quantity - ?, 0), updatedAt = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `)
-      for (const row of parsed) {
+        UPDATE products
+        SET quantity = MAX(quantity - ?, 0), updatedAt = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `)
+      for (const row of parsedParts) {
         stmt.run(toInt(row.quantity, 0), toInt(row.partId))
       }
     }
+
     return res
   })
 
@@ -797,8 +812,8 @@ ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
 
     if (tableName === 'clients') {
       stmt = db.prepare(`
-        INSERT INTO clients (clientName, phoneNo, pendingAmount, paidAmount, pendingFromOurs)
-        VALUES (@clientName, @phoneNo, @pendingAmount, @paidAmount, @pendingFromOurs)
+        INSERT INTO clients (clientName, phoneNo, pendingAmount, paidAmount, pendingFromOurs, accountType)
+        VALUES (@clientName, @phoneNo, @pendingAmount, @paidAmount, @pendingFromOurs, @accountType)
       `)
 
       const insertMany = db.transaction((rows) => {
@@ -808,7 +823,8 @@ ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
             phoneNo: String(row.phoneNo).split('.')[0] || '',
             pendingAmount: row.pendingAmount || 0,
             paidAmount: row.paidAmount || 0,
-            pendingFromOurs: row.pendingFromOurs || 0
+            pendingFromOurs: row.pendingFromOurs || 0,
+            accountType: row.accountType || ''
           })
           count++
         }
@@ -816,14 +832,14 @@ ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
       insertMany(rows)
     } else if (tableName === 'products') {
       stmt = db.prepare(`
-        INSERT INTO products (productName, quantity, price)
-        VALUES (@productName, @quantity, @price)
+        INSERT INTO products (name, quantity, price)
+        VALUES (@name, @quantity, @price)
       `)
 
       const insertMany = db.transaction((rows) => {
         for (const row of rows) {
           stmt.run({
-            productName: row.productName || '',
+            name: row.name || '',
             quantity: row.quantity || 0,
             price: row.price || 0
           })
@@ -975,24 +991,67 @@ ipcMain.handle('deleteSettings', async (event, id) => {
   db.prepare(`DELETE FROM settings WHERE id = ?`).run(id)
 })
 
+const USER_DATA = app.getPath('userData')
+const FILE_PATH = path.join(USER_DATA, 'keyBindings.json')
+
+function ensureFile() {
+  if (!fs.existsSync(USER_DATA)) fs.mkdirSync(USER_DATA, { recursive: true })
+  if (!fs.existsSync(FILE_PATH)) fs.writeFileSync(FILE_PATH, JSON.stringify([]))
+}
+
+function readBindings() {
+  ensureFile()
+  try {
+    const raw = fs.readFileSync(FILE_PATH, 'utf8')
+    return JSON.parse(raw || '[]')
+  } catch (err) {
+    console.error('Failed to read keyBindings:', err)
+    return []
+  }
+}
+
+function writeBindings(list) {
+  ensureFile()
+  try {
+    fs.writeFileSync(FILE_PATH, JSON.stringify(list, null, 2), 'utf8')
+  } catch (err) {
+    console.error('Failed to write keyBindings:', err)
+  }
+}
+
+// ✅ Get all key bindings
 ipcMain.handle('getKeyBindings', async () => {
-  // Fetch from database
-  return await db.getAllKeyBindings()
+  return readBindings()
 })
 
+// ✅ Create new key binding
 ipcMain.handle('createKeyBinding', async (event, data) => {
-  // Save to database
-  return await db.createKeyBinding(data)
+  const list = readBindings()
+  const record = { id: Date.now(), ...data }
+  list.push(record)
+  writeBindings(list)
+  return record
 })
 
+// ✅ Update key binding
 ipcMain.handle('updateKeyBinding', async (event, data) => {
-  // Update in database
-  return await db.updateKeyBinding(data)
+  const list = readBindings()
+  const idx = list.findIndex((r) => String(r.id) === String(data.id))
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], ...data }
+    writeBindings(list)
+    return list[idx]
+  } else {
+    throw new Error('Key binding not found')
+  }
 })
 
+// ✅ Delete key binding
 ipcMain.handle('deleteKeyBinding', async (event, id) => {
-  // Delete from database
-  return await db.deleteKeyBinding(id)
+  const list = readBindings()
+  const updated = list.filter((r) => String(r.id) !== String(id))
+  writeBindings(updated)
+  return { success: true }
 })
 
 // --- Restore Backup ---

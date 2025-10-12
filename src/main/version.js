@@ -17,7 +17,6 @@ async function checkForUpdate() {
 
     console.log('Latest version:', latestVersion)
     console.log('Current version:', CURRENT_VERSION)
-    console.log('Update URL:', data.url)
 
     if (latestVersion !== CURRENT_VERSION) {
       const choice = dialog.showMessageBoxSync({
