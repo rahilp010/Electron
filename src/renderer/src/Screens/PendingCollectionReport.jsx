@@ -7,6 +7,7 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
 import { Tooltip, Whisper, Input } from 'rsuite'
+import html2pdf from 'html2pdf.js'
 import {
   TrendingUp,
   Calendar,
@@ -598,6 +599,60 @@ const PendingCollectionReport = ({ client, onClose }) => {
     setSelectedClient(client || null)
   }, [client])
 
+  // const handleGenerateAndSendPDF = async () => {
+  //   try {
+  //     if (!selectedClient) {
+  //       toast.warn('Select a client first')
+  //       return
+  //     }
+
+  //     const receipts = filteredData.filter((r) => r.clientName === selectedClient.clientName)
+  //     if (receipts.length === 0) {
+  //       toast.info('No pending receipts for this client')
+  //       return
+  //     }
+
+  //     if (!selectedClient.phoneNo || selectedClient.phoneNo.trim() === '') {
+  //       toast.error('Client phone number is missing')
+  //       return
+  //     }
+
+  //     const printData = receipts.map((r) => ({
+  //       accountName: r.clientName,
+  //       credit: toThousands(r.amount),
+  //       date: new Date(r.date).toLocaleDateString('en-IN')
+  //     }))
+
+  //     const totalPending = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+  //     const title = `Pending Collection Report - ${selectedClient.clientName} (${selectedType})`
+  //     const printHTML = generatePrintHTML(printData, TABLE_HEADERS_PRINT, title, totalPending)
+
+  //     toast.info('Generating PDF...')
+
+  //     // Generate PDF as ArrayBuffer directly
+  //     const pdfArrayBuffer = await html2pdf().from(printHTML).toPdf().output('arraybuffer')
+
+  //     toast.info('Sending to WhatsApp...')
+
+  //     const result = await window.api.saveAndSendWhatsAppPDF(
+  //       selectedClient.phoneNo,
+  //       pdfArrayBuffer,
+  //       `${selectedClient.clientName}_Pending.pdf`,
+  //       `Hello ${selectedClient.clientName}, here is your pending payment report.`
+  //     )
+
+  //     if (result.success) {
+  //       toast.success('✅ WhatsApp message sent successfully!')
+  //       console.log('PDF saved at:', result.filePath)
+  //     } else {
+  //       toast.error(`Failed to send: ${result.error || 'Unknown error'}`)
+  //     }
+  //   } catch (err) {
+  //     console.error('Error generating/sending PDF:', err)
+  //     toast.error(`Error: ${err.message || 'Failed to generate or send PDF'}`)
+  //   }
+  // }
+
   return (
     <div className="select-none gap-10 h-screen overflow-x-auto min-w-[720px] overflow-auto customScrollbar relative">
       <div className="w-full sticky top-0 z-10">
@@ -791,15 +846,18 @@ const PendingCollectionReport = ({ client, onClose }) => {
               className="w-52 flex flex-shrink-0 items-center justify-center transition-all duration-200 transform hover:scale-105 cursor-pointer"
               onClick={() => {
                 try {
+                  console.log(selectedClient)
+
                   const clientName = selectedClient?.clientName
                   const amount = toThousands(Number(selectedClient?.pendingAmount).toFixed(0))
 
-                  const message = `Hello ${clientName},\n\njust a reminder that the ${amount} amount is still pending till ${new Date(selectedClient?.createdAt).toLocaleDateString('en-US', { month: 'long' })}.\n\nPlease make the payment as soon as possible.\n\nThank you for your business!`
+                  const message = `Hello ${clientName},\n\n!!! just a reminder that the ${amount} amount is still pending till ${new Date(selectedClient?.createdAt).toLocaleDateString('en-US', { month: 'long' })}.\n\nPlease make the payment as soon as possible.\nThank you for your business!`
 
                   // Replace with client’s phone number if available in DB
                   if (selectedClient?.phoneNo) {
                     const phoneNumber = selectedClient?.phoneNo
-                    const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
+                    const encodedMessage = encodeURIComponent(message)
+                    const url = `https://wa.me/${phoneNumber}?text=${encodedMessage}`
                     window.open(url, '_blank')
                   }
                 } catch (error) {

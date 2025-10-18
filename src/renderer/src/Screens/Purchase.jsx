@@ -3,7 +3,7 @@
 /* eslint-disable react/prop-types */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { FileUp, Import, PenLine, Plus, Trash } from 'lucide-react'
 import Loader from '../components/Loader'
 import { useNavigate } from 'react-router-dom'
@@ -193,19 +193,7 @@ const PurchaseRow = React.memo(
         </td>
         <td className="px-4 py-3">{renderPendingAmount()}</td>
         <td className="px-4 py-3">{renderPaidAmount()}</td>
-        <td className="px-4 py-3 tracking-wide">
-          {/* <PaymentStatusDropdown transaction={transaction} onUpdateStatus={onUpdateStatus} />
-           */}
-          {transaction?.statusOfTransaction === 'completed' ? (
-            <span className="flex items-center text-[#166534] bg-[#dcfce7] border border-[#8ffab5] px-2 py-1 rounded-full justify-center text-xs font-medium">
-              Completed
-            </span>
-          ) : (
-            <span className="flex items-center border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] px-2 py-1 rounded-full justify-center text-xs font-medium">
-              Pending
-            </span>
-          )}
-        </td>
+        <td className="px-4 py-3 tracking-wide">{getPaymentStatusComponent(transaction)}</td>
 
         <td className="w-28">
           <div className="flex gap-3 justify-center items-center">
@@ -375,6 +363,8 @@ const Purchase = () => {
   const [assetsTypeFilter, setAssetsTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [importFile, setImportFile] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(30)
+  const tableContainerRef = useRef(null)
 
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
@@ -432,6 +422,39 @@ const Purchase = () => {
     clients,
     products
   ])
+
+  const loadMore = useCallback(() => {
+    if (visibleCount < filteredData.length) {
+      setVisibleCount((prev) => prev + 30)
+    }
+  }, [visibleCount, filteredData.length])
+
+  const handleScroll = useCallback(() => {
+    if (tableContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = tableContainerRef.current
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        loadMore()
+      }
+    }
+  }, [loadMore])
+
+  useEffect(() => {
+    const container = tableContainerRef?.current
+    if (container) {
+      container?.addEventListener('scroll', handleScroll)
+      return () => container.removeEventListener('scroll', handleScroll)
+    }
+  }, [handleScroll])
+
+  // Memoized visible data for rendering
+  const visibleData = useMemo(() => {
+    return filteredData.slice(0, visibleCount)
+  }, [filteredData, visibleCount])
+
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(30)
+  }, [filteredData])
 
   // Memoized statistics
   const statistics = useMemo(() => {
@@ -629,6 +652,8 @@ const Purchase = () => {
                   placeholder="Select Date Range"
                   onChange={setDateRange}
                   placement="bottomEnd"
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
                 <SelectPicker
                   data={products.map((product) => ({
@@ -637,19 +662,30 @@ const Purchase = () => {
                   }))}
                   onChange={setProductFilter}
                   placeholder="Select Product"
-                  style={{ width: 150 }}
+                  virtualized={true}
+                  style={{ width: 200 }}
+                  placement="bottomEnd"
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
                 <SelectPicker
                   data={ASSETS_TYPE_OPTIONS}
                   onChange={setAssetsTypeFilter}
                   placeholder="Select Assets Type"
                   style={{ width: 150 }}
+                  placement="bottomEnd"
+                  searchable={false}
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
               </div>
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5">
+            <div
+              ref={tableContainerRef}
+              className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5"
+            >
               <table className="min-w-max border-collapse table-fixed">
                 <thead className="bg-gray-200">
                   <tr className="text-sm sticky top-0">
@@ -676,7 +712,7 @@ const Purchase = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredData.map((transaction, index) => (
+                    visibleData.map((transaction, index) => (
                       <PurchaseRow
                         key={transaction?.id || index}
                         transaction={transaction}

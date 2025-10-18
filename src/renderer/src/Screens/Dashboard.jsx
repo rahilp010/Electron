@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import Navbar from '../components/UI/Navbar'
 import clientList from '../assets/client.png'
 import report from '../assets/report.png'
@@ -10,6 +11,7 @@ import { ReceiptText } from 'lucide-react'
 import { useDispatch } from 'react-redux'
 import { setKeyBindings } from '../app/features/electronSlice'
 import { useEffect } from 'react'
+// import WhatsAppQRModal from '../components/Modal/whatsappQRModal'
 
 const Dashboard = () => {
   const navigate = useNavigate()
@@ -50,25 +52,6 @@ const Dashboard = () => {
               </button>
             </div>
 
-            {/* Progress */}
-            {/* <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
-                     <h3 className="font-semibold text-gray-700">Progress</h3>
-                     <p className="text-2xl font-bold">6.1h</p>
-                     <p className="text-sm text-gray-500">
-                        Work Time this week
-                     </p>
-                     {/* Placeholder bar chart *
-                     <div className="flex justify-between mt-4">
-                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                           <div key={i} className="flex flex-col items-center">
-                              <div
-                                 className="w-3 bg-yellow-400 rounded"
-                                 style={{ height: `${(i + 2) * 10}px` }}></div>
-                              <span className="text-xs mt-1">{d}</span>
-                           </div>
-                        ))}
-                     </div>
-                  </div> */}
             <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4">
               <img src={clientList} alt="product" className="w-24 h-24 object-cover" />
               <button
@@ -128,28 +111,6 @@ const Dashboard = () => {
               </button>
             </div>
 
-            {/* Pension Contributions */}
-            {/* <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
-                     <h3 className="font-semibold text-gray-700">
-                        Pension contributions
-                     </h3>
-                     <ul className="mt-3 space-y-2">
-                        <li className="flex justify-between">
-                           <span>Devices</span>
-                           <span className="text-gray-500">MacBook Air</span>
-                        </li>
-                        <li className="flex justify-between">
-                           <span>Compensation</span>
-                           <span className="text-gray-500">Summary</span>
-                        </li>
-                        <li className="flex justify-between">
-                           <span>Benefits</span>
-                           <span className="text-gray-500">Employee</span>
-                        </li>
-                     </ul>
-                  </div> */}
-
-            {/* Calendar */}
             <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
               <h3 className="font-semibold text-gray-700">
                 {fullMonth} {year}
@@ -165,6 +126,10 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+
+            {/* <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
+              <WhatsAppQRModal />
+            </div> */}
           </div>
         </div>
       </div>

@@ -912,6 +912,7 @@ const Transaction = () => {
                   onChange={setStatusFilter}
                   placeholder="Select Status"
                   style={{ width: 150 }}
+                  searchable={false}
                 />
               </div>
             </div>

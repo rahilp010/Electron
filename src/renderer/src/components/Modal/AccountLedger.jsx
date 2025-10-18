@@ -31,7 +31,8 @@ const TABLE_HEADERS = [
   { key: 'debit', label: 'Debit', width: 'w-[200px]', icon: TrendingDown },
   { key: 'credit', label: 'Credit', width: 'w-[200px]', icon: TrendingUp },
   { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
-  { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText }
+  { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText },
+  { key: 'statusOfTransaction', label: 'Status', width: 'w-[200px]', icon: BarChart3 }
 ]
 
 const TABLE_HEADERS_PRINT = [
@@ -65,6 +66,8 @@ const getAmount = (type, amount) => {
 const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
   const isReceipt = receipt.type === 'Receipt'
   const isEven = index % 2 === 0
+
+  console.log('receipt', receipt)
 
   return (
     <tr
@@ -167,6 +170,24 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
           </div>
         </Whisper>
       </td>
+
+      <td className="px-6 py-3">
+        <span
+          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ${
+            receipt.statusOfTransaction === 'pending'
+              ? 'bg-orange-50 text-orange-300 ring-1 ring-orange-200'
+              : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+          }`}
+        >
+          <span
+            className={`h-2 w-2 rounded-full ${
+              receipt.statusOfTransaction === 'pending' ? 'bg-orange-300' : 'bg-emerald-500'
+            }`}
+          ></span>
+          {String(receipt.statusOfTransaction).charAt(0).toUpperCase() +
+            String(receipt.statusOfTransaction).slice(1)}
+        </span>
+      </td>
     </tr>
   )
 })
@@ -245,9 +266,7 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
     const sourceData = selectedType === 'Bank' ? recentBankReceipts : recentCashReceipts
 
     if (client?.id) {
-      return sourceData.filter(
-        (r) => r.clientName === getClientName(client.id) && r.statusOfTransaction === 'completed'
-      )
+      return sourceData.filter((r) => r.clientName === getClientName(client.id))
     }
 
     return sourceData

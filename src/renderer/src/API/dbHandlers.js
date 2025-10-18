@@ -6,6 +6,7 @@ import PDFDocument from 'pdfkit'
 import crypto from 'crypto'
 import { app } from 'electron'
 import path from 'path'
+// import { sendWhatsAppPDF, getWhatsAppStatus, logoutWhatsApp } from '../../../main/whatsappClient.js'
 // import cron from 'node-cron'
 
 const dbPath = app.isPackaged
@@ -1085,6 +1086,19 @@ ipcMain.handle('manualBackup', async () => {
   }
 })
 
+ipcMain.handle('getAuthorization', async () => {
+  try {
+    const passcode = '123123'
+    if (!passcode) {
+      return { success: false, message: 'Wrong Passcode' }
+    }
+    return { success: true, passcode: passcode, message: 'Authorization successful.' }
+  } catch (err) {
+    console.error('Authorization error:', err)
+    return { success: false, message: err.message }
+  }
+})
+
 // --- Schedule Daily Backup at 12:01 AM ---
 // cron.schedule(
 //   '8 23 * * *',
@@ -1100,6 +1114,64 @@ ipcMain.handle('manualBackup', async () => {
 // )
 
 // console.log('✅ Daily backup job scheduled for 23:07 AM IST')
+
+// ipcMain.handle('saveAndSendWhatsAppPDF', async (event, phone, pdfBuffer, fileName, caption) => {
+//   let pdfPath = null
+
+//   try {
+//     if (!phone || !pdfBuffer || !fileName) {
+//       throw new Error('Missing required parameters')
+//     }
+
+//     const sanitizedFileName = path.basename(fileName)
+
+//     let buffer
+//     if (pdfBuffer instanceof ArrayBuffer) {
+//       buffer = Buffer.from(pdfBuffer)
+//     } else if (pdfBuffer instanceof Uint8Array) {
+//       buffer = Buffer.from(pdfBuffer)
+//     } else if (Buffer.isBuffer(pdfBuffer)) {
+//       buffer = pdfBuffer
+//     } else {
+//       throw new Error('Invalid PDF data format')
+//     }
+
+//     pdfPath = path.join(app.getPath('documents'), sanitizedFileName)
+
+//     await fs.writeFile(pdfPath, buffer)
+//     console.log(`📄 PDF saved to: ${pdfPath}`)
+
+//     const success = await sendWhatsAppPDF(phone, pdfPath, caption)
+
+//     return { success, filePath: pdfPath }
+//   } catch (err) {
+//     console.error('❌ Error saving/sending PDF:', err)
+
+//     if (pdfPath) {
+//       try {
+//         await fs.access(pdfPath)
+//         await fs.unlink(pdfPath)
+//         console.log('🗑️ Cleaned up failed PDF file')
+//       } catch (unlinkErr) {
+//         // Ignore
+//         console.error('Failed to clean up failed PDF file:', unlinkErr)
+//       }
+//     }
+
+//     return { success: false, error: err.message }
+//   }
+// })
+
+// // Get WhatsApp status
+// ipcMain.handle('getWhatsAppStatus', async () => {
+//   return await getWhatsAppStatus()
+// })
+
+// // Logout WhatsApp
+// ipcMain.handle('logoutWhatsApp', async () => {
+//   await logoutWhatsApp()
+//   return { success: true }
+// })
 
 db.exec(`
     CREATE INDEX IF NOT EXISTS idx_transactions_clientId ON transactions(clientId);

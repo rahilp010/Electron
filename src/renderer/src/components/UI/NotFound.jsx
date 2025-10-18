@@ -53,7 +53,7 @@ const NotFound = () => {
         whileHover={{ scale: 1.05, boxShadow: '0 0 8px rgba(0,0,0,0.2)' }}
         whileTap={{ scale: 0.95 }}
         onClick={() => navigate('/')}
-        className="border-[#5b94b9] border bg-gradient-to-b from-[#5b94b9] to-[#6fb6e0] hover:bg-gradient-to-b hover:from-[#6fb6e0] hover:to-[#5b94b9] text-white text-[#5b94b9] font-bold py-2 px-4 rounded cursor-pointer"
+        className="border-[#5b94b9] border bg-gradient-to-b from-[#5b94b9] to-[#6fb6e0] hover:bg-gradient-to-b hover:from-[#6fb6e0] hover:to-[#5b94b9] text-white font-bold py-2 px-4 rounded cursor-pointer"
       >
         Go to Home
       </motion.button>

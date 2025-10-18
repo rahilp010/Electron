@@ -26,10 +26,6 @@ import NotFound from './components/UI/NotFound.jsx'
 function App() {
   return (
     <>
-      {/* <p className="tip">
-        Please try pressing <code>F12</code> to open the devTool
-      </p> */}
-
       <Provider store={store}>
         <ToastContainer
           position="top-right"
@@ -68,7 +64,6 @@ function App() {
           </KeyBind>
         </HashRouter>
       </Provider>
-      {/* <Versions></Versions> */}
     </>
   )
 }

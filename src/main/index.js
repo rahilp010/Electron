@@ -6,6 +6,7 @@ import icon from '../../resources/icon.png?asset'
 import '../renderer/src/API/dbHandlers.js'
 import { autoBackupOncePerDay } from './autoBackup.js'
 import checkForUpdate from './version.js'
+// import { initWhatsAppClient, getWhatsAppStatus, destroyWhatsAppClient } from './whatsappClient.js'
 
 // Get directory name in ES module
 const currentFilename = fileURLToPath(import.meta.url)
@@ -42,6 +43,8 @@ function createWindow() {
   } else {
     mainWindow.loadFile(join(currentDirname, '../renderer/index.html'))
   }
+
+  return mainWindow
 }
 
 // This method will be called when Electron has finished
@@ -62,16 +65,41 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
+  // const mainWindow = createWindow()
   createWindow()
 
   autoBackupOncePerDay()
 
+  // initWhatsAppClient(mainWindow)
+
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+      // initWhatsAppClient(newWindow)
+    }
   })
 })
+
+// ipcMain.handle('getWhatsAppStatus', () => {
+//   return getWhatsAppStatus()
+// })
+
+// app.on('before-quit', async (event) => {
+//   event.preventDefault()
+//   console.log('🔄 Shutting down gracefully...')
+
+//   try {
+//     await destroyWhatsAppClient()
+//   } catch (err) {
+//     console.error('Error during shutdown:', err)
+//   }
+
+//   setTimeout(() => {
+//     app.exit(0)
+//   }, 1000)
+// })
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

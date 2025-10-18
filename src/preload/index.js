@@ -60,7 +60,33 @@ contextBridge.exposeInMainWorld('api', {
   // Backup methods
   restoreBackup: (backupFilePath) => ipcRenderer.invoke('restoreBackup', backupFilePath),
   selectBackupFile: () => ipcRenderer.invoke('selectBackupFile'),
-  manualBackup: () => ipcRenderer.invoke('manualBackup')
+  manualBackup: () => ipcRenderer.invoke('manualBackup'),
+
+  // Authorization
+  getAuthorization: () => ipcRenderer.invoke('getAuthorization')
+
+  // // WhatsApp methods
+  // saveAndSendWhatsAppPDF: (phone, arrayBuffer, fileName, caption) =>
+  //   ipcRenderer.invoke('saveAndSendWhatsAppPDF', phone, arrayBuffer, fileName, caption),
+
+  // getWhatsAppStatus: () => ipcRenderer.invoke('getWhatsAppStatus'),
+
+  // logoutWhatsApp: () => ipcRenderer.invoke('logoutWhatsApp'),
+
+  // // Listen for WhatsApp events
+  // onWhatsAppQR: (callback) => {
+  //   ipcRenderer.on('whatsapp-qr', (event, qrDataURL) => callback(qrDataURL))
+  // },
+
+  // onWhatsAppStatus: (callback) => {
+  //   ipcRenderer.on('whatsapp-status', (event, status) => callback(status))
+  // },
+
+  // // Cleanup listeners
+  // removeWhatsAppListeners: () => {
+  //   ipcRenderer.removeAllListeners('whatsapp-qr')
+  //   ipcRenderer.removeAllListeners('whatsapp-status')
+  // }
 })
 
 // Version information

@@ -10,3 +10,4 @@ build
 data.db
 clients.xlsx
 backups
+.wwebjs_auth

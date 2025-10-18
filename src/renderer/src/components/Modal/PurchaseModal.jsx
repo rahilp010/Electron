@@ -187,16 +187,16 @@ const PurchaseModal = ({
           return
         } else if (transaction.paymentType === 'full') {
           transaction.pendingAmount = 0
-          transaction.paidAmount = 0
+          transaction.paidAmount = grandTotal
         } else if (
           transaction.statusOfTransaction === 'pending' &&
           transaction.paymentType !== 'partial'
         ) {
-          transaction.pendingAmount = transaction.purchaseAmount * transaction.quantity
+          transaction.pendingAmount = transaction.purchaseAmount
           transaction.paidAmount = 0
         } else if (transaction.statusOfTransaction === 'completed') {
-          transaction.pendingAmount = 0
-          transaction.paidAmount = transaction.purchaseAmount * transaction.quantity
+          transaction.paymentType = 'full'
+          transaction.paidAmount = grandTotal
         } else if (transaction.paymentType === 'partial') {
           if (grandTotal > transaction.pendingAmount + transaction.paidAmount) {
             toast.error('Partial amount should be less than total amount')
@@ -273,24 +273,69 @@ const PurchaseModal = ({
           }
 
           if (transaction.paymentMethod === 'bank') {
-            const updatedBankReceipt = await window.api.updateBankReceipt({
-              ...baseReceipt,
-              amount: grandTotal,
-              bank: transaction.bank || 'IDBI'
-            })
-            dispatch(updateBankReceipt(updatedBankReceipt))
+            if (transaction.paymentType === 'partial') {
+              const updatedBankReceipt = await window.api.updateBankReceipt({
+                ...baseReceipt,
+                amount: transaction.paidAmount,
+                bank: transaction.bank || 'IDBI',
+                statusOfTransaction: 'completed',
+                description: `Partial Payment ${getProductName(transaction.productId)}`
+              })
+              if (transaction.pendingAmount > 0) {
+                const createdBankReceipt = await window.api.createBankReceipt({
+                  ...baseReceipt,
+                  amount: transaction.pendingAmount,
+                  bank: transaction.bank || 'IDBI'
+                })
+                dispatch(setBankReceipt(createdBankReceipt))
+              }
+              dispatch(updateBankReceipt(updatedBankReceipt))
+            } else if (transaction.paymentType === 'full') {
+              const updatedBankReceipt = await window.api.updateBankReceipt({
+                ...baseReceipt,
+                amount: grandTotal,
+                bank: transaction.bank || 'IDBI'
+              })
+              dispatch(updateBankReceipt(updatedBankReceipt))
+            } else {
+              const updatedBankReceipt = await window.api.updateBankReceipt({
+                ...baseReceipt,
+                amount: grandTotal,
+                bank: transaction.bank || 'IDBI'
+              })
+              dispatch(updateBankReceipt(updatedBankReceipt))
+            }
           } else if (transaction.paymentMethod === 'cash') {
-            const updatedCashReceipt = await window.api.updateCashReceipt({
-              ...baseReceipt,
-              amount: grandTotal,
-              cash: transaction.cash || 'Cash'
-            })
-            dispatch(updateCashReceipt(updatedCashReceipt))
+            if (transaction.paymentType === 'partial') {
+              const updatedCashReceipt = await window.api.updateCashReceipt({
+                ...baseReceipt,
+                amount: transaction.paidAmount,
+                cash: transaction.cash || 'Cash',
+                statusOfTransaction: 'completed'
+              })
+              if (transaction.pendingAmount > 0) {
+                const createdCashReceipt = await window.api.createCashReceipt({
+                  ...baseReceipt,
+                  amount: transaction.pendingAmount,
+                  cash: transaction.cash || 'Cash'
+                })
+                dispatch(setCashReceipt(createdCashReceipt))
+              }
+              dispatch(updateCashReceipt(updatedCashReceipt))
+            } else {
+              const updatedCashReceipt = await window.api.updateCashReceipt({
+                ...baseReceipt,
+                amount: grandTotal,
+                cash: transaction.cash || 'Cash'
+              })
+              dispatch(updateCashReceipt(updatedCashReceipt))
+            }
           }
         }
         await fetchTransaction() // Refresh data
         setShowModal(false)
       } catch (error) {
+        console.log(error)
         toast.error('An error occurred while processing your request', error)
       } finally {
         setIsSubmittingTransaction(false)
@@ -442,7 +487,7 @@ const PurchaseModal = ({
       )}
       {type === 'transaction' ? (
         <form onSubmit={handleSubmitTransaction}>
-          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-xl relative">
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-2xl relative">
             <p className="text-lg font-semibold mb-4">
               {isUpdateExpense ? 'Update Purchase' : 'Add Purchase'}
             </p>
@@ -463,6 +508,7 @@ const PurchaseModal = ({
                     value: client.id
                   }))}
                   value={transaction.clientId}
+                  virtualized={true}
                   onChange={(value) => handleOnChangeEvent(value, 'clientId')}
                   placeholder="Select Client"
                   style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
@@ -502,6 +548,7 @@ const PurchaseModal = ({
                   }}
                   menuStyle={{ zIndex: productModal ? 1 : 999 }}
                   menuMaxHeight={300}
+                  virtualized={true}
                   renderMenuItem={(label, item) => (
                     <div className="flex justify-between w-full items-center">
                       <span
