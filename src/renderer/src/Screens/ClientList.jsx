@@ -36,7 +36,7 @@ import { IoLogoWhatsapp } from 'react-icons/io'
 const TABLE_HEADERS = [
   // { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
   { key: 'date', label: 'Date', width: 'w-[120px]', icon: Calendar1 },
-  { key: 'clientName', label: 'Client Name', width: 'w-[300px]', icon: User },
+  { key: 'clientName', label: 'Client Name', width: 'w-[500px]', icon: User },
   { key: 'gstNo', label: 'GST No', width: 'w-[200px]', icon: Package },
   { key: 'phoneNo', label: 'Phone No', width: 'w-[200px]', icon: Phone },
   { key: 'pendingAmount', label: 'Pending Payment', width: 'w-[200px]', icon: TrendingUp },
@@ -63,7 +63,8 @@ const getInitials = (name) => {
       ?.split(' ')
       .map((n) => n[0])
       .join('')
-      .toUpperCase() || ''
+      .toUpperCase()
+      .slice(0, 2) || ''
   )
 }
 
@@ -108,25 +109,42 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
 
   const handleHistory = async (id) => {
     try {
-      const response = await window.api.getAllTransactions()
-      const filteredResponse = response.filter((transaction) => transaction.clientId === id)
-      setClientHistory(filteredResponse)
-      console.log('response History', filteredResponse)
+      // const response = await window.api.getAllTransactions()
+      const bankReceipts = await window.api.getRecentBankReceipts()
+      const cashReceipts = await window.api.getRecentCashReceipts()
+      // const filteredResponse = response.filter((transaction) => transaction.clientId === id)
+      const filteredBankReceipts = bankReceipts.filter((receipt) => receipt.clientId === id)
+      const filteredCashReceipts = cashReceipts.filter((receipt) => receipt.clientId === id)
+      const combinedHistory = [...filteredBankReceipts, ...filteredCashReceipts]
+      setClientHistory(combinedHistory)
     } catch (error) {
       toast.error('Failed to fetch client details: ' + error.message)
     }
   }
 
   return (
-    <tr className={`text-sm text-center ${rowBg}`}>
-      <td className="px-4 py-3">{new Date(client.createdAt).toLocaleDateString()}</td>
+    <tr className={`text-sm text-center`}>
+      <td className="px-4 py-3">
+        {new Date(client.createdAt).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        })}
+      </td>
       <td className="px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 px-6 uppercase truncate">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {getInitials(client.clientName)}
+        <td className="px-4">
+          <div className="flex items-center gap-3 px-6">
+            <div className="relative group">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
+                {getInitials(client.clientName)}
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
+            </div>
+            <span className="font-medium text-gray-700 transition-colors duration-200 group-hover:text-indigo-600">
+              {client.clientName}
+            </span>
           </div>
-          <div className="truncate">{client.clientName}</div>
-        </div>
+        </td>
         <Whisper
           trigger="hover"
           placement="left"
@@ -148,8 +166,8 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
           }
         >
           <Info
-            size={14}
-            className="text-blue-500 cursor-pointer hover:scale-110 transition-all duration-300"
+            size={16}
+            className="text-[#897ee8] cursor-pointer hover:scale-110 transition-all duration-300"
             onClick={() => {
               setOpen(true)
               handleHistory(client.id)
@@ -168,31 +186,38 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
           : client.phoneNo}
       </td>
       <td className="px-4 py-3">
-        <div className="border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] p-1 rounded-full font-bold text-xs px-2">
+        <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-50 to-amber-100 text-amber-700 border border-amber-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300 ">
           ₹ {toThousands(Number(client.pendingAmount).toFixed(0))}
         </div>
       </td>
-      <td className="px-4 py-3 font-bold">
-        <div className="border border-indigo-200 text-indigo-600 bg-indigo-100 p-1 rounded-full font-bold text-xs px-2">
+
+      <td className="px-4 py-3">
+        <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-indigo-50 to-indigo-100 text-indigo-700 border border-indigo-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
           ₹ {toThousands(Number(client.paidAmount).toFixed(0))}
         </div>
       </td>
+
       <td className="px-4 py-3">
-        <div className="text-[#166534] bg-[#dcfce7] border border-[#8ffab5] p-1 rounded-full font-bold text-xs px-2">
+        <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-emerald-50 to-green-100 text-emerald-700 border border-emerald-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
           ₹ {toThousands(Number(client.pendingFromOurs).toFixed(0))}
         </div>
       </td>
-      <td className="px-4 py-3 tracking-wide">
-        <div className="text-[#991b1b] bg-[#fee2e2] border border-[#ffadad] p-1 rounded-full font-bold text-xs px-2">
+
+      <td className="px-4 py-3">
+        <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-rose-50 to-red-100 text-rose-700 border border-rose-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
           {client.accountType}
         </div>
       </td>
-      <td className="px-4 py-3 tracking-wide">
-        ₹{' '}
-        {toThousands(
-          calculateTotalWorth(client.pendingFromOurs, client.pendingAmount, client.paidAmount)
-        )}
+
+      <td className="px-4 py-3 font-semibold">
+        <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
+          ₹{' '}
+          {toThousands(
+            calculateTotalWorth(client.pendingFromOurs, client.pendingAmount, client.paidAmount)
+          )}
+        </div>
       </td>
+
       <td className="w-28">
         <div className="flex gap-3 justify-center items-center">
           <button
@@ -569,7 +594,7 @@ const ClientList = () => {
 
       <div className="overflow-y-auto h-screen customScrollbar">
         {/* Statistics Cards */}
-        <div className="border border-gray-200 shadow px-5 py-3 mx-6 rounded-3xl my-4 flex">
+        <div className="bg-gradient-to-r from-slate-50 to-gray-100 border border-gray-200 rounded-2xl shadow-md px-6 py-4 mx-7 flex items-center justify-start transition-all duration-300 hover:shadow-lg">
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light">Total Assets Value</p>
             <p className="text-2xl ">₹ {toThousands(statistics.totalAssets)}</p>
@@ -652,18 +677,17 @@ const ClientList = () => {
             {/* Table */}
             <div
               ref={tableContainerRef}
-              className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-2xl h-screen mt-5"
+              className="overflow-x-auto customScrollbar border border-gray-200 rounded-2xl h-screen mt-5"
             >
-              <table className="min-w-max border-collapse table-fixed">
-                <thead className="bg-gradient-to-r from-gray-50 to-gray-100  relative z-20">
-                  <tr className="text-sm sticky top-0 z-20 p-3">
+              <table className="min-w-max table-fixed">
+                <thead className="relative z-20">
+                  <tr className="text-sm sticky top-0 z-20 bg-gradient-to-r from-gray-50 to-gray-100">
                     {TABLE_HEADERS.map((header) => {
                       const IconTable = header.icon
                       return (
                         <th
                           key={header.key}
-                          className={`px-4 py-3 border-r border-gray-300 ${header.width} ${header.sticky ? 'sticky left-0 z-30 bg-gray-200 shadow-md' : 'bg-gray-200'}
-        `}
+                          className={`px-4 py-3 border-b border-gray-300 ${header.width} ${header.sticky} bg-transparent`}
                         >
                           <div className="flex items-center justify-center gap-2">
                             <IconTable size={16} className="text-gray-500" />
@@ -743,7 +767,7 @@ const ClientList = () => {
         </Modal.Header>
 
         <Modal.Body>
-          {clientHistory.length && (
+          {clientHistory.length > 0 ? (
             <>
               {/* Summary Card */}
               <div className="bg-gradient-to-br from-orange-50 to-red-50 border-b-2 border-orange-200 p-2 px-6 mx-4 rounded-2xl shadow-lg">
@@ -754,7 +778,19 @@ const ClientList = () => {
                       <IndianRupee size={24} className="text-orange-600" />
                       <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
                         {toThousands(
-                          clientHistory.reduce((total, t) => total + t.sellAmount * t.quantity, 0)
+                          clientHistory.reduce(
+                            (total, t) =>
+                              total +
+                              (t.sellAmount && t.quantity
+                                ? t.sellAmount * t.quantity
+                                : t.statusOfTransaction === 'pending' && t.paymentType === 'full'
+                                  ? t.amount
+                                  : t.statusOfTransaction === 'pending' &&
+                                      t.paymentType === 'partial'
+                                    ? t.pendingAmount
+                                    : 0),
+                            0
+                          )
                         )}
                       </h2>
                     </div>
@@ -817,7 +853,7 @@ const ClientList = () => {
                           >
                             {/* Date */}
                             <td className="px-6 py-3 text-gray-800">
-                              {new Date(t.createdAt).toLocaleDateString('en-IN', {
+                              {new Date(t.createdAt || t.date).toLocaleDateString('en-IN', {
                                 day: '2-digit',
                                 month: 'short',
                                 year: 'numeric'
@@ -826,11 +862,15 @@ const ClientList = () => {
 
                             {/* Product */}
                             <td className="px-6 py-3 text-gray-700">
-                              {getProductName(t.productId, products) || '-'}
+                              {t.productId
+                                ? getProductName(t.productId, products)
+                                : t.description || '-'}
                             </td>
 
                             {/* Quantity */}
-                            <td className="px-6 py-3 font-medium text-gray-800">{t.quantity}</td>
+                            <td className="px-6 py-3 font-medium text-gray-800">
+                              {t.quantity || '-'}
+                            </td>
 
                             {/* Status */}
                             <td className="px-6 py-3">
@@ -860,6 +900,12 @@ const ClientList = () => {
                 </div>
               </div>
             </>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-500 border w-full rounded-xl h-32 flex items-center justify-center text-xl">
+                No Transactions Found
+              </p>
+            </div>
           )}
         </Modal.Body>
 

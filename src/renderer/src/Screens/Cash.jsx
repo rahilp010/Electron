@@ -203,7 +203,9 @@ const Cash = () => {
     party: '',
     amount: '',
     description: '',
-    dueDate: null
+    dueDate: null,
+    taxAmount: '',
+    statusOfTransaction: 'pending'
   })
 
   // Form validation errors
@@ -211,6 +213,9 @@ const Cash = () => {
   const [recentReceipts, setRecentReceipts] = useState([])
 
   const cashOptions = [{ label: 'Cash Account', value: 'Cash Account', icon: cash }]
+  const STATIC_CASH_BALANCES = {
+    'Cash Account': 2377100
+  }
 
   const typeOptions = [
     { label: 'Receipt', value: 'Receipt', color: 'emerald', icon: TrendingUp },
@@ -300,7 +305,7 @@ const Cash = () => {
     const newErrors = {}
 
     if (!cashReceipt.type) newErrors.type = 'Type is required'
-    if (!cashReceipt.bank) newErrors.bank = 'Bank is required'
+    if (!cashReceipt.cash) newErrors.cash = 'Cash is required'
     if (!cashReceipt.date) newErrors.date = 'Date is required'
     if (!cashReceipt.party) newErrors.party = 'Party/Account is required'
     if (!cashReceipt.amount || Number(cashReceipt.amount) <= 0) {
@@ -343,7 +348,10 @@ const Cash = () => {
           date: new Date(cashReceipt.date),
           party: clients.find((c) => c.id === cashReceipt.party)?.clientName,
           amount: Number(cashReceipt.amount) || 0,
-          description: cashReceipt.description
+          description: cashReceipt.description,
+          statusOfTransaction: 'pending',
+          dueDate: cashReceipt.dueDate ? new Date(cashReceipt.dueDate) : null,
+          taxAmount: cashReceipt.taxAmount
         }
 
         let response
@@ -396,7 +404,9 @@ const Cash = () => {
       party: '',
       amount: '',
       description: '',
-      dueDate: null
+      dueDate: null,
+      taxAmount: '',
+      statusOfTransaction: 'pending'
     })
     setErrors({})
   }, [recentReceipts])
@@ -410,7 +420,9 @@ const Cash = () => {
       party: receipt.party || '',
       amount: receipt.amount ? String(receipt.amount) : '',
       description: receipt.description || '',
-      dueDate: receipt.dueDate ? new Date(receipt.dueDate) : null
+      dueDate: receipt.dueDate ? new Date(receipt.dueDate) : null,
+      taxAmount: receipt.taxAmount || '',
+      statusOfTransaction: receipt.statusOfTransaction || 'pending'
     })
 
     setIsUpdatingReceipt(true)
@@ -459,6 +471,10 @@ const Cash = () => {
     label: client.clientName,
     value: client.id
   }))
+
+  const selectedCashBalance = useMemo(() => {
+    return STATIC_CASH_BALANCES[cashReceipt.cash] || 0
+  }, [cashReceipt.cash])
 
   // Effects
   useEffect(() => {
@@ -556,16 +572,26 @@ const Cash = () => {
               <div className="flex gap-3 items-center">
                 <SelectPicker
                   data={cashOptions}
-                  value={cashReceipt.bank}
-                  onChange={(value) => handleInputChange('bank', value)}
+                  value={cashReceipt.cash}
+                  onChange={(value) => handleInputChange('cash', value)}
                   size="lg"
                   searchable={false}
                   placeholder="Select Account"
                   className="flex-1"
                   renderMenuItem={(label, item) => (
-                    <div className="flex items-center gap-3">
-                      <img src={item?.icon} alt="" className="w-7 h-7" />
-                      <span className="pt-1">{label}</span>
+                    <div className="flex justify-between">
+                      <div className="flex items-center gap-3">
+                        <img src={item?.icon} alt="" className="w-7 h-7" />
+                        <span className="pt-1">{label}</span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-2">
+                        Available Balance:{' '}
+                        <span className="font-semibold text-emerald-600">
+                          {cashReceipt.cash === item.value
+                            ? toThousands(selectedCashBalance + statistics?.netBalance)
+                            : toThousands('')}
+                        </span>
+                      </p>
                     </div>
                   )}
                   renderValue={(value, item) => (
@@ -581,8 +607,10 @@ const Cash = () => {
                   speaker={
                     <Tooltip className="!bg-white !text-black !shadow-lg rounded-xl p-4 border border-gray-100">
                       <div>
-                        <p className="font-thin text-sm">Current Balance</p>
-                        <p className="font-bold text-2xl">₹ {toThousands(statistics.netBalance)}</p>
+                        <p className="font-thin text-sm">Cash Balance</p>
+                        <p className="font-bold text-2xl">
+                          ₹ {toThousands(selectedCashBalance + statistics?.netBalance)}
+                        </p>
                       </div>
                     </Tooltip>
                   }

@@ -75,7 +75,7 @@ const PurchaseModal = ({
     if (isUpdateExpense && existingTransaction) {
       return {
         clientId: existingTransaction.clientId || '',
-        productId: existingTransaction.productId || '',
+        productId: existingTransaction.productId || 0,
         quantity: Number(existingTransaction.quantity) || 0,
         sellAmount: Number(existingTransaction.sellAmount) || 0,
         purchaseAmount: Number(existingTransaction.purchaseAmount) || 0,
@@ -91,7 +91,7 @@ const PurchaseModal = ({
     }
     return {
       clientId: '',
-      productId: '',
+      productId: 0,
       quantity: 0,
       sellAmount: 0,
       purchaseAmount: 0,
@@ -487,7 +487,7 @@ const PurchaseModal = ({
       )}
       {type === 'transaction' ? (
         <form onSubmit={handleSubmitTransaction}>
-          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-2xl relative">
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-full min-w-4xl relative">
             <p className="text-lg font-semibold mb-4">
               {isUpdateExpense ? 'Update Purchase' : 'Add Purchase'}
             </p>
@@ -511,9 +511,9 @@ const PurchaseModal = ({
                   virtualized={true}
                   onChange={(value) => handleOnChangeEvent(value, 'clientId')}
                   placeholder="Select Client"
-                  style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
+                  style={{ width: '100%', zIndex: clientModal ? 1 : 999 }}
                   menuStyle={{ zIndex: clientModal ? 1 : 999 }}
-                  menuMaxHeight={200}
+                  menuMaxHeight={250}
                   renderExtraFooter={() => (
                     <div className="px-3 py-1 border-t border-gray-200">
                       <p
@@ -543,18 +543,18 @@ const PurchaseModal = ({
                   }}
                   placeholder="Select Products"
                   style={{
-                    width: 300,
+                    width: '100%',
                     zIndex: productModal ? 1 : 999
                   }}
                   menuStyle={{ zIndex: productModal ? 1 : 999 }}
-                  menuMaxHeight={300}
+                  menuMaxHeight={250}
                   virtualized={true}
                   renderMenuItem={(label, item) => (
                     <div className="flex justify-between w-full items-center">
                       <span
                         className="truncate"
                         style={{
-                          maxWidth: '200px',
+                          maxWidth: '500px',
                           display: 'inline-block',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -653,12 +653,12 @@ const PurchaseModal = ({
                 </label>
                 <CheckPicker
                   data={taxOptions}
-                  searchable={taxOptions.length > 5}
+                  searchable={taxOptions.length > 6}
                   size="md"
                   placeholder="Select Tax"
                   value={transaction.taxAmount.map((t) => t.code)}
                   onChange={(value) => handleOnChangeEvent(value, 'taxAmount')}
-                  style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
+                  style={{ width: '100%', zIndex: clientModal ? 1 : 999 }}
                   menuStyle={{ zIndex: clientModal ? 1 : 999 }}
                 />
               </div>

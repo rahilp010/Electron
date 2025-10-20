@@ -8,7 +8,13 @@ import { Plus, Info, Import, Edit, Trash, Save, RotateCcw, AlertCircle } from 'l
 import Loader from '../components/Loader'
 import { useNavigate } from 'react-router-dom'
 import 'rsuite/dist/rsuite-no-reset.min.css'
-import { createBankReceipt, setClients, setProducts } from '../app/features/electronSlice'
+import {
+  createBankReceipt,
+  deleteBankReceipt,
+  setClients,
+  setProducts,
+  updateClient
+} from '../app/features/electronSlice'
 import { useDispatch, useSelector } from 'react-redux'
 import { clientApi, productApi } from '../API/Api'
 import { toast } from 'react-toastify'
@@ -17,8 +23,6 @@ import { DatePicker, Input, SelectPicker, Tooltip, Whisper } from 'rsuite'
 import IDBI from '../assets/IDBIBank.png'
 import HDFC from '../assets/HDFCBank.png'
 import SBI from '../assets/SBI.png'
-import CB from '../assets/CBI.png'
-import Axis from '../assets/Axisbank.png'
 import ImportExcel from '../components/UI/ImportExcel'
 import {
   TrendingUp,
@@ -107,9 +111,11 @@ const ReceiptRow = React.memo(
         <td className="px-6 py-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-              {getInitials(receipt.party)}
+              {getInitials(clients.find((c) => c.id === receipt.clientId)?.clientName)}
             </div>
-            <span className="font-medium text-gray-800">{receipt.party || 'Ram Bharoshe'}</span>
+            <span className="font-medium text-gray-800">
+              {clients.find((c) => c.id === receipt.clientId)?.clientName || 'Unknown Client'}
+            </span>
           </div>
         </td>
 
@@ -174,7 +180,7 @@ const ReceiptRow = React.memo(
             className="text-red-500 p-2 border border-red-500 rounded-full hover:bg-red-500 transition-all duration-200 hover:scale-110 hover:text-white "
             onClick={(e) => {
               e.stopPropagation()
-              onDelete(receipt?.id)
+              onDelete(receipt)
             }}
             title="Delete receipt"
           >
@@ -200,15 +206,24 @@ const Bank = () => {
 
   // Form state
   const [bankReceipt, setBankReceipt] = useState({
+    id: '',
     transactionId: '',
+    clientId: '',
+    productId: '',
     srNo: '',
     type: 'Receipt',
     bank: 'IDBI',
     date: new Date(),
-    party: '',
     amount: '',
     description: '',
-    dueDate: null
+    dueDate: null,
+    taxAmount: '',
+    statusOfTransaction: 'pending',
+    pendingAmount: '',
+    pendingFromOurs: '',
+    paidAmount: '',
+    quantity: '',
+    paymentType: 'full',
   })
 
   // Form validation errors
@@ -218,10 +233,14 @@ const Bank = () => {
   const bankOptions = [
     { label: 'IDBI Bank', value: 'IDBI', icon: IDBI },
     { label: 'HDFC Bank', value: 'HDFC', icon: HDFC },
-    { label: 'SBI Bank', value: 'SBI', icon: SBI },
-    { label: 'Central Bank', value: 'CB', icon: CB },
-    { label: 'Axis Bank', value: 'Axis', icon: Axis }
+    { label: 'SBI Bank', value: 'SBI', icon: SBI }
   ]
+
+  const STATIC_BANK_BALANCES = {
+    IDBI: 3017655,
+    HDFC: 0,
+    SBI: 0
+  }
 
   const typeOptions = [
     { label: 'Receipt', value: 'Receipt', color: 'emerald', icon: TrendingUp },
@@ -271,7 +290,8 @@ const Bank = () => {
     try {
       setShowLoader(true)
       const receipts = await window.api.getRecentBankReceipts()
-      setRecentReceipts(receipts)
+      const sorted = receipts.sort((a, b) => b.id - a.id) // latest first
+      setRecentReceipts(sorted)
 
       if (!isUpdatingReceipt && receipts.length > 0) {
         const maxSrNo = Math.max(...receipts.map((r) => Number(r.srNo) || 0))
@@ -309,7 +329,7 @@ const Bank = () => {
     if (!bankReceipt.type) newErrors.type = 'Type is required'
     if (!bankReceipt.bank) newErrors.bank = 'Bank is required'
     if (!bankReceipt.date) newErrors.date = 'Date is required'
-    if (!bankReceipt.party) newErrors.party = 'Party/Account is required'
+    if (!bankReceipt.clientId) newErrors.party = 'Party/Account is required'
     if (!bankReceipt.amount || Number(bankReceipt.amount) <= 0) {
       newErrors.amount = 'Valid amount is required'
     }
@@ -329,6 +349,33 @@ const Bank = () => {
     [errors]
   )
 
+  const handleClearForm = useCallback(() => {
+    setIsUpdatingReceipt(false)
+    setSelectedReceiptId(null)
+
+    const maxSrNo =
+      recentReceipts.length > 0 ? Math.max(...recentReceipts.map((r) => Number(r.srNo) || 0)) : 0
+
+    setBankReceipt({
+      id: null,
+      srNo: String(maxSrNo + 1),
+      type: 'Receipt',
+      bank: 'IDBI',
+      date: new Date(),
+      amount: '',
+      description: '',
+      dueDate: '',
+      taxAmount: '',
+      pendingAmount: '',
+      pendingFromOurs: '',
+      paidAmount: '',
+      statusOfTransaction: 'pending',
+      quantity: 0,
+      paymentType: 'full'
+    })
+    setErrors({})
+  }, [recentReceipts])
+
   const handleSubmitBankReceipt = useCallback(
     async (e) => {
       e.preventDefault()
@@ -342,28 +389,90 @@ const Bank = () => {
       setIsSubmittingTransaction(true)
 
       try {
+        // Prepare the data to send (omit id for new receipts)
+
+        const transaction = await window.api.createTransaction({
+          clientId: bankReceipt?.clientId,
+          productId: null,
+          quantity: bankReceipt?.quantity || 0,
+          totalAmount: bankReceipt?.amount || 0,
+          sellAmount: bankReceipt?.sellAmount || 0,
+          purchaseAmount: bankReceipt?.purchaseAmount || 0,
+          paymentMethod: 'bank',
+          statusOfTransaction: 'pending',
+          paymentType: bankReceipt?.paymentType || 'full',
+          pendingAmount: bankReceipt?.pendingAmount || 0,
+          paidAmount: bankReceipt?.paidAmount || 0,
+          taxAmount: bankReceipt?.taxAmount || '',
+          dueDate: bankReceipt?.dueDate
+            ? new Date(bankReceipt.dueDate)
+            : new Date().setMonth(new Date().getMonth() + 1),
+          transactionType: bankReceipt?.type === 'Receipt' ? 'sales' : 'purchase'
+        })
+
         const bankReceiptData = {
-          transactionId: bankReceipt.id,
+          clientId: bankReceipt?.clientId,
+          productId: bankReceipt?.productId || null,
+          transactionId: transaction.id,
           srNo: bankReceipt.srNo,
           type: bankReceipt.type,
           bank: bankReceipt.bank,
           date: new Date(bankReceipt.date),
-          party: clients.find((c) => c.id === bankReceipt.party)?.clientName,
           amount: Number(bankReceipt.amount) || 0,
-          description: bankReceipt.description
+          description: bankReceipt.description,
+          dueDate: bankReceipt.dueDate
+            ? new Date(bankReceipt.dueDate)
+            : new Date().setMonth(new Date().getMonth() + 1),
+          taxAmount: bankReceipt.taxAmount || [],
+          statusOfTransaction: bankReceipt.statusOfTransaction || 'pending',
+          pendingAmount: bankReceipt.type === 'Receipt' ? Number(bankReceipt.amount) : 0,
+          pendingFromOurs: bankReceipt.type === 'Payment' ? Number(bankReceipt.amount) : 0,
+          paidAmount: bankReceipt.paidAmount || 0,
+          quantity: bankReceipt.quantity || 0,
+          paymentType: bankReceipt.paymentType || 'full'
         }
 
         let response
+
         if (isUpdatingReceipt && selectedReceiptId) {
+          // Updating an existing receipt
           response = await window.api.updateBankReceipt({
             id: selectedReceiptId,
             ...bankReceiptData
           })
           toast.success('Bank receipt updated successfully')
         } else {
+          // Creating a new receipt
           response = await window.api.createBankReceipt(bankReceiptData)
-          dispatch(createBankReceipt(bankReceiptData))
+
+          // Update frontend state with backend-generated ID
+          setBankReceipt((prev) => ({
+            ...prev,
+            id: response.id,
+            transactionId: transaction.id
+          }))
+
+          dispatch(createBankReceipt(response))
           toast.success('Bank receipt added successfully')
+
+          // Update client balances
+          const clientFiltered = clients.find((c) => c.id === bankReceipt.clientId)
+
+          if (bankReceipt.type === 'Receipt') {
+            const updateData = await window.api.updateClient({
+              id: clientFiltered?.id,
+              ...clientFiltered,
+              pendingAmount: clientFiltered?.pendingAmount + Number(bankReceipt.amount)
+            })
+            dispatch(updateClient(updateData))
+          } else {
+            const updateData = await window.api.updateClient({
+              id: clientFiltered?.id,
+              ...clientFiltered,
+              pendingFromOurs: clientFiltered?.pendingFromOurs + Number(bankReceipt.amount)
+            })
+            dispatch(updateClient(updateData))
+          }
         }
 
         await fetchRecentReceipts()
@@ -382,40 +491,32 @@ const Bank = () => {
       selectedReceiptId,
       validateForm,
       fetchRecentReceipts,
-      dispatch
+      dispatch,
+      clients,
+      handleClearForm
     ]
   )
 
-  const handleClearForm = useCallback(() => {
-    setIsUpdatingReceipt(false)
-    setSelectedReceiptId(null)
-
-    const maxSrNo =
-      recentReceipts.length > 0 ? Math.max(...recentReceipts.map((r) => Number(r.srNo) || 0)) : 0
-
-    setBankReceipt({
-      srNo: String(maxSrNo + 1),
-      type: 'Receipt',
-      bank: 'IDBI',
-      date: new Date(),
-      party: '',
-      amount: '',
-      description: '',
-      dueDate: null
-    })
-    setErrors({})
-  }, [recentReceipts])
-
   const handleUpdateReceipt = useCallback((receipt) => {
     setBankReceipt({
+      id: receipt.id,
       srNo: receipt.srNo || '',
+      clientId: receipt.clientId,
+      productId: receipt.productId || null,
+      transactionId: receipt.transactionId,
+      pendingAmount: receipt.pendingAmount,
+      pendingFromOurs: receipt.pendingFromOurs,
+      paidAmount: receipt.paidAmount,
       type: receipt.type || 'Receipt',
       bank: receipt.bank || 'IDBI',
       date: receipt.date ? new Date(receipt.date) : new Date(),
-      party: receipt.party || '',
       amount: receipt.amount ? String(receipt.amount) : '',
       description: receipt.description || '',
-      dueDate: receipt.dueDate ? new Date(receipt.dueDate) : null
+      dueDate: receipt.dueDate ? new Date(receipt.dueDate) : null,
+      taxAmount: receipt.taxAmount || '',
+      statusOfTransaction: receipt.statusOfTransaction || 'pending',
+      quantity: receipt.quantity || 0,
+      paymentType: receipt.paymentType || 'full'
     })
 
     setIsUpdatingReceipt(true)
@@ -426,18 +527,42 @@ const Bank = () => {
   }, [])
 
   const handleDeleteReceipt = useCallback(
-    async (id) => {
+    async (receipt) => {
+      // pass the full receipt object, not just id
       if (!window.confirm('Are you sure you want to delete this receipt?')) return
 
       try {
-        await window.api.deleteBankReceipt(id)
+        const res = await window.api.deleteBankReceipt(receipt.id)
+        if (!res.success) throw new Error(res.message || 'Failed to delete')
+
         await fetchRecentReceipts()
+        dispatch(deleteBankReceipt(receipt.id))
         toast.success('Receipt deleted successfully')
+
+        const clientFiltered = clients.find((c) => c.id === receipt.clientId)
+        if (!clientFiltered) return
+
+        // Adjust client balances based on type
+        if (receipt.type === 'Receipt') {
+          const updateClientData = await window.api.updateClient({
+            id: clientFiltered.id,
+            ...clientFiltered,
+            pendingAmount: clientFiltered.pendingAmount - Number(receipt.amount)
+          })
+          dispatch(updateClient(updateClientData))
+        } else {
+          const updateClientData = await window.api.updateClient({
+            id: clientFiltered.id,
+            ...clientFiltered,
+            pendingFromOurs: clientFiltered.pendingFromOurs - Number(receipt.amount)
+          })
+          dispatch(updateClient(updateClientData))
+        }
       } catch (error) {
         toast.error('Failed to delete receipt: ' + error.message)
       }
     },
-    [fetchRecentReceipts]
+    [fetchRecentReceipts, clients, dispatch]
   )
 
   const handleImportExcel = useCallback(
@@ -464,6 +589,10 @@ const Bank = () => {
     label: client.clientName,
     value: client.id
   }))
+
+  const selectedBankBalance = useMemo(() => {
+    return STATIC_BANK_BALANCES[bankReceipt.bank] || 0
+  }, [bankReceipt.bank])
 
   // Effects
   useEffect(() => {
@@ -549,6 +678,8 @@ const Bank = () => {
                 size="lg"
                 searchable={false}
                 placeholder="Select Type"
+                container={() => document.body}
+                menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 className="w-full"
               />
               {errors.type && (
@@ -569,11 +700,23 @@ const Bank = () => {
                   size="lg"
                   searchable={false}
                   placeholder="Select Bank"
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                   className="flex-1"
                   renderMenuItem={(label, item) => (
-                    <div className="flex items-center gap-3">
-                      <img src={item?.icon} alt="" className="w-7 h-7" />
-                      <span className="pt-1">{label}</span>
+                    <div className="flex justify-between">
+                      <div className="flex items-center gap-3">
+                        <img src={item?.icon} alt="" className="w-7 h-7" />
+                        <span className="pt-1">{label}</span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-2">
+                        Available Balance:{' '}
+                        <span className="font-semibold text-emerald-600">
+                          {bankReceipt.bank === item.value
+                            ? toThousands(selectedBankBalance + statistics?.netBalance)
+                            : toThousands('')}
+                        </span>
+                      </p>
                     </div>
                   )}
                   renderValue={(value, item) => (
@@ -587,10 +730,12 @@ const Bank = () => {
                   trigger="hover"
                   placement="top"
                   speaker={
-                    <Tooltip className="!bg-white !text-black !shadow-lg rounded-xl p-4 border border-gray-100">
+                    <Tooltip className="!bg-white !text-black !shadow-lg rounded-xl p-4 border border-gray-100 w-52">
                       <div>
-                        <p className="font-thin text-sm">Current Balance</p>
-                        <p className="font-bold text-2xl">₹ {toThousands(statistics.netBalance)}</p>
+                        <p className="font-thin text-sm">Bank Balance</p>
+                        <p className="font-bold text-2xl">
+                          ₹ {toThousands(selectedBankBalance + statistics?.netBalance)}
+                        </p>
                       </div>
                     </Tooltip>
                   }
@@ -639,17 +784,19 @@ const Bank = () => {
               </label>
               <SelectPicker
                 data={clientOptions}
-                value={bankReceipt.party}
-                onChange={(value) => handleInputChange('party', value)}
+                value={bankReceipt.clientId}
+                onChange={(value) => handleInputChange('clientId', value)}
                 size="lg"
                 searchable
                 placeholder="Select Client"
                 className="w-full"
+                container={() => document.body}
+                menuStyle={{ zIndex: 99999, position: 'absolute' }}
               />
-              {errors.party && (
+              {errors.clientId && (
                 <div className="flex items-center gap-1 mt-1 text-red-500 text-xs">
                   <AlertCircle size={12} />
-                  {errors.party}
+                  {errors.clientId}
                 </div>
               )}
             </div>
@@ -765,18 +912,20 @@ const Bank = () => {
             </thead>
             <tbody className="text-sm">
               {recentReceipts.length > 0 ? (
-                recentReceipts.slice(0,3).map((receipt, index) => (
-                  <ReceiptRow
-                    key={receipt.id}
-                    receipt={receipt}
-                    index={index}
-                    balance={balances[index]}
-                    clients={clients}
-                    onEdit={handleUpdateReceipt}
-                    onDelete={handleDeleteReceipt}
-                    isSelected={selectedReceiptId === receipt.id}
-                  />
-                ))
+                recentReceipts
+                  .slice(0, 3)
+                  .map((receipt, index) => (
+                    <ReceiptRow
+                      key={receipt.id}
+                      receipt={receipt}
+                      index={index}
+                      balance={balances[index]}
+                      clients={clients}
+                      onEdit={handleUpdateReceipt}
+                      onDelete={handleDeleteReceipt}
+                      isSelected={selectedReceiptId === receipt.id}
+                    />
+                  ))
               ) : (
                 <tr>
                   <td

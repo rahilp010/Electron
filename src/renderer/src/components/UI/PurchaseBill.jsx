@@ -490,15 +490,37 @@ const PurchaseBill = () => {
 
                   {/* Payment Options */}
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-3">
-                      <Checkbox
-                        value="partial"
-                        checked={transaction.paymentType === 'partial'}
-                        onChange={(_, checked) =>
-                          handleOnChangeEvent(checked ? 'partial' : 'full', 'paymentType')
-                        }
-                      />
-                      <span className="text-sm font-medium text-gray-700">Partial Payment</span>
+                    <div className="grid grid-cols-2 items-center gap-4">
+                      {/* Payment Method */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Payment Method
+                        </label>
+                        <SelectPicker
+                          data={[
+                            { label: 'Bank Transfer', value: 'bank' },
+                            { label: 'Cash', value: 'cash' }
+                          ]}
+                          value={transaction.paymentMethod}
+                          onChange={(value) => handleOnChangeEvent(value, 'paymentMethod')}
+                          placeholder="Select Payment Method"
+                          style={{ width: '100%' }}
+                          searchable={false}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="mt-6 flex items-center">
+                        <Checkbox
+                          value="partial"
+                          checked={transaction.paymentType === 'partial'}
+                          onChange={(_, checked) =>
+                            handleOnChangeEvent(checked ? 'partial' : 'full', 'paymentType')
+                          }
+                        >
+                        <span className="text-sm font-medium text-gray-700">Partial Payment</span>
+                        </Checkbox>
+                      </div>
                     </div>
 
                     <Animation.Collapse in={transaction.paymentType === 'partial'}>
@@ -534,24 +556,6 @@ const PurchaseBill = () => {
                         </div>
                       </div>
                     </Animation.Collapse>
-
-                    {/* Payment Method */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Payment Method
-                      </label>
-                      <SelectPicker
-                        data={[
-                          { label: 'Bank Transfer', value: 'bank' },
-                          { label: 'Cash', value: 'cash' }
-                        ]}
-                        value={transaction.paymentMethod}
-                        onChange={(value) => handleOnChangeEvent(value, 'paymentMethod')}
-                        placeholder="Select Payment Method"
-                        style={{ width: '100%' }}
-                        className="w-full"
-                      />
-                    </div>
                   </div>
                 </div>
               </div>

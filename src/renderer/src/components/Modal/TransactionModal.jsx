@@ -228,13 +228,22 @@ const TransactionModal = ({
             type: 'Receipt',
             date: new Date().toISOString().slice(0, 19).replace('T', ' '),
             statusOfTransaction: createdTransaction.statusOfTransaction,
+            clientId: createdTransaction.clientId,
+            paymentType: createdTransaction.paymentType,
             party:
               clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
             amount: grandTotal,
             description: `Sale ${getProductName(transaction.productId)}`,
             taxAmount: transaction.taxAmount || [],
-            dueDate: new Date().setMonth(new Date().getMonth() + 1)
+            dueDate: new Date().setMonth(new Date().getMonth() + 1),
+            productId: createdTransaction.productId || '',
+            pendingAmount: Number(transactionData.pendingAmount) || 0,
+            paidAmount: Number(transactionData.paidAmount) || 0,
+            pendingFromOurs: Number(transactionData.pendingFromOurs) || 0,
+            quantity: Number(transactionData.quantity) || 0
           }
+
+          console.log('🟡 Sending bank receipt data:', baseReceipt)
 
           // if (transaction.statusOfTransaction === 'completed') {
           if (transaction.paymentMethod === 'bank') {
@@ -242,6 +251,7 @@ const TransactionModal = ({
               ...baseReceipt,
               bank: transaction.bank || 'IDBI'
             })
+            console.log('🟡 Sending bank receipt data:', createdBankReceipt)
             dispatch(setBankReceipt(createdBankReceipt))
           } else if (transaction.paymentMethod === 'cash') {
             const createdCashReceipt = await window.api.createCashReceipt({
@@ -282,12 +292,19 @@ const TransactionModal = ({
             type: 'Receipt',
             date: new Date().toISOString().slice(0, 19).replace('T', ' '),
             statusOfTransaction: updatedTransaction.data.statusOfTransaction,
+            clientId: updatedTransaction.data.clientId,
             party:
               clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
             amount: grandTotal,
+            paymentType: updatedTransaction.data.paymentType,
             description: `Sale ${getProductName(transaction.productId)}`,
             taxAmount: transaction.taxAmount || [],
-            dueDate: new Date().setMonth(new Date().getMonth() + 1)
+            dueDate: new Date().setMonth(new Date().getMonth() + 1),
+            productId: updatedTransaction.data.productId || '',
+            pendingAmount: Number(transactionData.pendingAmount) || 0,
+            paidAmount: Number(transactionData.paidAmount) || 0,
+            pendingFromOurs: Number(transactionData.pendingFromOurs) || 0,
+            quantity: Number(transactionData.quantity) || 0
           }
 
           if (transaction.paymentMethod === 'bank') {
@@ -494,7 +511,7 @@ const TransactionModal = ({
       )}
       {type === 'transaction' ? (
         <form onSubmit={handleSubmitTransaction}>
-          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-3xl relative">
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-full min-w-4xl relative">
             <p className="text-lg font-semibold mb-4">
               {isUpdateExpense ? 'Update Transaction' : 'Add Transaction'}
             </p>

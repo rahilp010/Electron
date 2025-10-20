@@ -66,6 +66,7 @@ const getAmount = (type, amount) => {
 const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
   const isReceipt = receipt.type === 'Receipt'
   const isEven = index % 2 === 0
+  const balanceColor = balance >= 0 ? 'text-emerald-600' : 'text-red-600'
 
   console.log('receipt', receipt)
 
@@ -142,9 +143,7 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
 
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
-          <span
-            className={`font-semibold text-[16px] ${isReceipt ? 'text-emerald-600' : 'text-red-600'}`}
-          >
+          <span className={`font-semibold text-[16px] ${balanceColor}`}>
             {toThousands(balance)}
           </span>
         </div>
@@ -212,7 +211,8 @@ const useAccountOperations = () => {
       return receipts.map((r) => ({
         ...r,
         clientName: r.party,
-        date: r.date || r.createdAt
+        date: r.date || r.createdAt,
+        bank: 'Bank'
       }))
     } catch (error) {
       console.error('Error fetching bank receipts:', error)
@@ -227,7 +227,8 @@ const useAccountOperations = () => {
       return receipts.map((r) => ({
         ...r,
         clientName: r.party,
-        date: r.date || r.createdAt
+        date: r.date || r.createdAt,
+        bank: 'Cash'
       }))
     } catch (error) {
       console.error('Error fetching cash receipts:', error)
@@ -252,6 +253,8 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
 
   const clients = useSelector((state) => state.electron.clients.data || [])
 
+  const openingBalance = 0 // TODO: Fetch from API or client data
+
   // Get client name helper
   const getClientName = useCallback(
     (id) => {
@@ -272,20 +275,20 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
     return sourceData
   }, [selectedType, recentBankReceipts, recentCashReceipts, client, getClientName])
 
-  // Memoized running balance calculation
-  const balances = useMemo(() => {
-    const receipts = [...filteredData].reverse()
-    let balance = 0
-    const calculatedBalances = []
+  // Memoized sorted transactions (ascending by date)
+  const sortedTransactions = useMemo(() => {
+    return [...filteredData].sort((a, b) => new Date(a.date) - new Date(b.date))
+  }, [filteredData])
 
-    receipts.forEach((receipt, idx) => {
+  // Memoized running balance calculation starting from opening balance
+  const runningBalances = useMemo(() => {
+    let balance = openingBalance
+    return sortedTransactions.map((receipt) => {
       const amount = getAmount(receipt.type, receipt.amount)
       balance += amount
-      calculatedBalances[receipts.length - 1 - idx] = balance
+      return balance
     })
-
-    return calculatedBalances
-  }, [filteredData])
+  }, [sortedTransactions, openingBalance])
 
   // Memoized statistics
   const statistics = useMemo(() => {
@@ -297,11 +300,12 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
       .filter((r) => r.type === 'Payment')
       .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
 
-    const netBalance = totalReceipts - totalPayments
+    const change = totalReceipts - totalPayments
+    const closingBalance = openingBalance + change
     const transactionCount = filteredData.length
 
-    return { totalReceipts, totalPayments, netBalance, transactionCount }
-  }, [filteredData])
+    return { totalReceipts, totalPayments, closingBalance, transactionCount }
+  }, [filteredData, openingBalance])
 
   // Event handlers
   const handleTypeChange = useCallback((type) => {
@@ -313,7 +317,7 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
     const getCellValue = (row, headerKey) => {
       switch (headerKey) {
         case 'date':
-          return new Date(row.date).toLocaleDateString('en-IN')
+          return row.date === 'Opening Balance' ? row.date : new Date(row.date).toLocaleDateString('en-IN')
         case 'accountName':
           return row.accountName || ''
         case 'debit':
@@ -506,14 +510,24 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
   // Updated handler for printing PDF using iframe to avoid popup blockers
   const handlePrintPDF = useCallback(() => {
     let printHeaders = TABLE_HEADERS_PRINT
-    let printData = filteredData.map((row, index) => ({
-      ...row,
-      accountName: row.clientName || '',
-      date: row.date,
-      debit: row.type === 'Payment' ? toThousands(Number(row.amount) || 0) : '-',
-      credit: row.type === 'Receipt' ? toThousands(Number(row.amount) || 0) : '-',
-      balance: balances[index] || 0
-    }))
+    const sortedTransactionsForPrint = [...filteredData].sort((a, b) => new Date(a.date) - new Date(b.date))
+    const runningBalancesForPrint = sortedTransactionsForPrint.map((receipt, index) => runningBalances[index])
+    let printData = [
+      {
+        date: 'Opening Balance',
+        accountName: client?.clientName || 'All Accounts',
+        debit: '-',
+        credit: '-',
+        balance: openingBalance
+      },
+      ...sortedTransactionsForPrint.map((row, index) => ({
+        date: row.date,
+        accountName: row.clientName || '',
+        debit: row.type === 'Payment' ? toThousands(Number(row.amount) || 0) : '-',
+        credit: row.type === 'Receipt' ? toThousands(Number(row.amount) || 0) : '-',
+        balance: runningBalancesForPrint[index]
+      }))
+    ]
 
     const title = `Account Ledger Report - ${client?.clientName || 'All Accounts'} (${selectedType})`
 
@@ -550,7 +564,7 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
       console.error('Error initiating print:', error)
       toast.error('Failed to initiate print: ' + error.message)
     }
-  }, [filteredData, balances, client, selectedType])
+  }, [filteredData, runningBalances, client, selectedType, openingBalance])
 
   // Data fetching
   const loadData = useCallback(async () => {
@@ -572,6 +586,9 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  const openingBalanceColor = openingBalance >= 0 ? 'text-emerald-600' : 'text-red-600'
+  const closingBalanceColor = statistics.closingBalance >= 0 ? 'text-emerald-600' : 'text-red-600'
 
   return (
     <div className="space-y-6 mx-7 -mt-4">
@@ -646,20 +663,29 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
             </div>
           </div>
         </div>
+        <div className=" border-r w-52 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gray-50">
+              <DollarSign size={20} className="text-gray-600" />
+            </div>
+            <div>
+              <p className="text-gray-600 text-sm">Opening Balance</p>
+              <p className="text-xl font-light text-gray-800">{toThousands(openingBalance)}</p>
+            </div>
+          </div>
+        </div>
         <div className="mx-4 w-52 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg`}>
+            <div className={`p-2 rounded-lg ${statistics.closingBalance >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
               <DollarSign
                 size={20}
-                className={statistics.netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}
+                className={closingBalanceColor}
               />
             </div>
             <div>
-              <p className="text-gray-600 text-sm">Net Balance</p>
-              <p
-                className={`text-xl font-light ${statistics.netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
-              >
-                {toThousands(statistics.netBalance)}
+              <p className="text-gray-600 text-sm">Closing Balance</p>
+              <p className={closingBalanceColor}>
+                {toThousands(statistics.closingBalance)}
               </p>
             </div>
           </div>
@@ -689,10 +715,48 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredData.length === 0 ? (
-                <tr className="h-96">
-                  <td colSpan={TABLE_HEADERS.length} className="text-center">
-                    <div className="flex flex-col items-center gap-4 py-12">
+              {/* Opening Balance Row */}
+              <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-t-2 border-blue-200">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded-full bg-blue-200">
+                      <Calendar size={14} className="text-blue-600" />
+                    </div>
+                    <span className="font-semibold text-blue-800">Opening Balance</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 no-print">
+                  <span className="font-medium text-gray-700">{selectedType}</span>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="font-medium text-gray-800 tracking-wide">{client?.clientName || 'All Accounts'}</span>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="text-gray-400 italic">-</span>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="text-gray-400 italic">-</span>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-semibold text-[16px] ${openingBalanceColor} px-3 py-1 rounded-full`}>
+                      {toThousands(openingBalance)}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 max-w-[350px] no-print">
+                  <span className="text-gray-400 italic">Opening balance</span>
+                </td>
+                <td className="px-6 py-3">
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-50 text-gray-600">
+                    Balanced
+                  </span>
+                </td>
+              </tr>
+              {sortedTransactions.length === 0 ? (
+                <tr>
+                  <td colSpan={TABLE_HEADERS.length} className="text-center py-12">
+                    <div className="flex flex-col items-center gap-4">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                         <FileText size={32} className="text-gray-400" />
                       </div>
@@ -701,18 +765,19 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
                         <p className="text-gray-400 mt-1">
                           No {selectedType.toLowerCase()} transactions available for this account
                         </p>
+                        <p className="text-sm text-gray-500 mt-2">Current Balance: {toThousands(openingBalance)}</p>
                       </div>
                     </div>
                   </td>
                 </tr>
               ) : (
-                filteredData.map((receipt, index) => (
+                sortedTransactions.map((receipt, index) => (
                   <TransactionRow
-                    key={`${receipt.id || receipt.transactionId}-${index}`}
+                    key={`${receipt.id || receipt.transactionId}-${receipt.date}-${index}`}
                     receipt={receipt}
                     index={index}
-                    balance={balances[index]}
-                    clientName={getClientName(receipt.clientId)}
+                    balance={runningBalances[index]}
+                    clientName={receipt.clientName}
                   />
                 ))
               )}

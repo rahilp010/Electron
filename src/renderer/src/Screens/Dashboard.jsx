@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 /* eslint-disable react-hooks/exhaustive-deps */
 import Navbar from '../components/UI/Navbar'
 import clientList from '../assets/client.png'

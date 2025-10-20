@@ -3,7 +3,24 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useState, useMemo, useCallback, memo } from 'react'
-import { FileUp, Import, PenLine, Plus, Trash, X, Printer } from 'lucide-react'
+import {
+  FileUp,
+  Import,
+  Plus,
+  Trash,
+  Printer,
+  Info,
+  Package,
+  TrendingUp,
+  IndianRupee,
+  Receipt,
+  User,
+  Calendar1,
+  Box,
+  Phone,
+  MoreHorizontal,
+  PenLine
+} from 'lucide-react'
 import Loader from '../components/Loader'
 import SearchIcon from '@mui/icons-material/Search'
 import { DateRangePicker, SelectPicker, Whisper, Tooltip, InputGroup, Input } from 'rsuite'
@@ -27,17 +44,17 @@ import { IoLogoWhatsapp } from 'react-icons/io5'
 
 // Constants
 const TABLE_HEADERS = [
-  { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
-  { key: 'date', label: 'Date', width: 'w-[150px]' },
-  { key: 'clientName', label: 'Client Name', width: 'w-[200px]' },
-  { key: 'productName', label: 'Product Name', width: 'w-[230px]' },
-  { key: 'quantity', label: 'Quantity', width: 'w-[150px]' },
+  // { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
+  { key: 'date', label: 'Date', width: 'w-[150px]', icon: Calendar1 },
+  { key: 'clientName', label: 'Client Name', width: 'w-[300px]', icon: User },
+  { key: 'productName', label: 'Product Name', width: 'w-[250px]', icon: Box },
+  { key: 'quantity', label: 'Quantity', width: 'w-[150px]', icon: Box },
   { key: 'sellingPrice', label: 'Selling Price', width: 'w-[170px]', conditional: true },
-  { key: 'totalAmount', label: 'Total Amount', width: 'w-[200px]' },
-  { key: 'pendingAmount', label: 'Pending Amount', width: 'w-[200px]' },
-  { key: 'paidAmount', label: 'Paid Amount', width: 'w-[200px]' },
-  { key: 'paymentStatus', label: 'Payment Status', width: 'w-[170px]' },
-  { key: 'action', label: 'Action', width: 'w-[150px]' }
+  { key: 'totalAmount', label: 'Total Amount', width: 'w-[200px]', icon: IndianRupee },
+  { key: 'pendingAmount', label: 'Pending Amount', width: 'w-[200px]', icon: TrendingUp },
+  { key: 'paidAmount', label: 'Paid Amount', width: 'w-[200px]', icon: Receipt },
+  { key: 'paymentStatus', label: 'Payment Status', width: 'w-[170px]', icon: Info },
+  { key: 'action', label: 'Action', width: 'w-[150px]', icon: MoreHorizontal }
 ]
 
 const STATUS_OPTIONS = [
@@ -72,41 +89,49 @@ const getInitials = (name) => {
       ?.split(' ')
       .map((n) => n[0])
       .join('')
-      .toUpperCase() || '??'
+      .toUpperCase()
+      .slice(0, 2) || ''
   )
 }
 
 const getPaymentStatusComponent = (transaction) => {
   const { statusOfTransaction, paymentType } = transaction
 
+  // Common style base
+  const baseStyle =
+    'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ring-1'
+
   if (statusOfTransaction === 'completed') {
     return (
-      <div className="flex items-center text-[#166534] bg-[#dcfce7] border border-[#8ffab5] px-2 py-1 rounded-full justify-center text-xs font-medium">
+      <span className={`${baseStyle} bg-emerald-50 text-emerald-700 ring-emerald-200`}>
+        <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
         Completed
-      </div>
+      </span>
     )
   }
 
   if (statusOfTransaction === 'pending' && paymentType === 'partial') {
     return (
-      <div className="flex items-center border border-[#8a94fe] text-[#0e1a85] bg-[#c3d3fe] px-2 py-1 rounded-full justify-center text-xs font-medium">
+      <span className={`${baseStyle} bg-indigo-50 text-indigo-600 ring-indigo-200`}>
+        <span className="h-2 w-2 rounded-full bg-indigo-500"></span>
         Partial
-      </div>
+      </span>
     )
   }
 
   if (statusOfTransaction === 'pending') {
     return (
-      <div className="flex items-center border border-[#fef08a] text-[#854d0e] bg-[#fef9c3] px-2 py-1 rounded-full justify-center text-xs font-medium">
+      <span className={`${baseStyle} bg-orange-50 text-orange-300 ring-orange-200`}>
+        <span className="h-2 w-2 rounded-full bg-orange-300"></span>
         Pending
-      </div>
+      </span>
     )
   }
 
   return (
-    <div className="flex items-center text-gray-500 bg-gray-50 border border-gray-200 px-2 py-1 rounded-full justify-center text-xs font-medium">
-      -
-    </div>
+    <span className={`${baseStyle} bg-gray-50 text-gray-500 ring-gray-200`}>
+      <span className="h-2 w-2 rounded-full bg-gray-400"></span>-
+    </span>
   )
 }
 
@@ -163,22 +188,36 @@ const TransactionRow = memo(
     }
 
     return (
-      <tr className={`text-sm text-center ${rowBg}`}>
-        <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
+      <tr className={`text-sm text-center`}>
+        {/* <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
           {formatTransactionId(transaction?.id)}
-        </td>
-        <td className="px-4 py-3">{new Date(transaction?.createdAt).toLocaleDateString()}</td>
+        </td> */}
         <td className="px-4 py-3">
-          <div className="flex items-center gap-2 px-6">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-              {getInitials(clientName)}
+          {' '}
+          {new Date(transaction?.createdAt).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          })}
+        </td>
+        <td className="px-4">
+          <div className="flex items-center gap-3 px-6">
+            <div className="relative group">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
+                {getInitials(clientName)}
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
             </div>
-            {clientName}
+            <span className="font-medium text-gray-700 transition-colors duration-200 group-hover:text-indigo-600">
+              {clientName.toUpperCase()}
+            </span>
           </div>
         </td>
-        <td className="px-4 py-3 tracking-wide font-medium">{String(productName).toUpperCase()}</td>
+        <td className="px-4 py-3 tracking-wide font-medium">
+          {String(productName === 'Unknown Product' ? '-' : productName).toUpperCase()}
+        </td>
         <td className="px-4 py-3">
-          <span className="bg-gray-300 px-2 py-1 rounded-full text-xs font-medium">
+          <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
             {transaction?.quantity || 0}
           </span>
         </td>
@@ -188,29 +227,42 @@ const TransactionRow = memo(
           </td>
         )}
         <td className="px-4 py-3 font-semibold">
-          ₹ {toThousands(Number(transaction?.sellAmount).toFixed(0))}
+          <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
+            ₹ {toThousands(Number(transaction?.totalAmount).toFixed(0))}
+          </div>
         </td>
         <td className="px-4 py-3">{renderPendingAmount()}</td>
         <td className="px-4 py-3">{renderPaidAmount()}</td>
         <td className="px-4 py-3 tracking-wide">{getPaymentStatusComponent(transaction)}</td>
         <td className="w-28">
-          <div className="flex gap-3 justify-center items-center">
+          <div className="flex gap-2 justify-center items-center">
+            {/* Edit Button */}
             <button
-              className="text-purple-500 p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-110"
+              className="group relative p-2 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-purple-400 "
               onClick={() => onEdit(transaction)}
               title="Edit transaction"
             >
-              <PenLine size={12} />
+              <PenLine
+                size={14}
+                className="group-hover:rotate-12 transition-transform duration-300"
+              />
             </button>
+
+            {/* Delete Button */}
             <button
-              className="text-red-500 p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-110"
+              className="group relative p-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-red-400"
               onClick={() => onDelete(transaction?.id)}
               title="Delete transaction"
             >
-              <Trash size={12} />
+              <Trash
+                size={14}
+                className="group-hover:rotate-12 transition-transform duration-300"
+              />
             </button>
+
+            {/* WhatsApp Button */}
             <button
-              className="text-green-600 p-2 border border-green-600 rounded-full hover:bg-green-600 hover:text-white transition-all duration-300 hover:scale-110"
+              className="group relative p-2 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-green-400"
               onClick={() => {
                 const clientName = getClientName(transaction?.clientId, clients)
                 const productName = getProductName(transaction?.productId, products)
@@ -220,18 +272,18 @@ const TransactionRow = memo(
                   transaction?.createdAt
                 ).toLocaleDateString()}\n\nThank you for your business!`
 
-                // Replace with client’s phone number if available in DB
-                console.log(clients.find((c) => c.id === transaction.clientId).phoneNo)
-
-                if (clients.find((c) => c.id === transaction.clientId)?.phoneNo) {
-                  const phoneNumber = clients.find((c) => c.id === transaction.clientId)?.phoneNo
-                  const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
+                const client = clients.find((c) => c.id === transaction.clientId)
+                if (client?.phoneNo) {
+                  const url = `https://wa.me/${client.phoneNo}?text=${encodeURIComponent(message)}`
                   window.open(url, '_blank')
                 }
               }}
               title="Send on WhatsApp"
             >
-              <IoLogoWhatsapp size={16} />
+              <IoLogoWhatsapp
+                size={16}
+                className="group-hover:scale-110 transition-transform duration-300"
+              />
             </button>
           </div>
         </td>
@@ -851,7 +903,7 @@ const Transaction = () => {
 
       <div className="overflow-y-auto h-screen customScrollbar">
         {/* Statistics Cards */}
-        <div className="border border-gray-200 shadow px-5 py-3 mx-6 rounded-3xl my-4 flex">
+        <div className="bg-gradient-to-r from-slate-50 to-gray-100 border border-gray-200 rounded-2xl shadow-md px-6 py-4 mx-7 flex items-center justify-start transition-all duration-300 hover:shadow-lg">
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light mb-1">Total Sales</p>
             <p className="text-2xl font-light">₹ {toThousands(statistics.totalSales)}</p>
@@ -887,6 +939,8 @@ const Transaction = () => {
                   placeholder="Select Date Range"
                   onChange={setDateRange}
                   placement="bottomEnd"
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
                 <SelectPicker
                   data={products.map((product) => ({
@@ -896,6 +950,8 @@ const Transaction = () => {
                   onChange={setProductFilter}
                   placeholder="Select Product"
                   style={{ width: 150 }}
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
                 <SelectPicker
                   data={clients.map((client) => ({
@@ -906,6 +962,8 @@ const Transaction = () => {
                   onChange={setClientFilter}
                   placeholder="Select Client"
                   style={{ width: 150 }}
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
                 <SelectPicker
                   data={STATUS_OPTIONS}
@@ -913,30 +971,36 @@ const Transaction = () => {
                   placeholder="Select Status"
                   style={{ width: 150 }}
                   searchable={false}
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
               </div>
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5">
+            <div className="overflow-x-auto customScrollbar border border-gray-200 rounded-2xl h-screen mt-5">
               <table className="min-w-max border-collapse table-fixed">
-                <thead className="bg-gray-200">
-                  <tr className="text-sm sticky top-0">
-                    {visibleHeaders.map((header) => (
-                      <th
-                        key={header.key}
-                        className={`px-4 py-3 border-r border-gray-300 ${header.width} ${
-                          header.sticky ? 'sticky left-0 bg-gray-200 z-10' : ''
-                        }`}
-                      >
-                        {header.label}
-                      </th>
-                    ))}
+                <thead className="relative z-20">
+                  <tr className="text-sm sticky top-0 z-20 bg-gradient-to-r from-gray-50 to-gray-100">
+                    {visibleHeaders.map((header) => {
+                      const IconTable = header.icon
+                      return (
+                        <th
+                          key={header.key}
+                          className={`px-4 py-3 border-b border-gray-300 ${header.width} ${header.sticky} bg-transparent`}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <IconTable size={16} className="text-gray-500" />
+                            {header.label}
+                          </div>
+                        </th>
+                      )
+                    })}
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-200">
                   {filteredData.length === 0 ? (
-                    <tr className="text-center h-80">
+                    <tr className="text-center h-72">
                       <td
                         colSpan={visibleHeaders.length}
                         className="text-center font-light tracking-wider text-gray-500 text-lg"

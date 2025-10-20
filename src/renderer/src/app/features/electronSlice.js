@@ -365,6 +365,16 @@ export const electronSlice = createSlice({
       }
       localStorage.setItem('bankReceipt', JSON.stringify(state.bankReceipt.data))
     },
+    deleteBankReceipt: (state, action) => {
+      if (!Array.isArray(state.bankReceipt.data)) {
+        state.bankReceipt.data = []
+        return
+      }
+      state.bankReceipt.data = state.bankReceipt.data.filter(
+        (bankReceipt) => bankReceipt.id !== action.payload
+      )
+      localStorage.setItem('bankReceipt', JSON.stringify(state.bankReceipt.data))
+    },
     getBankReceipt: (state) => {
       try {
         const data = localStorage.getItem('bankReceipt')
@@ -418,6 +428,16 @@ export const electronSlice = createSlice({
       } else {
         state.cashReceipt.data.push(action.payload)
       }
+      localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
+    },
+    deleteCashReceipt: (state, action) => {
+      if (!Array.isArray(state.cashReceipt.data)) {
+        state.cashReceipt.data = []
+        return
+      }
+      state.cashReceipt.data = state.cashReceipt.data.filter(
+        (cashReceipt) => cashReceipt.id !== action.payload
+      )
       localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
     },
     getCashReceipt: (state) => {
@@ -559,6 +579,8 @@ export const {
   setKeyBindings,
   updateKeyBinding,
   deleteKeyBinding,
-  clientProducts
+  clientProducts,
+  deleteBankReceipt,
+  deleteCashReceipt
 } = electronSlice.actions
 export default electronSlice.reducer

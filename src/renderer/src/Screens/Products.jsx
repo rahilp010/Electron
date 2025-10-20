@@ -3,7 +3,22 @@
 /* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useState, useCallback, memo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileUp, Import, PenLine, Plus, Trash } from 'lucide-react'
+import {
+  MoreHorizontal,
+  Box,
+  Calendar1,
+  ChevronDown,
+  ChevronUp,
+  FileUp,
+  Import,
+  IndianRupee,
+  Info,
+  Package,
+  PenLine,
+  Plus,
+  Trash,
+  User
+} from 'lucide-react'
 import Loader from '../components/Loader'
 import { useDispatch, useSelector } from 'react-redux'
 import { deleteProduct, setClients, setProducts } from '../app/features/electronSlice'
@@ -17,15 +32,20 @@ import * as XLSX from 'xlsx'
 
 // Constants
 const TABLE_HEADERS = [
-  // { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
-  { key: 'date', label: 'Date', width: 'w-[150px]' },
-  { key: 'client', label: 'Client', width: 'w-[250px]' },
-  { key: 'product', label: 'Product', width: 'w-[250px]' },
-  { key: 'price', label: 'Price', width: 'w-[200px]' },
-  { key: 'quantity', label: 'Quantity', width: 'w-[200px]' },
-  { key: 'assetsType', label: 'Assets Type', width: 'w-[200px]' },
-  { key: 'totalWorth', label: 'Total Worth', width: 'w-[200px]' },
-  { key: 'action', label: 'Action', width: 'w-[150px]' }
+  { key: 'date', label: 'Date', width: 'w-[150px]', sortable: true, icon: Calendar1 },
+  { key: 'client', label: 'Client', width: 'w-[200px]', icon: User },
+  { key: 'product', label: 'Product', width: 'w-[250px]', sortable: true, icon: Package },
+  { key: 'price', label: 'Price', width: 'w-[200px]', sortable: true, icon: IndianRupee },
+  { key: 'quantity', label: 'Quantity', width: 'w-[200px]', sortable: true, icon: Box },
+  { key: 'assetsType', label: 'Assets Type', width: 'w-[200px]', sortable: true, icon: Info },
+  {
+    key: 'totalWorth',
+    label: 'Total Worth',
+    width: 'w-[200px]',
+    sortable: true,
+    icon: IndianRupee
+  },
+  { key: 'action', label: 'Action', width: 'w-[150px]', icon: MoreHorizontal }
 ]
 
 const ASSETS_TYPE_OPTIONS = [
@@ -51,13 +71,15 @@ const getClientName = (clientId, clients) => {
 }
 
 const getAssetsTypeStyle = (assetsType) => {
+  const baseStyle =
+    'inline-flex items-center justify-center gap-1 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300'
   switch (assetsType) {
     case 'Raw Material':
-      return 'text-[#166534] font-medium border border-[#8ffab5] bg-green-50'
+      return `${baseStyle} bg-gradient-to-r from-yellow-50 to-amber-100 text-amber-700 border border-amber-300`
     case 'Finished Goods':
-      return 'border border-[#fef08a] text-[#854d0e] bg-yellow-50'
+      return `${baseStyle} bg-gradient-to-r from-indigo-50 to-indigo-100 text-indigo-700 border border-indigo-300`
     case 'Assets':
-      return 'border border-[#8a94fe] text-[#0e1a85] bg-blue-50'
+      return `${baseStyle} bg-gradient-to-r from-yellow-50 to-amber-100 text-amber-700 border border-amber-300`
     default:
       return 'border border-gray-300 text-gray-600 bg-gray-50'
   }
@@ -65,26 +87,30 @@ const getAssetsTypeStyle = (assetsType) => {
 
 // Memoized ProductRow component
 const ProductRow = memo(({ product, index, clients, onDelete, onEdit }) => {
-  const isEven = index % 2 === 0
-  const rowBg = isEven ? 'bg-white' : 'bg-[#f0f0f0]'
   const totalWorth = (product?.price || 0) * (product?.quantity || 0)
 
   return (
-    <tr className={`text-sm text-center ${rowBg}`}>
+    <tr className={`text-sm text-center`}>
       {/* <td className="px-4 py-3">{formatProductId(product?.id)}</td> */}
-      <td className="px-4 py-3">{new Date(product?.createdAt).toLocaleDateString()}</td>
+      <td className="px-4 py-3">
+        {new Date(product?.createdAt).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        })}
+      </td>
       <td className="px-4 py-3 tracking-wide">{getClientName(product?.clientId, clients)}</td>
       <td className="px-4 py-3 tracking-wide font-medium">
         {String(product?.name || '').toUpperCase()}
       </td>
       <td className="px-4 py-3">
-        <div className="border border-[#67C090] text-[#568F87] bg-[#DDF4E7] p-1 px-2 rounded-full font-bold text-xs">
+        <div className="flex items-center justify-center bg-gradient-to-r from-slate-50 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full font-semibold text-sm shadow-sm hover:shadow-md hover:scale-[1.03] transition-all duration-300">
           ₹ {toThousands(product?.price)}
         </div>
       </td>
-      <td className={`px-4 py-3 ${(product?.quantity || 0) <= 0 ? 'text-red-500' : ''}`}>
-        <span className="bg-gray-300 px-2 py-1 rounded-full text-xs font-medium">
-          {product?.quantity || 0}
+      <td className="px-4 py-3">
+        <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
+          {toThousands(product?.quantity) || 0}
         </span>
       </td>
       <td className="px-4 py-3 tracking-wide">
@@ -94,7 +120,11 @@ const ProductRow = memo(({ product, index, clients, onDelete, onEdit }) => {
           {product?.assetsType || '-'}
         </div>
       </td>
-      <td className="px-4 py-3 tracking-wide font-bold">₹ {toThousands(totalWorth)}</td>
+      <td className="px-4 py-3 tracking-wide font-bold">
+        <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-emerald-50 to-green-100 text-emerald-700 border border-emerald-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
+          ₹ {toThousands(totalWorth)}
+        </div>
+      </td>
       <td className="w-28">
         <div className="flex gap-3 justify-center items-center">
           <button
@@ -192,6 +222,7 @@ const Products = () => {
   const [importFile, setImportFile] = useState(false)
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const [visibleCount, setVisibleCount] = useState(30)
+  const [showLowStockOnly, setShowLowStockOnly] = useState(false)
   const tableContainerRef = useRef(null)
 
   const products = useSelector((state) => state.electron.products?.data || [])
@@ -224,7 +255,10 @@ const Products = () => {
         matchesDate = createdDate >= new Date(start) && createdDate <= new Date(end)
       }
 
-      return matchesSearch && matchesProduct && matchesDate && matchesAssetsType
+      // ✅ Low stock filter
+      const matchesLowStock = !showLowStockOnly || data.quantity < 5
+
+      return matchesSearch && matchesProduct && matchesDate && matchesAssetsType && matchesLowStock
     })
 
     // ✅ Sorting logic
@@ -240,7 +274,16 @@ const Products = () => {
     }
 
     return filtered
-  }, [products, searchQuery, productFilter, dateRange, assetsTypeFilter, clients, sortConfig])
+  }, [
+    products,
+    searchQuery,
+    productFilter,
+    dateRange,
+    assetsTypeFilter,
+    clients,
+    sortConfig,
+    showLowStockOnly
+  ])
 
   const handleSort = useCallback((key) => {
     setSortConfig((prev) => {
@@ -289,6 +332,7 @@ const Products = () => {
       0
     )
     const totalQuantity = filteredData.length
+
 
     return { totalAssetsValue, totalQuantity }
   }, [filteredData])
@@ -376,6 +420,32 @@ const Products = () => {
       <div className="flex justify-between mt-5 pb-2 items-center">
         <p className="text-3xl font-light mx-7">Products</p>
         <div className="mx-7 flex gap-2">
+          {products.some((product) => product.quantity < 10) && (
+            <button
+              className={`relative flex items-center gap-2.5 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 ${
+                showLowStockOnly
+                  ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg shadow-red-500/30 scale-105'
+                  : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-red-400 hover:shadow-md hover:scale-105'
+              }`}
+              onClick={() => setShowLowStockOnly((prev) => !prev)}
+            >
+              <Package size={18} className={showLowStockOnly ? 'animate-pulse' : ''} />
+              <span>{showLowStockOnly ? 'Show All Products' : 'Low Stock Alert'}</span>
+
+              {/* Enhanced animated badge: smaller inner circle, outer pulse scaled to fit snugly, inner centered */}
+              {!showLowStockOnly && (
+                <div className="absolute -top-1 -right-1">
+                  <span className="relative flex h-3 w-3 justify-center items-center">
+                    {' '}
+                    {/* Added justify-center items-center for proper centering */}
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 scale-110"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-lg shadow-red-500/50"></span>{' '}
+                    {/* Smaller inner circle */}
+                  </span>
+                </div>
+              )}
+            </button>
+          )}
           <button
             className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105 cursor-pointer"
             onClick={() => setImportFile(!importFile)}
@@ -419,6 +489,12 @@ const Products = () => {
             <p className="text-sm font-light">Total Products</p>
             <p className="font-light text-sm">
               <span className="font-bold text-2xl">{statistics.totalQuantity}</span> Products
+            </p>
+          </div>
+          <div className="mx-5 border-r w-52">
+            <p className="text-sm font-light">Low Stock</p>
+            <p className="font-light text-sm">
+              <span className="font-bold text-2xl">{statistics.lowStockProducts}</span>
             </p>
           </div>
         </div>
@@ -479,22 +555,50 @@ const Products = () => {
             {/* Table */}
             <div
               ref={tableContainerRef}
-              className="overflow-x-auto customScrollbar border-2 border-gray-200 rounded-lg h-screen mt-5"
+              className="overflow-x-auto customScrollbar border border-gray-200 rounded-2xl h-screen mt-5"
             >
-              <table className="min-w-max border-collapse table-fixed">
-                <thead className="bg-gray-200 relative z-20">
-                  <tr className="text-sm sticky top-0 z-20">
-                    {TABLE_HEADERS.map((header) => (
-                      <th
-                        key={header.key}
-                        className={`px-4 py-3 border-r border-gray-300 ${header.width}
-          ${header.sticky ? 'sticky left-0 z-30 bg-gray-200 shadow-md' : 'bg-gray-200'}
-          
-        `}
-                      >
-                        {header.label}
-                      </th>
-                    ))}
+              <table className="min-w-max table-fixed">
+                <thead className="relative z-20">
+                  <tr className="text-sm sticky top-0 z-20 bg-gradient-to-r from-gray-50 to-gray-100">
+                    {TABLE_HEADERS.map((header) => {
+                      const IconTable = header.icon
+                      const isActive = sortConfig.key === header.key
+                      const arrow =
+                        isActive && header.sortable ? (
+                          sortConfig.direction === 'asc' ? (
+                            <ChevronUp size={14} />
+                          ) : (
+                            <ChevronDown size={14} />
+                          )
+                        ) : (
+                          ''
+                        )
+
+                      return (
+                        <th
+                          key={header.key}
+                          className={`px-4 py-3 border-b border-gray-300 ${header.width} ${
+                            header.sticky
+                          } bg-transparent ${header.sortable ? 'cursor-pointer select-none' : ''}`}
+                          onClick={() => header.sortable && handleSort(header.key)}
+                          title={header.sortable ? 'Click to sort' : ''}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <IconTable size={16} className="text-gray-500" />
+                            <span>{header.label}</span>
+                            {header.sortable && (
+                              <span
+                                className={`text-xs transition-all duration-200 ${
+                                  isActive ? 'opacity-100' : 'opacity-30'
+                                }`}
+                              >
+                                {arrow}
+                              </span>
+                            )}
+                          </div>
+                        </th>
+                      )
+                    })}
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-200">
