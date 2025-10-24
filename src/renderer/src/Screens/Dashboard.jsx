@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 /* eslint-disable prettier/prettier */
 /* eslint-disable react-hooks/exhaustive-deps */
 import Navbar from '../components/UI/Navbar'
@@ -10,10 +11,11 @@ import purchase from '../assets/purchase.png'
 import sales from '../assets/sales.png'
 import salary from '../assets/salary.png'
 import { useNavigate } from 'react-router-dom'
-import { List, Plus, ReceiptText } from 'lucide-react'
+import { Plus, ReceiptText } from 'lucide-react'
 import { useDispatch } from 'react-redux'
 import { setKeyBindings } from '../app/features/electronSlice'
 import { useEffect } from 'react'
+import { CiBoxList } from 'react-icons/ci'
 // import WhatsAppQRModal from '../components/Modal/whatsappQRModal'
 
 const Dashboard = () => {
@@ -43,100 +45,266 @@ const Dashboard = () => {
           <Navbar />
         </div>
         <div>
-          <div className="grid grid-cols-12 gap-2 p-6 bg-gray-50 min-h-[500px] font-poppins">
+          <div className="grid grid-cols-12 gap-1.5 p-6 bg-gray-50 min-h-[500px] font-poppins">
             {/* Profile Card */}
-            <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4">
-              <img src={product} alt="product" className="w-24 h-24 object-cover" />
-              <button
-                className="mt-4 bg-black text-white px-16 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
-                onClick={() => navigate('/products')}
-              >
-                Add Products
-              </button>
+            <div
+              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-600 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
+              onClick={() => navigate('/products')}
+            >
+              {/* Animated background gradient */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-transparent to-purple-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+              {/* Decorative corner accent */}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-gray-900/5 to-transparent rounded-bl-full"></div>
+
+              <div className="flex items-center justify-center relative">
+                <div className="relative">
+                  <img
+                    src={product}
+                    alt="product"
+                    className="w-30 h-24 object-cover drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
+                  />
+                  {/* Glow effect behind image */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-400/40 to-purple-400/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center relative pt-1 z-10">
+                <div className="flex flex-col text-center">
+                  <p className="text-3xl bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                    Products
+                  </p>
+                  <span className="text-[10px] text-gray-500">Manage inventory</span>
+                </div>
+              </div>
             </div>
 
-            <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4">
-              <img src={clientList} alt="product" className="w-24 h-24 object-cover" />
-              <button
-                className="mt-4 bg-black text-white px-18 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
-                onClick={() => navigate('/clients')}
-              >
-                Add Clients
-              </button>
+            <div
+              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-600 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
+              onClick={() => navigate('/clients')}
+            >
+              {/* Animated background gradient */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-transparent to-purple-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+              {/* Decorative corner accent */}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-gray-900/5 to-transparent rounded-bl-full"></div>
+
+              <div className="flex items-center justify-center relative">
+                <div className="relative">
+                  <img
+                    src={clientList}
+                    alt="client"
+                    className="w-24 h-24 object-cover drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
+                  />
+                  {/* Glow effect behind image */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-400/40 to-purple-400/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center relative mt-1 z-10">
+                <div className="flex flex-col text-center">
+                  <p className="text-3xl bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                    Clients
+                  </p>
+                  <span className="text-[10px] text-gray-500">Manage inventory</span>
+                </div>
+              </div>
             </div>
 
-            {/* Time Tracker */}
-            <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4 relative">
-              <img src={salary} alt="product" className="w-24 h-24 object-cover" />
-              <button
-                className="mt-4 bg-black text-white px-22 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
-                onClick={() => navigate('/salary')}
-              >
-                Salary
-              </button>
+            <div
+              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-600 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
+              onClick={() => navigate('/salary')}
+            >
+              {/* Animated background gradient */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-transparent to-purple-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+              {/* Decorative corner accent */}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-gray-900/5 to-transparent rounded-bl-full"></div>
+
+              <div className="flex items-center justify-center relative">
+                <div className="relative">
+                  <img
+                    src={salary}
+                    alt="client"
+                    className="w-30 h-24 object-cover drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
+                  />
+                  {/* Glow effect behind image */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-400/40 to-purple-400/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center relative mt-1 z-10">
+                <div className="flex flex-col text-center">
+                  <p className="text-3xl bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                    Salary
+                  </p>
+                  <span className="text-[10px] text-gray-500">Manage inventory</span>
+                </div>
+              </div>
             </div>
 
             {/* Onboarding Progress */}
-            <div className="col-span-3 row-span-2 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex  flex-col items-center justify-center gap-5">
-              <div className="flex flex-col bg-gray-900 rounded-4xl p-3 items-center justify-center gap-5">
-                <img src={bank} alt="product" className="w-24 h-24 object-cover" />
-                <button
-                  className="mt-4 bg-white text-black px-20 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-white/80"
-                  onClick={() => navigate('/bank')}
-                >
-                  Bank
-                </button>
-              </div>
-
-              <div className="flex flex-col bg-gray-900 rounded-4xl p-3 items-center justify-center gap-3">
-                <img src={cash} alt="product" className="w-24 h-24 object-cover" />
-                <button
-                  className="mt-4 bg-white text-black px-20 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-white/80"
-                  onClick={() => navigate('/cash')}
-                >
-                  Cash
-                </button>
-              </div>
-            </div>
-
-            <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4">
-              <img src={report} alt="product" className="w-24 h-24 object-cover" />
-              <button
-                className="mt-4 bg-black text-white px-10 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
-                onClick={() => navigate('/reports')}
+            <div className="col-span-3 row-span-2 bg-white rounded-4xl border border-gray-600 border-b-4 shadow-lg p-4 flex  flex-col items-center justify-center gap-5">
+              <div
+                className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
+                onClick={() => navigate('/bank')}
               >
-                Reports & Analytics
-              </button>
-            </div>
+                {/* Animated background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
-            <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex items-center justify-center gap-5">
-              <div className="flex flex-col bg-gray-900 backdrop-blur-md rounded-4xl p-3 px-7 items-center justify-center gap-5 relative border border-white/20">
-                <img src={purchase} alt="product" className="w-30 h-24 object-cover" />
-                <ReceiptText
-                  className="absolute top-3 right-3 border border-white p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white hover:scale-110 transition-all duration-200 cursor-pointer"
-                  size={28}
-                  onClick={() => navigate('/purchaseBill')}
-                />
-                <button
-                  className="mt-4 bg-white/90 backdrop-blur-sm text-black px-17 py-2 rounded-full shadow-xl cursor-pointer transition-all duration-200 hover:bg-white/80 hover:shadow-2xl"
-                  onClick={() => navigate('/purchase')}
-                >
-                  Purchase
-                </button>
+                {/* Decorative corner accent */}
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
+
+                <div className="flex items-center justify-center relative">
+                  <div className="relative">
+                    <img
+                      src={bank}
+                      alt="bank"
+                      className="w-24 h-24 object-cover drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
+                    />
+                    {/* Glow effect behind image */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-gray-400/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center mt-1 relative">
+                  <div className="flex flex-col text-center">
+                    <p className="text-3xl bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
+                      Bank
+                    </p>
+                    <span className="text-[10px] text-gray-400">Banking transactions</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex flex-col bg-gray-900 backdrop-blur-md rounded-4xl p-3 px-7 items-center justify-center gap-3 border border-white/10">
-                <img src={sales} alt="product" className="w-24 h-26 object-cover" />
-                <button
-                  className="mt-4 bg-white/90 backdrop-blur-sm text-black px-20 py-2 rounded-full shadow-xl cursor-pointer transition-all duration-200 hover:bg-white/80 hover:shadow-2xl"
-                  onClick={() => navigate('/sales')}
-                >
-                  Sales
-                </button>
+              <div
+                className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20  hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
+                onClick={() => navigate('/cash')}
+              >
+                {/* Animated background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                {/* Decorative corner accent */}
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
+
+                <div className="flex items-center justify-center relative">
+                  <div className="relative">
+                    <img
+                      src={cash}
+                      alt="cash"
+                      className="w-24 h-24 object-cover drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
+                    />
+                    {/* Glow effect behind image */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-gray-400/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center relative">
+                  <div className="flex flex-col text-center">
+                    <p className="text-3xl bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
+                      Cash
+                    </p>
+                    <span className="text-[10px] text-gray-400">cash transactions</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
+            <div
+              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-600 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
+              onClick={() => navigate('/reports')}
+            >
+              {/* Animated background gradient */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-transparent to-purple-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+              {/* Decorative corner accent */}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-gray-900/5 to-transparent rounded-bl-full"></div>
+
+              <div className="flex items-center justify-center relative z-10">
+                <div className="relative">
+                  <img
+                    src={report}
+                    alt="client"
+                    className="w-28 h-24 object-cover drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
+                  />
+                  {/* Glow effect behind image */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-400/40 to-purple-400/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center relative ">
+                <div className="flex flex-col text-center">
+                  <p className="text-3xl bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                    Reports
+                  </p>
+                  <span className="text-[10px] text-gray-500">Manage inventory</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-span-6 bg-white rounded-4xl border border-gray-600 border-b-4 shadow-lg p-4 flex items-center justify-center gap-5">
+              <div className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
+              onClick={() => navigate('/purchase')}>
+                {/* Animated background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                {/* Decorative corner accent */}
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
+
+                <div className="flex items-center justify-center relative">
+                  <div className="relative">
+                    <img
+                      src={purchase}
+                      alt="purchase"
+                      className="w-24 h-24 object-cover drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
+                    />
+                    {/* Glow effect behind image */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-gray-400/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center relative">
+                  <div className="flex flex-col text-center">
+                    <p className="text-3xl bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
+                      Purchase
+                    </p>
+                    <span className="text-[10px] text-gray-400">purchase transactions</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
+              onClick={() => navigate('/sales')}>
+                {/* Animated background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                {/* Decorative corner accent */}
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
+
+                <div className="flex items-center justify-center relative">
+                  <div className="relative">
+                    <img
+                      src={sales}
+                      alt="sales"
+                      className="w-24 h-24 object-cover drop-shadow-lg group-hover:scale-110 transition-transform duration-300"
+                    />
+                    {/* Glow effect behind image */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-gray-400/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center relative">
+                  <div className="flex flex-col text-center">
+                    <p className="text-3xl bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
+                      Sales
+                    </p>
+                    <span className="text-[10px] text-gray-400">sales transactions</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* <div className="col-span-6 bg-white rounded-4xl border border-gray-600 shadow-lg p-4">
               <h3 className="font-semibold text-gray-700">
                 {fullMonth} {year}
               </h3>
@@ -150,7 +318,7 @@ const Dashboard = () => {
                   <span className="text-gray-500 text-sm">Sep 15, 09:00 AM</span>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
               <WhatsAppQRModal />

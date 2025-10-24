@@ -15,9 +15,9 @@ db.pragma('foreign_keys = ON')
 
 // db.prepare('DROP TABLE products;').run()
 // db.prepare('DROP TABLE clients;').run()
-db.prepare('DROP TABLE transactions;').run()
-db.prepare('DROP TABLE bankReceipts;').run()
-db.prepare('DROP TABLE cashReceipts;').run()
+// db.prepare('DROP TABLE transactions;').run()
+// db.prepare('DROP TABLE bankReceipts;').run()
+// db.prepare('DROP TABLE cashReceipts;').run()
 // Execute SQL statements one by one
 db.prepare(
   `CREATE TABLE IF NOT EXISTS products (

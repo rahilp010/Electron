@@ -18,7 +18,7 @@ const Navbar = () => {
         {/* Logo */}
         <div>
           <div className="flex items-center" onClick={() => navigate('/auth')}>
-            <div className="bg-white rounded-full px-6 py-2 border border-gray-400">
+            <div className="bg-white rounded-full px-6 py-2 border border-gray-600">
               <span className="text-lg font-medium text-gray-900">Electron</span>
             </div>
           </div>
@@ -27,7 +27,7 @@ const Navbar = () => {
         <div className="flex items-center gap-3">
           {/* Navigation Items */}
           {location.pathname === '/' ? (
-            <div className="flex items-center space-x-1 border border-gray-300 rounded-4xl p-0.5 tracking-wide cursor-pointer">
+            <div className="flex items-center space-x-1 border border-gray-600 rounded-4xl p-0.5 tracking-wide cursor-pointer">
               {navItems.map((item) => (
                 <NavLink
                   key={item.name}
@@ -76,7 +76,7 @@ const Navbar = () => {
       </div>
 
       <p
-        className={`text-3xl font-light mt-8 mx-3 ${
+        className={`text-[32px] font-light mt-8 mx-3 ${
           location.pathname === '/' ? 'block' : 'hidden'
         }`}
       >

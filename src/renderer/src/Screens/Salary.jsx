@@ -1,5 +1,4 @@
 /* eslint-disable prettier/prettier */
-/* eslint-disable react/no-unknown-property */
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
@@ -22,7 +21,6 @@ import { toast } from 'react-toastify'
 import { SelectPicker, InputGroup, Input, Whisper, Tooltip, Modal } from 'rsuite'
 import Navbar from '../components/UI/Navbar'
 import { IoLogoWhatsapp } from 'react-icons/io'
-import electron from '../assets/electron.png'
 import { RiLockPasswordLine } from 'react-icons/ri'
 
 // Constants

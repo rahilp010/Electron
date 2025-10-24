@@ -31,7 +31,7 @@ import Navbar from '../components/UI/Navbar'
 import * as XLSX from 'xlsx'
 import ImportExcel from '../components/UI/ImportExcel'
 import { IoLogoWhatsapp } from 'react-icons/io'
-import electron from '../assets/electron.png'
+import electron from '../assets/electron.svg'
 
 // Constants
 const TABLE_HEADERS = [

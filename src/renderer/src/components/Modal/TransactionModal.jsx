@@ -24,6 +24,7 @@ import { useLocation } from 'react-router-dom'
 
 const TransactionModal = ({
   setShowModal,
+  setTransactionModal,
   existingTransaction = null,
   isUpdateExpense = false,
   type = 'transaction'
@@ -355,6 +356,7 @@ const TransactionModal = ({
         }
         await fetchTransaction() // Refresh data
         setShowModal(false)
+        setTransactionModal(false)
       } catch (error) {
         toast.error('An error occurred while processing your request')
       } finally {

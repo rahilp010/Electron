@@ -35,7 +35,7 @@ const CurrencyConvertor = () => {
         <p className="text-3xl font-light mx-7">Currency Converter</p>
       </div>
       <div className="flex justify-center items-center">
-        <div className="w-full m-10 mx-40 bg-white rounded-4xl border-2 border-gray-100 shadow-lg p-4 relative">
+        <div className="w-full m-10 mx-40 bg-white rounded-4xl border border-gray-600 shadow-lg p-4 relative">
           <CurrencyCard
             label="From"
             amount={Number(amount)}

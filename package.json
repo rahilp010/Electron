@@ -5,6 +5,7 @@
   "main": "./out/main/index.js",
   "author": "Rahil Patel",
   "homepage": "https://electron-vite.org",
+  "license": "MIT",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
