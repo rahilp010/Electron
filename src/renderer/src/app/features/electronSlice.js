@@ -200,11 +200,20 @@ export const electronSlice = createSlice({
         state.clients.data = []
         return
       }
+
       const updatedClient = action.payload
       const index = state.clients.data.findIndex((client) => client.id === updatedClient.id)
+
       if (index !== -1) {
-        state.clients.data[index] = updatedClient
-        localStorage.setItem('clients', JSON.stringify(state.clients.data))
+        // ✅ Create a new array to ensure UI re-renders
+        const newData = [
+          ...state.clients.data.slice(0, index),
+          updatedClient,
+          ...state.clients.data.slice(index + 1)
+        ]
+
+        state.clients.data = newData
+        localStorage.setItem('clients', JSON.stringify(newData))
       }
     },
     deleteClient: (state, action) => {
@@ -397,63 +406,79 @@ export const electronSlice = createSlice({
       }
     },
     createCashReceipt: (state, action) => {
-      // Ensure state.products.data is always an array
       if (!Array.isArray(state.cashReceipt.data)) {
         state.cashReceipt.data = []
       }
-      state.cashReceipt.data.push(action.payload)
+
+      const newReceipt = action.payload
+      if (!newReceipt || typeof newReceipt !== 'object') return
+
+      state.cashReceipt.data.push(newReceipt)
+
+      // Sort by createdAt (newest first)
       state.cashReceipt.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+
       localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
     },
+
     updateCashReceipt: (state, action) => {
       if (!Array.isArray(state.cashReceipt.data)) {
         state.cashReceipt.data = []
         return
       }
-      const updatedCashReceipt = action.payload
-      const index = state.cashReceipt.data.findIndex(
-        (cashReceipt) => cashReceipt.id === updatedCashReceipt.id
-      )
+
+      const updated = action.payload
+      if (!updated || typeof updated.id === 'undefined') return
+
+      const index = state.cashReceipt.data.findIndex((r) => r.id === updated.id)
       if (index !== -1) {
-        state.cashReceipt.data[index] = updatedCashReceipt
+        state.cashReceipt.data[index] = updated
         localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
       }
     },
+
     setCashReceipt: (state, action) => {
       if (!Array.isArray(state.cashReceipt.data)) {
         state.cashReceipt.data = []
       }
-      if (Array.isArray(action.payload)) {
-        state.cashReceipt.data = action.payload
-      } else {
-        state.cashReceipt.data.push(action.payload)
+
+      const payload = action.payload
+      if (Array.isArray(payload)) {
+        state.cashReceipt.data = payload
+      } else if (payload && typeof payload === 'object') {
+        state.cashReceipt.data.push(payload)
       }
+
       localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
     },
+
     deleteCashReceipt: (state, action) => {
       if (!Array.isArray(state.cashReceipt.data)) {
         state.cashReceipt.data = []
         return
       }
+
+      const idToDelete = action.payload
+      if (typeof idToDelete === 'undefined' || idToDelete === null) return
+
       state.cashReceipt.data = state.cashReceipt.data.filter(
         (cashReceipt) => cashReceipt.id !== action.payload
       )
       localStorage.setItem('cashReceipt', JSON.stringify(state.cashReceipt.data))
     },
+
     getCashReceipt: (state) => {
       try {
         const data = localStorage.getItem('cashReceipt')
-        if (data) {
-          const parsed = JSON.parse(data)
-          if (Array.isArray(parsed)) {
-            state.cashReceipt.data = parsed
-          } else {
-            console.warn(
-              'cashReceipt data in localStorage is not an array, resetting to empty array'
-            )
-            state.cashReceipt.data = []
-            localStorage.setItem('cashReceipt', JSON.stringify([]))
-          }
+        if (!data) return
+
+        const parsed = JSON.parse(data)
+        if (Array.isArray(parsed)) {
+          state.cashReceipt.data = parsed
+        } else {
+          console.warn('cashReceipt data corrupted, resetting')
+          state.cashReceipt.data = []
+          localStorage.setItem('cashReceipt', JSON.stringify([]))
         }
       } catch (error) {
         console.error('Error loading cashReceipt from localStorage:', error)
@@ -461,6 +486,7 @@ export const electronSlice = createSlice({
         localStorage.removeItem('cashReceipt')
       }
     },
+
     createSettings: (state, action) => {
       if (!Array.isArray(state.settings.data)) {
         state.settings.data = []

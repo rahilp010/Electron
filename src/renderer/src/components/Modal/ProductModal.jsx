@@ -156,7 +156,8 @@ const ProductModal = ({
               partId: p.partId,
               quantity: quantities[p.partId] || 1
             }))
-          )
+          ),
+          pageName: 'Product'
         }
 
         console.log('Submitting product:', productData)

@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 // import Versions from './components/Versions'
 import { store } from './app/store.js'
 import { Provider } from 'react-redux'
@@ -22,6 +23,7 @@ import PendingCollectionReport from './Screens/PendingCollectionReport.jsx'
 import Settings from './Screens/Settings.jsx'
 import PurchaseBill from './components/UI/PurchaseBill.jsx'
 import NotFound from './components/UI/NotFound.jsx'
+import Salary from './Screens/Salary.jsx'
 
 function App() {
   return (
@@ -60,6 +62,7 @@ function App() {
               <Route path="/pendingPayment" element={<PendingPaymentsReport />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/purchaseBill" element={<PurchaseBill />} />
+              <Route path="/salary" element={<Salary />} />
             </Routes>
           </KeyBind>
         </HashRouter>

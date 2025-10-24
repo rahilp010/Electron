@@ -8,7 +8,6 @@ const Navbar = () => {
   const navItems = [
     { name: 'Dashboard', active: true, path: '/' },
     { name: 'Reports', active: false, path: '/reports' },
-    { name: 'Sales', active: false, path: '/sales' },
     { name: 'Ledger', active: false, path: '/ledger' },
     { name: 'Analytics', active: false, path: '/analytics' }
   ]
@@ -77,7 +76,7 @@ const Navbar = () => {
       </div>
 
       <p
-        className={`text-3xl font-light mt-8 mx-5 ${
+        className={`text-3xl font-light mt-8 mx-3 ${
           location.pathname === '/' ? 'block' : 'hidden'
         }`}
       >

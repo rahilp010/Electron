@@ -67,7 +67,6 @@ const TransactionModal = ({
 
   const getInitialTransaction = () => {
     if (isUpdateExpense && existingTransaction) {
-      console.log('Initializing with existing transaction:', existingTransaction)
       return {
         clientId: existingTransaction.clientId || '',
         productId: existingTransaction.productId || '',
@@ -80,9 +79,10 @@ const TransactionModal = ({
         pendingAmount: Number(existingTransaction.pendingAmount) || 0,
         paidAmount: Number(existingTransaction.paidAmount) || 0,
         transactionType: existingTransaction.transactionType || '',
-        taxAmount: existingTransaction.taxAmount || [],
+        taxAmount: existingTransaction?.taxAmount || [],
         totalAmount: Number(existingTransaction.totalAmount) || 0,
-        dueDate: existingTransaction.dueDate || ''
+        dueDate: existingTransaction.dueDate || '',
+        pageName: existingTransaction.pageName || ''
       }
     }
     return {
@@ -99,7 +99,8 @@ const TransactionModal = ({
       transactionType: '',
       taxAmount: [],
       totalAmount: 0,
-      dueDate: ''
+      dueDate: '',
+      pageName: ''
     }
   }
 
@@ -128,7 +129,7 @@ const TransactionModal = ({
     let breakdown = {}
     let totalTax = 0
 
-    if (Array.isArray(transaction.taxAmount)) {
+    if (Array.isArray(transaction?.taxAmount)) {
       transaction.taxAmount.forEach((tax) => {
         breakdown[tax.name] = tax.value
         totalTax += tax.value
@@ -194,10 +195,20 @@ const TransactionModal = ({
           transaction.pendingAmount = 0
           transaction.paidAmount = transaction.sellAmount * transaction.quantity
         } else if (transaction.paymentType === 'partial') {
-          console.log(transaction.sellAmount > transaction.pendingAmount + transaction.paidAmount)
           if (transaction.sellAmount > transaction.pendingAmount + transaction.paidAmount) {
             toast.error('Partial amount should be less than total amount')
             return
+          }
+        }
+
+        const valueFunction = () => {
+          switch (transaction.statusOfTransaction === 'pending') {
+            case transaction.paymentType === 'full':
+              return Number(grandTotal)
+            case transaction.paymentType === 'partial':
+              return Number(transaction.pendingAmount)
+            default:
+              return Number(transaction.pendingAmount)
           }
         }
 
@@ -210,12 +221,13 @@ const TransactionModal = ({
           statusOfTransaction: transaction.statusOfTransaction || 'pending',
           paymentType: transaction.paymentType || 'full',
           paymentMethod: transaction.paymentMethod || 'bank',
-          pendingAmount: Number(transaction.pendingAmount) || 0,
+          pendingAmount: valueFunction(),
           paidAmount: Number(transaction.paidAmount) || 0,
           transactionType: location.pathname === '/sales' ? 'sales' : 'purchase',
           taxAmount: transaction.taxAmount || [],
           totalAmount: Number(grandTotal || 0),
-          dueDate: new Date().setMonth(new Date().getMonth() + 1)
+          dueDate: new Date().setMonth(new Date().getMonth() + 1),
+          pageName: 'sales'
         }
 
         if (!isUpdateExpense) {
@@ -240,10 +252,9 @@ const TransactionModal = ({
             pendingAmount: Number(transactionData.pendingAmount) || 0,
             paidAmount: Number(transactionData.paidAmount) || 0,
             pendingFromOurs: Number(transactionData.pendingFromOurs) || 0,
-            quantity: Number(transactionData.quantity) || 0
+            quantity: Number(transactionData.quantity) || 0,
+            pageName: 'sales'
           }
-
-          console.log('🟡 Sending bank receipt data:', baseReceipt)
 
           // if (transaction.statusOfTransaction === 'completed') {
           if (transaction.paymentMethod === 'bank') {
@@ -251,7 +262,6 @@ const TransactionModal = ({
               ...baseReceipt,
               bank: transaction.bank || 'IDBI'
             })
-            console.log('🟡 Sending bank receipt data:', createdBankReceipt)
             dispatch(setBankReceipt(createdBankReceipt))
           } else if (transaction.paymentMethod === 'cash') {
             const createdCashReceipt = await window.api.createCashReceipt({
@@ -304,7 +314,8 @@ const TransactionModal = ({
             pendingAmount: Number(transactionData.pendingAmount) || 0,
             paidAmount: Number(transactionData.paidAmount) || 0,
             pendingFromOurs: Number(transactionData.pendingFromOurs) || 0,
-            quantity: Number(transactionData.quantity) || 0
+            quantity: Number(transactionData.quantity) || 0,
+            pageName: 'sales'
           }
 
           if (transaction.paymentMethod === 'bank') {
@@ -369,7 +380,7 @@ const TransactionModal = ({
     switch (fieldName) {
       case 'quantity':
         const newSubtotal = transaction.sellAmount * value
-        const updatedTaxForQuantity = transaction.taxAmount.map((tax) => {
+        const updatedTaxForQuantity = transaction?.taxAmount.map((tax) => {
           settings.map((setting) => {})
         })
         setTransaction((prev) => ({
@@ -564,7 +575,7 @@ const TransactionModal = ({
                   onChange={(value) => handleOnChangeEvent(value, 'productId')}
                   placeholder="Select Products"
                   style={{
-                    width: 300,
+                    width: '100%',
                     zIndex: productModal ? 1 : 999
                   }}
                   menuStyle={{ zIndex: productModal ? 1 : 999 }}
@@ -650,7 +661,7 @@ const TransactionModal = ({
                   searchable={taxOptions.length > 5}
                   size="md"
                   placeholder="Select Tax"
-                  value={transaction.taxAmount.map((t) => t.code)}
+                  value={transaction?.taxAmount.map((t) => t.code)}
                   onChange={(value) => handleOnChangeEvent(value, 'taxAmount')}
                   style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
                   menuStyle={{ zIndex: clientModal ? 1 : 999 }}
@@ -675,7 +686,7 @@ const TransactionModal = ({
               </div>
 
               <Animation.Collapse
-                in={transaction.taxAmount.find((t) => t.code === 'frightChanged')}
+                in={transaction?.taxAmount.find((t) => t.code === 'frightChanged')}
               >
                 <div className="col-span-2">
                   <label htmlFor="frightCharges" className="block text-sm mb-1 text-gray-600">

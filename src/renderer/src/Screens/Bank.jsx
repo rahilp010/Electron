@@ -4,7 +4,17 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
-import { Plus, Info, Import, Edit, Trash, Save, RotateCcw, AlertCircle } from 'lucide-react'
+import {
+  Plus,
+  Info,
+  Import,
+  Edit,
+  Trash,
+  Save,
+  RotateCcw,
+  AlertCircle,
+  IndianRupee
+} from 'lucide-react'
 import Loader from '../components/Loader'
 import { useNavigate } from 'react-router-dom'
 import 'rsuite/dist/rsuite-no-reset.min.css'
@@ -13,7 +23,8 @@ import {
   deleteBankReceipt,
   setClients,
   setProducts,
-  updateClient
+  updateClient,
+  updateTransaction
 } from '../app/features/electronSlice'
 import { useDispatch, useSelector } from 'react-redux'
 import { clientApi, productApi } from '../API/Api'
@@ -41,7 +52,7 @@ const TABLE_HEADERS = [
   // { key: 'srNo', label: 'ID', width: 'w-[100px]', icon: FileText, sticky: true },
   { key: 'date', label: 'Date', width: 'w-[150px]', icon: Calendar },
   { key: 'bank', label: 'Bank', width: 'w-[200px]', icon: Building2 },
-  { key: 'party', label: 'Party', width: 'w-[250px]', icon: User },
+  { key: 'party', label: 'Party', width: 'w-[350px]', icon: User },
   { key: 'debit', label: 'Debit', width: 'w-[200px]', icon: TrendingDown },
   { key: 'credit', label: 'Credit', width: 'w-[200px]', icon: TrendingUp },
   { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
@@ -66,12 +77,14 @@ const getAmount = (type, amount) => {
 }
 
 const getInitials = (name) => {
-  if (!name) return '??'
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
+  return (
+    name
+      ?.split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || ''
+  )
 }
 
 // Memoized Receipt Row Component
@@ -85,7 +98,7 @@ const ReceiptRow = React.memo(
         className={`transition-all duration-200 cursor-pointer group hover:shadow-lg transform hover:scale-[1.001]
         border-l-4 ${isReceipt ? 'border-l-emerald-400' : 'border-l-red-400'}
       `}
-        onClick={() => onEdit(receipt)}
+        // onClick={() => onEdit(receipt)}
         title="Click to edit this receipt"
         style={{ animationDelay: `${index * 100}ms` }}
       >
@@ -114,13 +127,13 @@ const ReceiptRow = React.memo(
               {getInitials(clients.find((c) => c.id === receipt.clientId)?.clientName)}
             </div>
             <span className="font-medium text-gray-800">
-              {clients.find((c) => c.id === receipt.clientId)?.clientName || 'Unknown Client'}
+              {clients.find((c) => c.id === receipt.clientId)?.clientName || 'Ram Bhasore'}
             </span>
           </div>
         </td>
 
         <td className="px-6 py-4">
-          {receipt.type === 'Payment' ? (
+          {receipt.type === 'Payment' || receipt.type === 'Salary' ? (
             <div className="flex items-center gap-2">
               <TrendingDown size={14} className="text-red-600" />
               <span className="font-semibold text-red-600 bg-red-100 px-3 py-1 rounded-full">
@@ -223,7 +236,7 @@ const Bank = () => {
     pendingFromOurs: '',
     paidAmount: '',
     quantity: '',
-    paymentType: 'full',
+    paymentType: 'full'
   })
 
   // Form validation errors
@@ -244,7 +257,8 @@ const Bank = () => {
 
   const typeOptions = [
     { label: 'Receipt', value: 'Receipt', color: 'emerald', icon: TrendingUp },
-    { label: 'Payment', value: 'Payment', color: 'red', icon: TrendingDown }
+    { label: 'Payment', value: 'Payment', color: 'red', icon: TrendingDown },
+    { label: 'Salary', value: 'Salary', color: 'blue', icon: IndianRupee }
   ]
 
   const clients = useSelector((state) => state.electron.clients.data || [])
@@ -407,7 +421,8 @@ const Bank = () => {
           dueDate: bankReceipt?.dueDate
             ? new Date(bankReceipt.dueDate)
             : new Date().setMonth(new Date().getMonth() + 1),
-          transactionType: bankReceipt?.type === 'Receipt' ? 'sales' : 'purchase'
+          transactionType: bankReceipt?.type === 'Receipt' ? 'sales' : 'purchase',
+          pageName: 'Bank'
         })
 
         const bankReceiptData = {
@@ -424,12 +439,13 @@ const Bank = () => {
             ? new Date(bankReceipt.dueDate)
             : new Date().setMonth(new Date().getMonth() + 1),
           taxAmount: bankReceipt.taxAmount || [],
-          statusOfTransaction: bankReceipt.statusOfTransaction || 'pending',
+          statusOfTransaction: bankReceipt?.type === 'Salary' ? 'completed' : 'pending',
           pendingAmount: bankReceipt.type === 'Receipt' ? Number(bankReceipt.amount) : 0,
           pendingFromOurs: bankReceipt.type === 'Payment' ? Number(bankReceipt.amount) : 0,
           paidAmount: bankReceipt.paidAmount || 0,
           quantity: bankReceipt.quantity || 0,
-          paymentType: bankReceipt.paymentType || 'full'
+          paymentType: bankReceipt.paymentType || 'full',
+          pageName: 'Bank'
         }
 
         let response
@@ -465,13 +481,35 @@ const Bank = () => {
               pendingAmount: clientFiltered?.pendingAmount + Number(bankReceipt.amount)
             })
             dispatch(updateClient(updateData))
-          } else {
+          } else if (bankReceipt.type === 'Payment') {
             const updateData = await window.api.updateClient({
               id: clientFiltered?.id,
               ...clientFiltered,
               pendingFromOurs: clientFiltered?.pendingFromOurs + Number(bankReceipt.amount)
             })
             dispatch(updateClient(updateData))
+          } else if (bankReceipt.type === 'Salary') {
+            const updateData = await window.api.updateClient({
+              id: clientFiltered?.id,
+              ...clientFiltered,
+              salaryHistory: JSON.stringify([
+                ...clientFiltered.salaryHistory,
+                {
+                  amount: Number(bankReceipt.amount),
+                  date: new Date().toISOString(),
+                  type: bankReceipt.type
+                  
+                }
+              ])
+            })
+            dispatch(updateClient(updateData))
+            const updateTransactionData = await window.api.updateTransaction({
+              id: transaction.id,
+              ...transaction,
+              statusOfTransaction: 'completed',
+              pageName: 'Salary'
+            })
+            dispatch(updateTransaction(updateTransactionData))
           }
         }
 

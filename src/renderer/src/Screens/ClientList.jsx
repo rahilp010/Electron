@@ -31,6 +31,7 @@ import Navbar from '../components/UI/Navbar'
 import * as XLSX from 'xlsx'
 import ImportExcel from '../components/UI/ImportExcel'
 import { IoLogoWhatsapp } from 'react-icons/io'
+import electron from '../assets/electron.png'
 
 // Constants
 const TABLE_HEADERS = [
@@ -550,6 +551,11 @@ const ClientList = () => {
     fetchClients()
   }, [fetchClients])
 
+  const getTransactionDetails = (id) => {
+    const transaction = transactions.find((t) => t.id === id)
+    return transaction?.transactionType
+  }
+
   return (
     <div className="select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-hidden relative">
       <div className="w-full sticky top-0 z-10">
@@ -770,7 +776,7 @@ const ClientList = () => {
           {clientHistory.length > 0 ? (
             <>
               {/* Summary Card */}
-              <div className="bg-gradient-to-br from-orange-50 to-red-50 border-b-2 border-orange-200 p-2 px-6 mx-4 rounded-2xl shadow-lg">
+              <div className="bg-gradient-to-br from-orange-50 to-red-50 border-b-2 border-orange-200 p-2 px-6 mx-4 rounded-2xl shadow-lg overflow-y-auto customScrollbar">
                 <div className="grid grid-cols-4 items-center justify-between">
                   <div>
                     <p className="text-xs text-gray-600 font-medium mb-1">Total Pending Amount</p>
@@ -778,19 +784,7 @@ const ClientList = () => {
                       <IndianRupee size={24} className="text-orange-600" />
                       <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
                         {toThousands(
-                          clientHistory.reduce(
-                            (total, t) =>
-                              total +
-                              (t.sellAmount && t.quantity
-                                ? t.sellAmount * t.quantity
-                                : t.statusOfTransaction === 'pending' && t.paymentType === 'full'
-                                  ? t.amount
-                                  : t.statusOfTransaction === 'pending' &&
-                                      t.paymentType === 'partial'
-                                    ? t.pendingAmount
-                                    : 0),
-                            0
-                          )
+                          clientHistory.reduce((total, t) => total + t.pendingAmount, 0)
                         )}
                       </h2>
                     </div>
@@ -812,7 +806,7 @@ const ClientList = () => {
               </div>
 
               {/* Transaction List */}
-              <div className="px-4 pb-4 space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar my-5">
+              <div className="px-4 pb-4 space-y-3 max-h-[400px] my-5">
                 <div className="bg-white rounded-2xl shadow-md border border-gray-200 transition-all duration-300 hover:shadow-lg">
                   <table className="min-w-full border-collapse text-sm">
                     {/* Table Header */}
@@ -873,7 +867,7 @@ const ClientList = () => {
                             </td>
 
                             {/* Status */}
-                            <td className="px-6 py-3">
+                            <td className="px-6 py-3 flex items-center gap-2 relative">
                               <span
                                 className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ${
                                   t.statusOfTransaction === 'pending'
@@ -890,6 +884,14 @@ const ClientList = () => {
                                 ></span>
                                 {String(t.statusOfTransaction).charAt(0).toUpperCase() +
                                   String(t.statusOfTransaction).slice(1)}
+                              </span>
+                              <span className="absolute right-8">
+                                {console.log(getTransactionDetails(t.transactionId))}
+                                {getTransactionDetails(t.transactionId) === 'purchase' ? (
+                                  <img src={electron} className="w-5 h-5" />
+                                ) : (
+                                  ''
+                                )}
                               </span>
                             </td>
                           </tr>

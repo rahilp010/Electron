@@ -6,7 +6,7 @@ import { setClients, updateClient } from '../../app/features/electronSlice'
 import { CircleX } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
-import { Input, InputNumber, SelectPicker } from 'rsuite'
+import { Animation, Input, InputNumber, SelectPicker, Toggle } from 'rsuite'
 
 const ClientModal = ({
   setShowModal,
@@ -31,20 +31,25 @@ const ClientModal = ({
 
   const [isSubmittingClient, setIsSubmittingClient] = useState(false)
 
-  const getInitialClient = () => {
+  const getInitialClient = useCallback(() => {
     if (isUpdateExpense && existingClient) {
       return {
-        clientName: existingClient.clientName || '',
+        id: existingClient.id, // ✅ ADD THIS LINE
+        clientName: String(existingClient.clientName).toUpperCase() || '',
         phoneNo: existingClient.phoneNo || '',
         gstNo: existingClient.gstNo || '',
         address: existingClient.address || '',
         pendingAmount: Number(existingClient.pendingAmount) || 0,
         paidAmount: Number(existingClient.paidAmount) || 0,
         pendingFromOurs: Number(existingClient.pendingFromOurs) || 0,
-        accountType: existingClient.accountType || ''
+        accountType: existingClient.accountType || '',
+        isEmployee: existingClient.isEmployee || 0,
+        salary: Number(existingClient.salary) || 0,
+        salaryHistory: existingClient.salaryHistory || '[]'
       }
     }
     return {
+      id: null, // ✅ Also include id here for consistency
       clientName: '',
       phoneNo: '',
       gstNo: '',
@@ -52,9 +57,12 @@ const ClientModal = ({
       pendingAmount: 0,
       paidAmount: 0,
       pendingFromOurs: 0,
-      accountType: ''
+      accountType: '',
+      isEmployee: 0,
+      salary: 0,
+      salaryHistory: '[]'
     }
-  }
+  }, [isUpdateExpense, existingClient])
 
   // Simplified state - only use transaction object
   const [client, setClient] = useState(getInitialClient())
@@ -67,17 +75,7 @@ const ClientModal = ({
   // Initialize transaction data for updates
   useEffect(() => {
     if (isUpdateExpense && existingClient?.id) {
-      console.log('Initializing client for update:', existingClient)
-      setClient({
-        clientName: existingClient.clientName || '',
-        phoneNo: existingClient.phoneNo || '',
-        gstNo: existingClient.gstNo || '',
-        address: existingClient.address || '',
-        pendingAmount: Number(existingClient.pendingAmount) || 0,
-        paidAmount: Number(existingClient.paidAmount) || 0,
-        pendingFromOurs: Number(existingClient.pendingFromOurs) || 0,
-        accountType: existingClient.accountType || ''
-      })
+      setClient(getInitialClient())
     }
   }, [isUpdateExpense, existingClient?.id])
 
@@ -101,14 +99,17 @@ const ClientModal = ({
         }
 
         const clientData = {
-          clientName: client.clientName,
+          clientName: String(client.clientName).toUpperCase(),
           phoneNo: client.phoneNo,
           gstNo: client.gstNo,
           address: client.address,
           pendingAmount: Number(client.pendingAmount),
           paidAmount: Number(client.paidAmount),
           pendingFromOurs: Number(client.pendingFromOurs),
-          accountType: client.accountType
+          accountType: client.accountType,
+          isEmployee: client.isEmployee,
+          salary: Number(client.salary),
+          salaryHistory: client.salaryHistory
         }
 
         if (!isUpdateExpense) {
@@ -124,7 +125,7 @@ const ClientModal = ({
         } else {
           try {
             const response = await window.api.updateClient({
-              id: safeClient.id,
+              id: Number(client.id),
               ...clientData
             })
             dispatch(updateClient(response))
@@ -181,6 +182,14 @@ const ClientModal = ({
         setClient((prev) => ({ ...prev, accountType: value }))
         break
 
+      case 'isEmployee':
+        setClient((prev) => ({ ...prev, isEmployee: value }))
+        break
+
+      case 'salary':
+        setClient((prev) => ({ ...prev, salary: value }))
+        break
+
       default:
         toast.error('Invalid Field Name')
         break
@@ -200,7 +209,7 @@ const ClientModal = ({
     >
       {type === 'client' ? (
         <form onSubmit={handleSubmitClient}>
-          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-2xl relative">
+          <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-4xl relative">
             <p className="text-lg font-semibold mb-4">
               {isUpdateExpense ? 'Update Client' : 'Add Client'}
             </p>
@@ -217,7 +226,7 @@ const ClientModal = ({
                 </label>
                 <Input
                   size="sm"
-                  value={client.clientName}
+                  value={String(client.clientName).toUpperCase()}
                   placeholder="Enter Client Name"
                   onChange={(value) => handleOnChangeEvent(value, 'clientName')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
@@ -319,6 +328,39 @@ const ClientModal = ({
                   formatter={toThousands}
                   className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
+              </div>
+
+              <div className="mb-4 flex items-center gap-10">
+                <div>
+                  <label className="block text-sm mb-1 text-gray-600">Person Status</label>
+                  <Toggle
+                    size="lg"
+                    checkedChildren="Employee"
+                    unCheckedChildren="Client"
+                    checked={client.isEmployee === 1}
+                    onChange={(checked) => handleOnChangeEvent(checked ? 1 : 0, 'isEmployee')}
+                  />
+                </div>
+
+                <Animation.Collapse in={client.isEmployee === 1}>
+                  <div>
+                    <label htmlFor="salary" className="block text-sm mb-1 text-gray-600">
+                      Salary
+                    </label>
+                    <InputNumber
+                      prefix={<div className="">₹</div>}
+                      defaultValue={0}
+                      size="xs"
+                      value={client.salary}
+                      onChange={(value) => handleOnChangeEvent(value, 'salary')}
+                      formatter={toThousands}
+                      min={0}
+                      name="salary"
+                      id="salary"
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                </Animation.Collapse>
               </div>
             </div>
 

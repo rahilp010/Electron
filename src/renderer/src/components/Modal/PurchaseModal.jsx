@@ -75,7 +75,7 @@ const PurchaseModal = ({
     if (isUpdateExpense && existingTransaction) {
       return {
         clientId: existingTransaction.clientId || '',
-        productId: existingTransaction.productId || 0,
+        productId: existingTransaction.productId || '',
         quantity: Number(existingTransaction.quantity) || 0,
         sellAmount: Number(existingTransaction.sellAmount) || 0,
         purchaseAmount: Number(existingTransaction.purchaseAmount) || 0,
@@ -85,13 +85,14 @@ const PurchaseModal = ({
         pendingAmount: Number(existingTransaction.pendingAmount) || 0,
         paidAmount: Number(existingTransaction.paidAmount) || 0,
         transactionType: existingTransaction.transactionType || '',
-        taxAmount: existingTransaction.taxAmount || [],
-        dueDate: existingTransaction.dueDate || ''
+        taxAmount: existingTransaction?.taxAmount || [],
+        dueDate: existingTransaction.dueDate || '',
+        pageName: 'Purchase'
       }
     }
     return {
       clientId: '',
-      productId: 0,
+      productId: '',
       quantity: 0,
       sellAmount: 0,
       purchaseAmount: 0,
@@ -102,7 +103,9 @@ const PurchaseModal = ({
       paidAmount: 0,
       transactionType: '',
       taxAmount: [],
-      dueDate: ''
+      dueDate: '',
+      totalAmount: 0,
+      pageName: 'Purchase'
     }
   }
 
@@ -131,8 +134,8 @@ const PurchaseModal = ({
     let breakdown = {}
     let totalTax = 0
 
-    if (Array.isArray(transaction.taxAmount)) {
-      transaction.taxAmount.forEach((tax) => {
+    if (Array.isArray(transaction?.taxAmount)) {
+      transaction?.taxAmount.forEach((tax) => {
         breakdown[tax.name] = tax.value
         totalTax += tax.value
       })
@@ -187,7 +190,7 @@ const PurchaseModal = ({
           return
         } else if (transaction.paymentType === 'full') {
           transaction.pendingAmount = 0
-          transaction.paidAmount = grandTotal
+          transaction.paidAmount = 0
         } else if (
           transaction.statusOfTransaction === 'pending' &&
           transaction.paymentType !== 'partial'
@@ -197,6 +200,7 @@ const PurchaseModal = ({
         } else if (transaction.statusOfTransaction === 'completed') {
           transaction.paymentType = 'full'
           transaction.paidAmount = grandTotal
+          transaction.pendingAmount = 0
         } else if (transaction.paymentType === 'partial') {
           if (grandTotal > transaction.pendingAmount + transaction.paidAmount) {
             toast.error('Partial amount should be less than total amount')
@@ -217,7 +221,8 @@ const PurchaseModal = ({
           paidAmount: Number(transaction.paidAmount) || 0,
           transactionType: location.pathname === '/sales' ? 'sales' : 'purchase',
           taxAmount: transaction?.taxAmount || [],
-          dueDate: new Date()?.setMonth(new Date().getMonth() + 1)
+          dueDate: new Date()?.setMonth(new Date().getMonth() + 1),
+          pageName: 'Purchase'
         }
 
         if (!isUpdateExpense) {
@@ -230,12 +235,19 @@ const PurchaseModal = ({
             type: 'Payment',
             date: new Date().toISOString().slice(0, 19).replace('T', ' '),
             statusOfTransaction: createdTransaction.statusOfTransaction,
+            clientId: createdTransaction.clientId,
+            paymentType: createdTransaction.paymentType,
             party:
               clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
             amount: grandTotal,
             description: `Purchase ${getProductName(transaction.productId)}`,
-            taxAmount: transaction.taxAmount || [],
-            dueDate: new Date().setMonth(new Date().getMonth() + 1)
+            taxAmount: transaction?.taxAmount || [],
+            dueDate: new Date().setMonth(new Date().getMonth() + 1),
+            productId: createdTransaction.productId || '',
+            pendingAmount: Number(transactionData.pendingAmount) || 0,
+            paidAmount: Number(transactionData.paidAmount) || 0,
+            pendingFromOurs: Number(grandTotal) || 0,
+            quantity: Number(transactionData.quantity) || 0,
           }
 
           if (transaction.paymentMethod === 'bank') {
@@ -264,78 +276,40 @@ const PurchaseModal = ({
             type: 'Payment',
             date: new Date().toISOString().slice(0, 19).replace('T', ' '),
             statusOfTransaction: updatedTransaction.data.statusOfTransaction,
+            clientId: updatedTransaction.data.clientId,
+            paymentType: updatedTransaction.data.paymentType,
             party:
               clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
             amount: grandTotal,
             description: `Purchase ${getProductName(transaction.productId)}`,
-            taxAmount: transaction.taxAmount || [],
-            dueDate: new Date().setMonth(new Date().getMonth() + 1)
+            taxAmount: transaction?.taxAmount || [],
+            dueDate: new Date().setMonth(new Date().getMonth() + 1),
+            productId: updatedTransaction.data.productId || '',
+            pendingAmount: Number(transactionData.pendingAmount) || 0,
+            paidAmount: Number(transactionData.paidAmount) || 0,
+            pendingFromOurs: Number(transactionData.pendingFromOurs) || 0,
+            quantity: Number(transactionData.quantity) || 0
           }
 
           if (transaction.paymentMethod === 'bank') {
-            if (transaction.paymentType === 'partial') {
-              const updatedBankReceipt = await window.api.updateBankReceipt({
-                ...baseReceipt,
-                amount: transaction.paidAmount,
-                bank: transaction.bank || 'IDBI',
-                statusOfTransaction: 'completed',
-                description: `Partial Payment ${getProductName(transaction.productId)}`
-              })
-              if (transaction.pendingAmount > 0) {
-                const createdBankReceipt = await window.api.createBankReceipt({
-                  ...baseReceipt,
-                  amount: transaction.pendingAmount,
-                  bank: transaction.bank || 'IDBI'
-                })
-                dispatch(setBankReceipt(createdBankReceipt))
-              }
-              dispatch(updateBankReceipt(updatedBankReceipt))
-            } else if (transaction.paymentType === 'full') {
-              const updatedBankReceipt = await window.api.updateBankReceipt({
-                ...baseReceipt,
-                amount: grandTotal,
-                bank: transaction.bank || 'IDBI'
-              })
-              dispatch(updateBankReceipt(updatedBankReceipt))
-            } else {
-              const updatedBankReceipt = await window.api.updateBankReceipt({
-                ...baseReceipt,
-                amount: grandTotal,
-                bank: transaction.bank || 'IDBI'
-              })
-              dispatch(updateBankReceipt(updatedBankReceipt))
-            }
+            const updatedBankReceipt = await window.api.updateBankReceipt({
+              ...baseReceipt,
+              amount: grandTotal,
+              bank: transaction.bank || 'IDBI'
+            })
+            dispatch(updateBankReceipt(updatedBankReceipt))
           } else if (transaction.paymentMethod === 'cash') {
-            if (transaction.paymentType === 'partial') {
-              const updatedCashReceipt = await window.api.updateCashReceipt({
-                ...baseReceipt,
-                amount: transaction.paidAmount,
-                cash: transaction.cash || 'Cash',
-                statusOfTransaction: 'completed'
-              })
-              if (transaction.pendingAmount > 0) {
-                const createdCashReceipt = await window.api.createCashReceipt({
-                  ...baseReceipt,
-                  amount: transaction.pendingAmount,
-                  cash: transaction.cash || 'Cash'
-                })
-                dispatch(setCashReceipt(createdCashReceipt))
-              }
-              dispatch(updateCashReceipt(updatedCashReceipt))
-            } else {
-              const updatedCashReceipt = await window.api.updateCashReceipt({
-                ...baseReceipt,
-                amount: grandTotal,
-                cash: transaction.cash || 'Cash'
-              })
-              dispatch(updateCashReceipt(updatedCashReceipt))
-            }
+            const updatedCashReceipt = await window.api.updateCashReceipt({
+              ...baseReceipt,
+              amount: grandTotal,
+              cash: transaction.cash || 'Cash'
+            })
+            dispatch(updateCashReceipt(updatedCashReceipt))
           }
         }
         await fetchTransaction() // Refresh data
         setShowModal(false)
       } catch (error) {
-        console.log(error)
         toast.error('An error occurred while processing your request', error)
       } finally {
         setIsSubmittingTransaction(false)
@@ -348,7 +322,7 @@ const PurchaseModal = ({
     switch (fieldName) {
       case 'quantity':
         const newSubtotal = purchasePrice * value
-        const updatedTaxForQuantity = transaction.taxAmount.map((tax) => {
+        const updatedTaxForQuantity = transaction?.taxAmount.map((tax) => {
           settings.map((setting) => {})
         })
         setTransaction((prev) => ({ ...prev, quantity: value, taxAmount: updatedTaxForQuantity }))
@@ -537,35 +511,26 @@ const PurchaseModal = ({
                     value: product.id,
                     qty: product.quantity
                   }))}
-                  value={transaction.productId}
-                  onChange={(value) => {
-                    handleOnChangeEvent(value, 'productId')
-                  }}
-                  placeholder="Select Products"
+                  value={
+                    products.some((p) => p.id === transaction.productId)
+                      ? transaction.productId
+                      : null
+                  }
+                  onChange={(value) => handleOnChangeEvent(value, 'productId')}
+                  placeholder="Select Product"
                   style={{
                     width: '100%',
                     zIndex: productModal ? 1 : 999
                   }}
                   menuStyle={{ zIndex: productModal ? 1 : 999 }}
                   menuMaxHeight={250}
-                  virtualized={true}
+                  virtualized
                   renderMenuItem={(label, item) => (
                     <div className="flex justify-between w-full items-center">
+                      <span className="truncate max-w-[500px]">{label}</span>
                       <span
-                        className="truncate"
-                        style={{
-                          maxWidth: '500px',
-                          display: 'inline-block',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}
-                      >
-                        {label}
-                      </span>
-                      <span
-                        className={`text-gray-500 text-xs font-thin tracking-wider ${
-                          item.qty > 0 ? 'text-green-400' : 'text-red-400'
+                        className={`text-xs font-medium ${
+                          item.qty > 0 ? 'text-green-500' : 'text-red-400'
                         }`}
                       >
                         Qty: {item.qty}
@@ -573,22 +538,12 @@ const PurchaseModal = ({
                     </div>
                   )}
                   renderValue={(value, item) => (
-                    <span
-                      style={{
-                        maxWidth: '250px',
-                        display: 'inline-block',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
-                    >
-                      {item?.label}
-                    </span>
+                    <span className="truncate max-w-[250px]">{item?.label}</span>
                   )}
                   renderExtraFooter={() => (
                     <div className="px-3 py-1 border-t border-gray-200">
                       <p
-                        className="text-blue-600 text-sm tracking-wider cursor-pointer font-bold"
+                        className="text-blue-600 text-sm font-bold cursor-pointer"
                         onClick={() => setProductModal(true)}
                       >
                         + Create Product
@@ -656,7 +611,7 @@ const PurchaseModal = ({
                   searchable={taxOptions.length > 6}
                   size="md"
                   placeholder="Select Tax"
-                  value={transaction.taxAmount.map((t) => t.code)}
+                  value={transaction?.taxAmount.map((t) => t.code)}
                   onChange={(value) => handleOnChangeEvent(value, 'taxAmount')}
                   style={{ width: '100%', zIndex: clientModal ? 1 : 999 }}
                   menuStyle={{ zIndex: clientModal ? 1 : 999 }}
@@ -681,7 +636,7 @@ const PurchaseModal = ({
               </div>
 
               <Animation.Collapse
-                in={transaction.taxAmount.find((t) => t.code === 'frightChanged')}
+                in={transaction?.taxAmount.find((t) => t.code === 'frightChanged')}
               >
                 <div className="col-span-2">
                   <label htmlFor="frightCharges" className="block text-sm mb-1 text-gray-600">

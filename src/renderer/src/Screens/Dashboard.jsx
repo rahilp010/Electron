@@ -7,8 +7,10 @@ import product from '../assets/product.png'
 import bank from '../assets/ATM.png'
 import cash from '../assets/cash.png'
 import purchase from '../assets/purchase.png'
+import sales from '../assets/sales.png'
+import salary from '../assets/salary.png'
 import { useNavigate } from 'react-router-dom'
-import { ReceiptText } from 'lucide-react'
+import { List, Plus, ReceiptText } from 'lucide-react'
 import { useDispatch } from 'react-redux'
 import { setKeyBindings } from '../app/features/electronSlice'
 import { useEffect } from 'react'
@@ -35,7 +37,7 @@ const Dashboard = () => {
   const year = date.getFullYear()
   const fullMonth = date.toLocaleString('default', { month: 'long' })
   return (
-    <div className="w-full">
+    <div className="w-full select-none">
       <div className="overflow-y-auto h-screen customScrollbar">
         <div className="sticky top-0 z-10">
           <Navbar />
@@ -56,7 +58,7 @@ const Dashboard = () => {
             <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4">
               <img src={clientList} alt="product" className="w-24 h-24 object-cover" />
               <button
-                className="mt-4 bg-black text-white px-16 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
+                className="mt-4 bg-black text-white px-18 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
                 onClick={() => navigate('/clients')}
               >
                 Add Clients
@@ -65,17 +67,12 @@ const Dashboard = () => {
 
             {/* Time Tracker */}
             <div className="col-span-3 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex flex-col items-center justify-center gap-4 relative">
-              <img src={purchase} alt="product" className="w-24 h-24 object-cover" />
-              <ReceiptText
-                className="absolute top-3 right-3 border p-1.5 rounded-full bg-black text-white hover:scale-110 transition-all duration-200 cursor-pointer"
-                size={28}
-                onClick={() => navigate('/purchaseBill')}
-              />
+              <img src={salary} alt="product" className="w-24 h-24 object-cover" />
               <button
-                className="mt-4 bg-black text-white px-18 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
-                onClick={() => navigate('/purchase')}
+                className="mt-4 bg-black text-white px-22 py-2 rounded-full shadow cursor-pointer transition-all duration-200 hover:bg-black/80"
+                onClick={() => navigate('/salary')}
               >
-                Purchase
+                Salary
               </button>
             </div>
 
@@ -110,6 +107,33 @@ const Dashboard = () => {
               >
                 Reports & Analytics
               </button>
+            </div>
+
+            <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4 flex items-center justify-center gap-5">
+              <div className="flex flex-col bg-gray-900 backdrop-blur-md rounded-4xl p-3 px-7 items-center justify-center gap-5 relative border border-white/20">
+                <img src={purchase} alt="product" className="w-30 h-24 object-cover" />
+                <ReceiptText
+                  className="absolute top-3 right-3 border border-white p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white hover:scale-110 transition-all duration-200 cursor-pointer"
+                  size={28}
+                  onClick={() => navigate('/purchaseBill')}
+                />
+                <button
+                  className="mt-4 bg-white/90 backdrop-blur-sm text-black px-17 py-2 rounded-full shadow-xl cursor-pointer transition-all duration-200 hover:bg-white/80 hover:shadow-2xl"
+                  onClick={() => navigate('/purchase')}
+                >
+                  Purchase
+                </button>
+              </div>
+
+              <div className="flex flex-col bg-gray-900 backdrop-blur-md rounded-4xl p-3 px-7 items-center justify-center gap-3 border border-white/10">
+                <img src={sales} alt="product" className="w-24 h-26 object-cover" />
+                <button
+                  className="mt-4 bg-white/90 backdrop-blur-sm text-black px-20 py-2 rounded-full shadow-xl cursor-pointer transition-all duration-200 hover:bg-white/80 hover:shadow-2xl"
+                  onClick={() => navigate('/sales')}
+                >
+                  Sales
+                </button>
+              </div>
             </div>
 
             <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">

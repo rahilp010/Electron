@@ -2,7 +2,7 @@
 /* eslint-disable react/prop-types */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
-import React, { useEffect, useState, useMemo, useCallback, memo } from 'react'
+import React, { useEffect, useState, useMemo, useCallback, memo, useRef } from 'react'
 import {
   FileUp,
   Import,
@@ -138,8 +138,6 @@ const getPaymentStatusComponent = (transaction) => {
 // Memoized TransactionRow component
 const TransactionRow = memo(
   ({ transaction, index, clients, products, location, onEdit, onDelete }) => {
-    const isEven = index % 2 === 0
-    const rowBg = isEven ? 'bg-white' : 'bg-[#f0f0f0]'
     const clientName = getClientName(transaction?.clientId, clients)
     const productName = getProductName(transaction?.productId, products)
     const totalAmount = (transaction?.sellAmount || 0) * (transaction?.quantity || 0)
@@ -617,6 +615,8 @@ const Transaction = () => {
   const [productFilter, setProductFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [importFile, setImportFile] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(30)
+  const tableContainerRef = useRef(null)
 
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
@@ -672,6 +672,39 @@ const Transaction = () => {
     clients,
     products
   ])
+
+  const loadMore = useCallback(() => {
+    if (visibleCount < filteredData.length) {
+      setVisibleCount((prev) => prev + 30)
+    }
+  }, [visibleCount, filteredData.length])
+
+  const handleScroll = useCallback(() => {
+    if (tableContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = tableContainerRef.current
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        loadMore()
+      }
+    }
+  }, [loadMore])
+
+  useEffect(() => {
+    const container = tableContainerRef?.current
+    if (container) {
+      container?.addEventListener('scroll', handleScroll)
+      return () => container.removeEventListener('scroll', handleScroll)
+    }
+  }, [handleScroll])
+
+  // Memoized visible data for rendering
+  const visibleData = useMemo(() => {
+    return filteredData.slice(0, visibleCount)
+  }, [filteredData, visibleCount])
+
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(30)
+  }, [filteredData])
 
   // Memoized statistics
   const statistics = useMemo(() => {
@@ -1009,7 +1042,7 @@ const Transaction = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredData.map((transaction, index) => (
+                    visibleData.map((transaction, index) => (
                       <TransactionRow
                         key={transaction?.id || index}
                         transaction={transaction}
