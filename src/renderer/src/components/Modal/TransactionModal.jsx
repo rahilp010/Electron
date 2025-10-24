@@ -356,7 +356,6 @@ const TransactionModal = ({
         }
         await fetchTransaction() // Refresh data
         setShowModal(false)
-        setTransactionModal(false)
       } catch (error) {
         toast.error('An error occurred while processing your request')
       } finally {

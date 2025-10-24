@@ -234,16 +234,19 @@ const ClientRow = memo(({ client, onDelete, onEdit, setClientHistory, setOpen })
             }
           >
             <button
-              className="text-purple-500 p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+              className="group relative p-2 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-purple-400 "
               onClick={() => handleHistory(client.id)}
               title="History"
             >
-              <History size={12} />
+              <History
+                size={16}
+                className="group-hover:rotate-12 transition-transform duration-300"
+              />
             </button>
           </Whisper>
 
           <button
-            className="text-green-600 p-1.5 border border-green-600 rounded-full hover:bg-green-600 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+            className="group relative p-2 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-green-400"
             onClick={() => {
               const clientTransactions = transactions.filter((t) => t.clientId === client.id)
 
@@ -267,7 +270,10 @@ const ClientRow = memo(({ client, onDelete, onEdit, setClientHistory, setOpen })
             }}
             title="Send on WhatsApp"
           >
-            <IoLogoWhatsapp size={18} />
+            <IoLogoWhatsapp
+              size={18}
+              className="group-hover:scale-110 transition-transform duration-300"
+            />
           </button>
         </div>
       </td>

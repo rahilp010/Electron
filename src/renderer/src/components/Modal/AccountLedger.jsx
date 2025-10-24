@@ -316,11 +316,14 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
 
   // Memoized statistics
   const statistics = useMemo(() => {
-    const totalReceipts = filteredData
+    let totalReceipts = 0
+    let totalPayments = 0
+
+    totalReceipts = filteredData
       .filter((r) => r.type === 'Receipt')
       .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
 
-    const totalPayments = filteredData
+    totalPayments = filteredData
       .filter((r) => r.type === 'Payment')
       .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
 

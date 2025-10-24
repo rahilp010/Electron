@@ -602,25 +602,6 @@ const Bank = () => {
     [fetchRecentReceipts, clients, dispatch]
   )
 
-  const handleImportExcel = useCallback(
-    async (filePath) => {
-      try {
-        const result = await window.api.importExcel(filePath, 'bank_receipts')
-
-        if (result.success) {
-          toast.success(`Imported ${result.count} bank receipts successfully`)
-          await fetchRecentReceipts()
-          setImportFile(false)
-        } else {
-          toast.error(`Import failed: ${result.error}`)
-        }
-      } catch (error) {
-        toast.error('Failed to import Excel: ' + error.message)
-      }
-    },
-    [fetchRecentReceipts]
-  )
-
   // Prepare client options for SelectPicker
   const clientOptions = clients.map((client) => ({
     label: client.clientName,
@@ -657,13 +638,6 @@ const Bank = () => {
         </div>
         <div className="mx-7 flex gap-2">
           <button
-            className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-md"
-            onClick={() => setImportFile(!importFile)}
-          >
-            <Import size={16} />
-            <span className="text-sm">Import</span>
-          </button>
-          <button
             className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-lg hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
             onClick={() => navigate('/ledger')}
           >
@@ -672,11 +646,6 @@ const Bank = () => {
           </button>
         </div>
       </div>
-
-      {/* Import Excel Component */}
-      {importFile && (
-        <ImportExcel onFileSelected={handleImportExcel} onClose={() => setImportFile(false)} />
-      )}
 
       {showLoader && <Loader />}
 

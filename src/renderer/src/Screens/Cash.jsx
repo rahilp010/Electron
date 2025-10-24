@@ -32,7 +32,6 @@ import { toast } from 'react-toastify'
 import Navbar from '../components/UI/Navbar'
 import { DatePicker, Input, SelectPicker, Tooltip, Whisper } from 'rsuite'
 import cash from '../assets/cash.png'
-import ImportExcel from '../components/UI/ImportExcel'
 import {
   TrendingUp,
   TrendingDown,
@@ -633,13 +632,6 @@ const Cash = () => {
         </div>
         <div className="mx-7 flex gap-2">
           <button
-            className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-lg hover:bg-gray-50 transition-all duration-200 hover:shadow-md"
-            onClick={() => setImportFile(!importFile)}
-          >
-            <Import size={16} />
-            <span className="text-sm">Import</span>
-          </button>
-          <button
             className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-lg hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
             onClick={() => navigate('/ledger')}
           >
@@ -648,10 +640,6 @@ const Cash = () => {
           </button>
         </div>
       </div>
-
-      {importFile && (
-        <ImportExcel onFileSelected={handleImportExcel} onClose={() => setImportFile(false)} />
-      )}
 
       {showLoader && <Loader />}
 

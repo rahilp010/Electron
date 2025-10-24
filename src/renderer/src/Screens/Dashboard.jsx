@@ -1,4 +1,3 @@
-/* eslint-disable react/prop-types */
 /* eslint-disable prettier/prettier */
 /* eslint-disable react-hooks/exhaustive-deps */
 import Navbar from '../components/UI/Navbar'
@@ -11,11 +10,9 @@ import purchase from '../assets/purchase.png'
 import sales from '../assets/sales.png'
 import salary from '../assets/salary.png'
 import { useNavigate } from 'react-router-dom'
-import { Plus, ReceiptText } from 'lucide-react'
 import { useDispatch } from 'react-redux'
 import { setKeyBindings } from '../app/features/electronSlice'
 import { useEffect } from 'react'
-import { CiBoxList } from 'react-icons/ci'
 // import WhatsAppQRModal from '../components/Modal/whatsappQRModal'
 
 const Dashboard = () => {
@@ -48,7 +45,7 @@ const Dashboard = () => {
           <div className="grid grid-cols-12 gap-1.5 p-6 bg-gray-50 min-h-[500px] font-poppins">
             {/* Profile Card */}
             <div
-              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-600 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
+              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-400 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
               onClick={() => navigate('/products')}
             >
               {/* Animated background gradient */}
@@ -69,7 +66,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-center relative pt-1 z-10">
+              <div className="flex items-center justify-center relative pt-1">
                 <div className="flex flex-col text-center">
                   <p className="text-3xl bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                     Products
@@ -80,7 +77,7 @@ const Dashboard = () => {
             </div>
 
             <div
-              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-600 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
+              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-400 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
               onClick={() => navigate('/clients')}
             >
               {/* Animated background gradient */}
@@ -101,7 +98,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-center relative mt-1 z-10">
+              <div className="flex items-center justify-center relative mt-1">
                 <div className="flex flex-col text-center">
                   <p className="text-3xl bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                     Clients
@@ -112,7 +109,7 @@ const Dashboard = () => {
             </div>
 
             <div
-              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-600 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
+              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-400 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
               onClick={() => navigate('/salary')}
             >
               {/* Animated background gradient */}
@@ -133,7 +130,7 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-center relative mt-1 z-10">
+              <div className="flex items-center justify-center relative mt-1">
                 <div className="flex flex-col text-center">
                   <p className="text-3xl bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                     Salary
@@ -144,13 +141,13 @@ const Dashboard = () => {
             </div>
 
             {/* Onboarding Progress */}
-            <div className="col-span-3 row-span-2 bg-white rounded-4xl border border-gray-600 border-b-4 shadow-lg p-4 flex  flex-col items-center justify-center gap-5">
+            <div className="col-span-3 row-span-2 bg-white rounded-4xl border border-gray-400 border-b-4 shadow-lg p-4 flex  flex-col items-center justify-center gap-5">
               <div
                 className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
                 onClick={() => navigate('/bank')}
               >
                 {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-400/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
                 {/* Decorative corner accent */}
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
@@ -182,7 +179,7 @@ const Dashboard = () => {
                 onClick={() => navigate('/cash')}
               >
                 {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-400/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
                 {/* Decorative corner accent */}
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
@@ -211,7 +208,7 @@ const Dashboard = () => {
             </div>
 
             <div
-              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-600 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
+              className="col-span-3 bg-gradient-to-br from-white to-gray-50 rounded-4xl border border-gray-400 border-b-4 shadow-[0_10px_40px_rgba(0,0,0,0.08),0_2px_12px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_20px_60px_rgba(0,0,0,0.12),0_4px_16px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group hover:cursor-pointer"
               onClick={() => navigate('/reports')}
             >
               {/* Animated background gradient */}
@@ -242,11 +239,13 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div className="col-span-6 bg-white rounded-4xl border border-gray-600 border-b-4 shadow-lg p-4 flex items-center justify-center gap-5">
-              <div className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
-              onClick={() => navigate('/purchase')}>
+            <div className="col-span-6 bg-white rounded-4xl border border-gray-400 border-b-4 shadow-lg p-4 flex items-center justify-center gap-5">
+              <div
+                className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
+                onClick={() => navigate('/purchase')}
+              >
                 {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-400/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
                 {/* Decorative corner accent */}
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
@@ -273,10 +272,12 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
-              onClick={() => navigate('/sales')}>
+              <div
+                className="col-span-3 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
+                onClick={() => navigate('/sales')}
+              >
                 {/* Animated background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-600/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-400/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
                 {/* Decorative corner accent */}
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
@@ -304,7 +305,16 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* <div className="col-span-6 bg-white rounded-4xl border border-gray-600 shadow-lg p-4">
+            <div
+              className="col-span-12 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
+              onClick={() => navigate('/sales')}
+            >
+              {/* Animated background gradient */}
+              <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-400/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+              {/* Decorative corner accent */}
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
+
               <h3 className="font-semibold text-gray-700">
                 {fullMonth} {year}
               </h3>
@@ -318,7 +328,7 @@ const Dashboard = () => {
                   <span className="text-gray-500 text-sm">Sep 15, 09:00 AM</span>
                 </div>
               </div>
-            </div> */}
+            </div>
 
             {/* <div className="col-span-6 bg-white rounded-4xl border border-gray-100 shadow-lg p-4">
               <WhatsAppQRModal />
