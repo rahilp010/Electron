@@ -3,7 +3,7 @@ import { useRef, useState, useEffect } from 'react'
 import QRCodeStyling from 'qr-code-styling'
 import { toast } from 'react-toastify'
 import { Scan, Lock, X, CheckCircle2 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 const trustedPublicKeyBase64 = '' // 🔑 Put your trusted device's public key (spki DER, base64-encoded)
 
@@ -18,10 +18,13 @@ const Authentication = () => {
   const qrRef = useRef(null)
   const inputRefs = useRef([])
   const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  console.log('path', location.pathname)
 
   // ---- UUID / Challenge Generator ----
   const generateChallenge = () => {
@@ -169,7 +172,7 @@ const Authentication = () => {
         setIsVerifying(false)
         setShowPasscode(false)
         setPasscode(['', '', '', '', '', ''])
-        navigate('/')
+        navigate('/dashboard')
       }, 1000)
     }
   }
@@ -210,7 +213,7 @@ const Authentication = () => {
         {/* Main Content */}
         <div className="flex items-center justify-center gap-8 h-[calc(100vh-10rem)] px-8">
           {/* QR Code Card */}
-          <div
+          {/* <div
             className={`relative group transform transition-all duration-700 ${mounted ? 'translate-x-0 opacity-100' : '-translate-x-20 opacity-0'}`}
           >
             <div
@@ -221,7 +224,6 @@ const Authentication = () => {
               }`}
               onClick={!showQRCode ? generateChallenge : undefined}
             >
-              {/* Animated gradient border effect */}
               <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
               {showQRCode ? (
@@ -277,7 +279,7 @@ const Authentication = () => {
                 </div>
               )}
             </div>
-          </div>
+          </div> */}
 
           {/* Passcode Card */}
           <div
@@ -307,7 +309,7 @@ const Authentication = () => {
                   </button>
                   <Lock size={48} className="text-gray-700 mb-6" />
                   <p className="text-xl font-light mb-6 text-gray-700">Enter Passcode</p>
-                  <div className="flex gap-3 w-full mb-8 -ml-13">
+                  <div className="flex gap-2 w-full mb-8 -ml-8">
                     {passcode.map((digit, index) => (
                       <input
                         key={index}

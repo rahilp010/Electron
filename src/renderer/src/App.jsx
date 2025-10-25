@@ -46,7 +46,8 @@ function App() {
           <KeyBind>
             <Routes>
               <Route path="*" element={<NotFound />} />
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Authentication />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/products" element={<Products />} />
               <Route path="/clients" element={<ClientList />} />
               <Route path="/sales" element={<Transaction />} />

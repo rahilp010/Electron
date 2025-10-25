@@ -1,14 +1,18 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 
 function KeyBind({ children }) {
   const navigate = useNavigate()
   const keyBindings = useSelector((state) => state.electron.keyBindings?.data || [])
+  const location = useLocation()
 
   useEffect(() => {
+    if (location.pathname === '/auth' || location.pathname === '/') return
+
     const handleKeyPress = (event) => {
       // Check for ESC key (always enabled)
+
       if (event.key === 'Escape') {
         const activeElement = document.activeElement
         // Close modal if any input/textarea is focused or if there's a modal
@@ -19,7 +23,7 @@ function KeyBind({ children }) {
         ) {
           return // Let modal handle ESC
         }
-        navigate('/')
+        navigate('/dashboard')
         return
       }
 

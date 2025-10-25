@@ -790,7 +790,7 @@ const Salary = () => {
             </>
           ) : (
             <div className="flex items-center justify-center h-full">
-              <p className="text-gray-500 border w-full rounded-xl h-32 flex items-center justify-center text-xl">
+              <p className="text-gray-500 w-full rounded-xl h-32 flex items-center justify-center text-xl">
                 No Transactions Found
               </p>
             </div>

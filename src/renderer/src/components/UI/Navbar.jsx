@@ -6,7 +6,7 @@ const Navbar = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const navItems = [
-    { name: 'Dashboard', active: true, path: '/' },
+    { name: 'Dashboard', active: true, path: '/dashboard' },
     { name: 'Reports', active: false, path: '/reports' },
     { name: 'Ledger', active: false, path: '/ledger' },
     { name: 'Analytics', active: false, path: '/analytics' }
@@ -26,7 +26,7 @@ const Navbar = () => {
 
         <div className="flex items-center gap-3">
           {/* Navigation Items */}
-          {location.pathname === '/' ? (
+          {location.pathname === '/dashboard' ? (
             <div className="flex items-center space-x-1 border border-gray-600 rounded-4xl p-0.5 tracking-wide cursor-pointer">
               {navItems.map((item) => (
                 <NavLink
@@ -45,10 +45,10 @@ const Navbar = () => {
 
           {/* Right Side Icons */}
           <div className="flex items-center space-x-1 cursor-pointer">
-            {location.pathname === '/' ? null : (
+            {location.pathname === '/dashboard' ? null : (
               <div
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-white rounded-full transition-all duration-200 border"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/dashboard')}
               >
                 <div className="flex items-center gap-1">
                   <LayoutDashboard size={20} />
@@ -77,7 +77,7 @@ const Navbar = () => {
 
       <p
         className={`text-[32px] font-light mt-8 mx-3 ${
-          location.pathname === '/' ? 'block' : 'hidden'
+          location.pathname === '/dashboard' ? 'block' : 'hidden'
         }`}
       >
         Welcome in, Nixtio
