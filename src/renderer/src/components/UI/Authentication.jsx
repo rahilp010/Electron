@@ -211,7 +211,7 @@ const Authentication = () => {
         </div>
 
         {/* Main Content */}
-        <div className="flex items-center justify-center gap-8 h-[calc(100vh-10rem)] px-8">
+        <div className="flex items-center justify-center gap-8 h-[calc(100vh-10rem)] -ml-10">
           {/* QR Code Card */}
           {/* <div
             className={`relative group transform transition-all duration-700 ${mounted ? 'translate-x-0 opacity-100' : '-translate-x-20 opacity-0'}`}

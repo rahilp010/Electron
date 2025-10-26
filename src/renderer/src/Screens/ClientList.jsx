@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 /* eslint-disable react/no-unknown-property */
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
@@ -18,7 +19,9 @@ import {
   Calendar1,
   Box,
   Phone,
-  MoreHorizontal
+  MoreHorizontal,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react'
 import Loader from '../components/Loader'
 import { useDispatch, useSelector } from 'react-redux'
@@ -36,15 +39,27 @@ import electron from '../assets/electron.svg'
 // Constants
 const TABLE_HEADERS = [
   // { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
-  { key: 'date', label: 'Date', width: 'w-[120px]', icon: Calendar1 },
-  { key: 'clientName', label: 'Client Name', width: 'w-[500px]', icon: User },
-  { key: 'gstNo', label: 'GST No', width: 'w-[200px]', icon: Package },
-  { key: 'phoneNo', label: 'Phone No', width: 'w-[200px]', icon: Phone },
-  { key: 'pendingAmount', label: 'Pending Payment', width: 'w-[200px]', icon: TrendingUp },
-  { key: 'paidAmount', label: 'Paid Amount', width: 'w-[200px]', icon: Receipt },
-  { key: 'pendingFromOurs', label: 'Our Pendings', width: 'w-[200px]', icon: Box },
-  { key: 'accountType', label: 'Account Type', width: 'w-[200px]', icon: Info },
-  { key: 'totalWorth', label: 'Total Worth', width: 'w-[200px]', icon: IndianRupee },
+  { key: 'date', label: 'Date', width: 'w-[120px]', icon: Calendar1, sortable: true },
+  { key: 'clientName', label: 'Client Name', width: 'w-[500px]', icon: User, sortable: true },
+  { key: 'gstNo', label: 'GST No', width: 'w-[200px]', icon: Package, sortable: true },
+  { key: 'phoneNo', label: 'Phone No', width: 'w-[200px]', icon: Phone, sortable: true },
+  {
+    key: 'pendingAmount',
+    label: 'Pending Payment',
+    width: 'w-[200px]',
+    icon: TrendingUp,
+    sortable: true
+  },
+  { key: 'paidAmount', label: 'Paid Amount', width: 'w-[200px]', icon: Receipt, sortable: true },
+  { key: 'pendingFromOurs', label: 'Our Pendings', width: 'w-[200px]', icon: Box, sortable: true },
+  { key: 'accountType', label: 'Account Type', width: 'w-[200px]', icon: Info, sortable: true },
+  {
+    key: 'totalWorth',
+    label: 'Total Worth',
+    width: 'w-[200px]',
+    icon: IndianRupee,
+    sortable: true
+  },
   { key: 'action', label: 'Action', width: 'w-[150px]', icon: MoreHorizontal }
 ]
 
@@ -53,11 +68,9 @@ const toThousands = (value) => {
   if (!value || isNaN(value)) return '0'
   return new Intl.NumberFormat('en-IN').format(Number(value))
 }
-
 const formatClientId = (id) => {
   return id ? `RO${String(id).slice(-3).toUpperCase()}` : 'RO---'
 }
-
 const getInitials = (name) => {
   return (
     name
@@ -68,11 +81,9 @@ const getInitials = (name) => {
       .slice(0, 2) || ''
   )
 }
-
 const calculateLoss = (pendingFromOurs, pendingAmount) => {
   return Number(pendingFromOurs || 0) + Number(pendingAmount || 0)
 }
-
 const calculateTotalWorth = (pendingFromOurs, pendingAmount, paidAmount) => {
   return (
     Number(pendingFromOurs || 0) +
@@ -80,34 +91,44 @@ const calculateTotalWorth = (pendingFromOurs, pendingAmount, paidAmount) => {
     (Number(paidAmount || 0) - Number(pendingFromOurs || 0))
   )
 }
-
 const getClientName = (clientId, clients) => {
   if (!clientId) return 'Unknown Client'
-
   // Handle both direct ID and nested object structure
   const id = typeof clientId === 'object' ? clientId.id : clientId
   const client = clients.find((c) => String(c?.id) === String(id))
   return client ? client.clientName : 'Unknown Client'
 }
-
 const getProductName = (productId, products) => {
   if (!productId) return 'Unknown Product'
-
   // Handle both direct ID and nested object structure
   const id = typeof productId === 'object' ? productId.id : productId
   const product = products.find((p) => String(p?.id) === String(id))
   return product ? product.name : 'Unknown Product'
 }
 
+// Helper for sorting values
+const getSortValue = (item, key) => {
+  switch (key) {
+    case 'totalWorth':
+      return calculateTotalWorth(item.pendingFromOurs, item.pendingAmount, item.paidAmount)
+    case 'date':
+      return new Date(item.createdAt)
+    default:
+      const val = item[key]
+      if (typeof val === 'string') {
+        return val.toLowerCase()
+      }
+      return Number(val) || 0
+  }
+}
+
 // Memoized ClientRow component
 const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, setOpen }) => {
   const isEven = index % 2 === 0
   const rowBg = isEven ? 'bg-white' : 'bg-[#f0f0f0]'
-
   const clients = useSelector((state) => state.electron.clients.data || [])
   const products = useSelector((state) => state.electron.products.data || [])
   const transactions = useSelector((state) => state.electron.transaction.data || [])
-
   const handleHistory = async (id) => {
     try {
       // const response = await window.api.getAllTransactions()
@@ -122,7 +143,6 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
       toast.error('Failed to fetch client details: ' + error.message)
     }
   }
-
   return (
     <tr className={`text-sm text-center`}>
       <td className="px-4 py-3">
@@ -133,19 +153,17 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
         })}
       </td>
       <td className="px-4 py-3 flex items-center justify-between">
-        <td className="px-4">
-          <div className="flex items-center gap-3 px-6">
-            <div className="relative group">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
-                {getInitials(client.clientName)}
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
+        <div className="flex items-center gap-3 px-6">
+          <div className="relative group">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
+              {getInitials(client.clientName)}
             </div>
-            <span className="font-medium text-gray-700 transition-colors duration-200 group-hover:text-indigo-600">
-              {client.clientName}
-            </span>
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
           </div>
-        </td>
+          <span className="font-medium text-gray-700 transition-colors duration-200 group-hover:text-indigo-600">
+            {client.clientName}
+          </span>
+        </div>
         <Whisper
           trigger="hover"
           placement="left"
@@ -191,25 +209,21 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
           ₹ {toThousands(Number(client.pendingAmount).toFixed(0))}
         </div>
       </td>
-
       <td className="px-4 py-3">
         <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-indigo-50 to-indigo-100 text-indigo-700 border border-indigo-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
           ₹ {toThousands(Number(client.paidAmount).toFixed(0))}
         </div>
       </td>
-
       <td className="px-4 py-3">
         <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-emerald-50 to-green-100 text-emerald-700 border border-emerald-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
           ₹ {toThousands(Number(client.pendingFromOurs).toFixed(0))}
         </div>
       </td>
-
       <td className="px-4 py-3">
         <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-rose-50 to-red-100 text-rose-700 border border-rose-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
           {client.accountType}
         </div>
       </td>
-
       <td className="px-4 py-3 font-semibold">
         <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
           ₹{' '}
@@ -218,7 +232,6 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
           )}
         </div>
       </td>
-
       <td className="w-28">
         <div className="flex gap-3 justify-center items-center">
           <button
@@ -240,22 +253,17 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
             onClick={() => {
               // Get all transactions for this client
               const clientTransactions = transactions.filter((t) => t.clientId === client.id)
-
               if (!clientTransactions.length) {
                 toast.info('No transactions found for this client.')
                 return
               }
-
               const targetClient = clients.find((c) => c.id === client.id)
-
               if (!targetClient?.phoneNo) {
                 toast.error('Client phone number not available.')
                 return
               }
-
               // Build a WhatsApp message
               let message = `Hello ${targetClient.clientName},\n\nHere are your recent transaction details:\n\n`
-
               clientTransactions.forEach((t, index) => {
                 const productName = getProductName(t.productId, products)
                 const amount = toThousands(Number(t.sellAmount).toFixed(0))
@@ -263,9 +271,7 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
                   t.createdAt
                 ).toLocaleDateString('en-IN')}\n\n`
               })
-
               message += `Thank you for your business!\n- RO Team`
-
               // Open WhatsApp with the encoded message
               const url = `https://wa.me/${targetClient.phoneNo}?text=${encodeURIComponent(message)}`
               window.open(url, '_blank')
@@ -283,7 +289,6 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
 // Custom hook for client operations
 const useClientOperations = () => {
   const dispatch = useDispatch()
-
   const fetchClients = useCallback(async () => {
     try {
       const response = await window.api.getAllClients()
@@ -292,7 +297,6 @@ const useClientOperations = () => {
       toast.error('Failed to fetch clients: ' + error.message)
     }
   }, [dispatch])
-
   const fetchProducts = useCallback(async () => {
     try {
       const response = await window.api.getAllProducts()
@@ -301,7 +305,6 @@ const useClientOperations = () => {
       toast.error('Failed to fetch products: ' + error.message)
     }
   }, [dispatch])
-
   const handleDeleteClient = useCallback(
     async (id) => {
       if (!window.confirm('Are you sure you want to delete this client?')) return
@@ -316,7 +319,6 @@ const useClientOperations = () => {
     },
     [dispatch, fetchClients]
   )
-
   const handleEditClient = useCallback(
     async (client, setSelectedClient, setIsUpdateExpense, setShowModal) => {
       try {
@@ -330,7 +332,6 @@ const useClientOperations = () => {
     },
     []
   )
-
   return { fetchClients, handleDeleteClient, handleEditClient, fetchProducts }
 }
 
@@ -339,7 +340,6 @@ const ClientList = () => {
   const dispatch = useDispatch()
   const { fetchClients, handleDeleteClient, handleEditClient, fetchProducts } =
     useClientOperations()
-
   // State management
   const [showLoader, setShowLoader] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -352,33 +352,28 @@ const ClientList = () => {
   const [importFile, setImportFile] = useState(false)
   const [open, setOpen] = useState(false)
   const [overflow, setOverflow] = useState(true)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const [clientHistory, setClientHistory] = useState([])
   const [visibleCount, setVisibleCount] = useState(30)
   const tableContainerRef = useRef(null)
-
   const clients = useSelector((state) => state.electron.clients.data || [])
   const products = useSelector((state) => state.electron.products.data || [])
   const transactions = useSelector((state) => state.electron.transaction.data || [])
-
   const TABLE_HEADERS_HISTORY = [
     { key: 'date', label: 'Date', width: 'w-[100px]', icon: Calendar1 },
     { key: 'product', label: 'Product', width: 'w-[150px]', icon: Package },
     { key: 'quantity', label: 'Quantity', width: 'w-[150px]', icon: Box },
     { key: 'status', label: 'Status', width: 'w-[50px]', icon: TrendingUp }
   ]
-
   const ACCOUNT_TYPE_OPTIONS = [
     { label: 'Creditors', value: 'Creditors' },
     { label: 'Debtors', value: 'Debtors' }
   ]
-
   // Memoized filtered data
   const filteredData = useMemo(() => {
     if (!Array.isArray(clients)) return []
     const query = searchQuery.toLowerCase()
-
-    return clients.filter((data) => {
-      // Search filter
+    let filtered = clients.filter((data) => {
       const matchesSearch =
         !query ||
         [
@@ -389,31 +384,44 @@ const ClientList = () => {
           data?.paidAmount?.toString(),
           data?.pendingFromOurs?.toString()
         ].some((field) => field?.includes(query))
-
-      // Client filter
       const matchesClient = !clientFilter || data.id === clientFilter
-
-      // Date filter
       let matchesDate = true
       if (dateRange?.length === 2) {
         const createdDate = new Date(data.createdAt)
         const [start, end] = dateRange
         matchesDate = createdDate >= new Date(start) && createdDate <= new Date(end)
       }
-
       // Account type filter
       const matchesAccountType = !accountTypeFilter || data.accountType === accountTypeFilter
-
       return matchesSearch && matchesClient && matchesDate && matchesAccountType
     })
-  }, [clients, searchQuery, clientFilter, dateRange, accountTypeFilter])
-
+    if (sortConfig.key) {
+      filtered = [...filtered].sort((a, b) => {
+        const aVal = getSortValue(a, sortConfig.key)
+        const bVal = getSortValue(b, sortConfig.key)
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
+        return 0
+      })
+    }
+    return filtered
+  }, [clients, searchQuery, clientFilter, dateRange, accountTypeFilter, sortConfig])
+  const handleSort = useCallback((key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        // toggle direction
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, direction: 'asc' }
+    })
+    // Reset visible count when sorting to start from top
+    setVisibleCount(30)
+  }, [])
   const loadMore = useCallback(() => {
     if (visibleCount < filteredData.length) {
       setVisibleCount((prev) => prev + 30)
     }
   }, [visibleCount, filteredData.length])
-
   const handleScroll = useCallback(() => {
     if (tableContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = tableContainerRef.current
@@ -422,7 +430,6 @@ const ClientList = () => {
       }
     }
   }, [loadMore])
-
   useEffect(() => {
     const container = tableContainerRef?.current
     if (container) {
@@ -430,17 +437,14 @@ const ClientList = () => {
       return () => container.removeEventListener('scroll', handleScroll)
     }
   }, [handleScroll])
-
   // Memoized visible data for rendering
   const visibleData = useMemo(() => {
     return filteredData.slice(0, visibleCount)
   }, [filteredData, visibleCount])
-
   // Reset visible count when filters change
   useEffect(() => {
     setVisibleCount(30)
   }, [filteredData])
-
   // Memoized statistics
   const statistics = useMemo(() => {
     const totalAssets = filteredData.reduce(
@@ -452,26 +456,21 @@ const ClientList = () => {
       0
     )
     const totalProducts = filteredData.length
-
     const totalPendingAmount = filteredData.reduce(
       (sum, client) => sum + Number(client.pendingAmount || 0),
       0
     )
-
     const totalPaidAmount = filteredData.reduce(
       (sum, client) => sum + Number(client.paidAmount || 0),
       0
     )
-
     const totalPaidAmountWithTax = transactions
       .filter((t) => t.clientName === clients.clientName)
       .reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0)
-
     const totalPendingFromOurs = filteredData.reduce(
       (sum, client) => sum + Number(client.pendingFromOurs || 0),
       0
     )
-
     return {
       totalAssets,
       totalProducts,
@@ -481,23 +480,19 @@ const ClientList = () => {
       totalPendingFromOurs
     }
   }, [filteredData, clients, transactions])
-
   // Event handlers
   const handleAddClient = useCallback(async () => {
     setSelectedClient(null)
     setIsUpdateExpense(false)
     setShowModal(true)
   }, [])
-
   const handleSearchChange = useCallback((value) => {
     setSearchQuery(value)
   }, [])
-
   const handleImportExcel = useCallback(
     async (filePath) => {
       try {
         const result = await window.api.importExcel(filePath, 'clients')
-
         if (result.success) {
           toast.success(`Imported ${result.count} rows successfully`)
           await fetchClients()
@@ -511,7 +506,6 @@ const ClientList = () => {
     },
     [fetchClients]
   )
-
   const handleExportExcel = useCallback(() => {
     try {
       const exportData = filteredData.map((client) => ({
@@ -529,39 +523,32 @@ const ClientList = () => {
           client.paidAmount
         )
       }))
-
       const ws = XLSX.utils.json_to_sheet(exportData)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Clients')
       XLSX.writeFile(wb, `clients_${new Date().toISOString().split('T')[0]}.xlsx`)
-
       toast.success('Data exported successfully')
     } catch (error) {
       toast.error('Failed to export data: ' + error.message)
     }
   }, [filteredData])
-
   // Effects
   useEffect(() => {
     const timer = setTimeout(() => setShowLoader(false), 500)
     return () => clearTimeout(timer)
   }, [])
-
   useEffect(() => {
     fetchClients()
   }, [fetchClients])
-
   const getTransactionDetails = (id) => {
     const transaction = transactions.find((t) => t.id === id)
     return transaction?.transactionType
   }
-
   return (
     <div className="select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-hidden relative">
       <div className="w-full sticky top-0 z-10">
         <Navbar />
       </div>
-
       {/* Header */}
       <div className="flex justify-between mt-5 pb-2 items-center">
         <p className="text-3xl font-light mx-7">Clients</p>
@@ -589,15 +576,12 @@ const ClientList = () => {
           </button>
         </div>
       </div>
-
       {/* Import Excel Component */}
       {importFile && (
         <ImportExcel onFileSelected={handleImportExcel} onClose={() => setImportFile(false)} />
       )}
-
       {/* Loader */}
       {showLoader && <Loader />}
-
       <div className="overflow-y-auto h-screen customScrollbar">
         {/* Statistics Cards */}
         <div className="bg-gradient-to-r from-slate-50 to-gray-100 border border-gray-200 rounded-2xl shadow-md px-6 py-4 mx-7 flex items-center justify-start transition-all duration-300 hover:shadow-lg">
@@ -624,7 +608,6 @@ const ClientList = () => {
             </p>
           </div>
         </div>
-
         {/* Main Content */}
         <div className="w-full h-[calc(100%-40px)] my-3 bg-white overflow-y-auto customScrollbar relative">
           <div className="mx-7 my-3">
@@ -679,7 +662,6 @@ const ClientList = () => {
                 />
               </div>
             </div>
-
             {/* Table */}
             <div
               ref={tableContainerRef}
@@ -690,14 +672,38 @@ const ClientList = () => {
                   <tr className="text-sm sticky top-0 z-20 bg-gradient-to-r from-gray-50 to-gray-100">
                     {TABLE_HEADERS.map((header) => {
                       const IconTable = header.icon
+                      const isActive = sortConfig.key === header.key
+                      const arrow =
+                        isActive && header.sortable ? (
+                          sortConfig.direction === 'asc' ? (
+                            <ChevronUp size={14} />
+                          ) : (
+                            <ChevronDown size={14} />
+                          )
+                        ) : (
+                          ''
+                        )
                       return (
                         <th
                           key={header.key}
-                          className={`px-4 py-3 border-b border-gray-300 ${header.width} ${header.sticky} bg-transparent`}
+                          className={`px-4 py-3 border-b border-gray-300 ${header.width} ${
+                            header.sticky
+                          } bg-transparent ${header.sortable ? 'cursor-pointer select-none' : ''}`}
+                          onClick={() => header.sortable && handleSort(header.key)}
+                          title={header.sortable ? 'Click to sort' : ''}
                         >
                           <div className="flex items-center justify-center gap-2">
                             <IconTable size={16} className="text-gray-500" />
-                            {header.label}
+                            <span>{header.label}</span>
+                            {header.sortable && (
+                              <span
+                                className={`text-xs transition-all duration-200 ${
+                                  isActive ? 'opacity-100' : 'opacity-30'
+                                }`}
+                              >
+                                {arrow}
+                              </span>
+                            )}
                           </div>
                         </th>
                       )
@@ -740,7 +746,6 @@ const ClientList = () => {
           </div>
         </div>
       </div>
-
       {/* Modal */}
       {showModal && (
         <ClientModal
@@ -750,7 +755,6 @@ const ClientList = () => {
           type="client"
         />
       )}
-
       <Modal
         overflow={overflow}
         open={open}
@@ -771,7 +775,6 @@ const ClientList = () => {
             </div>
           </div>
         </Modal.Header>
-
         <Modal.Body>
           {clientHistory.length > 0 ? (
             <>
@@ -804,7 +807,6 @@ const ClientList = () => {
                   </div>
                 </div>
               </div>
-
               {/* Transaction List */}
               <div className="px-4 pb-4 space-y-3 max-h-[400px] my-5">
                 <div className="bg-white rounded-2xl shadow-md border border-gray-200 transition-all duration-300 hover:shadow-lg">
@@ -828,7 +830,6 @@ const ClientList = () => {
                         })}
                       </tr>
                     </thead>
-
                     {/* Table Body */}
                     <tbody className="divide-y divide-gray-100">
                       {clientHistory.length === 0 ? (
@@ -853,19 +854,16 @@ const ClientList = () => {
                                 year: 'numeric'
                               })}
                             </td>
-
                             {/* Product */}
                             <td className="px-6 py-3 text-gray-700">
                               {t.productId
                                 ? getProductName(t.productId, products)
                                 : t.description || '-'}
                             </td>
-
                             {/* Quantity */}
                             <td className="px-6 py-3 font-medium text-gray-800">
                               {t.quantity || '-'}
                             </td>
-
                             {/* Status */}
                             <td className="px-6 py-3 flex items-center gap-2 relative">
                               <span
@@ -910,7 +908,6 @@ const ClientList = () => {
             </div>
           )}
         </Modal.Body>
-
         <style jsx>{`
           @keyframes fadeIn {
             from {
@@ -922,21 +919,17 @@ const ClientList = () => {
               transform: translateY(0);
             }
           }
-
           .custom-scrollbar::-webkit-scrollbar {
             width: 8px;
           }
-
           .custom-scrollbar::-webkit-scrollbar-track {
             background: #f1f1f1;
             border-radius: 10px;
           }
-
           .custom-scrollbar::-webkit-scrollbar-thumb {
             background: linear-gradient(180deg, #3b82f6, #8b5cf6);
             border-radius: 10px;
           }
-
           .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: linear-gradient(180deg, #2563eb, #7c3aed);
           }
@@ -945,5 +938,4 @@ const ClientList = () => {
     </div>
   )
 }
-
 export default ClientList

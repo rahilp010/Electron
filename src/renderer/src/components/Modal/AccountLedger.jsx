@@ -6,9 +6,9 @@
 import { memo, useCallback, useEffect, useMemo, useState, useRef, forwardRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { clientApi } from '../../API/Api'
-import { setClients } from '../../app/features/electronSlice'
+import { setBankReceipt, setClients } from '../../app/features/electronSlice'
 import { toast } from 'react-toastify'
-import { Tooltip, Whisper } from 'rsuite'
+import { Input, InputNumber, Modal, Tooltip, Whisper } from 'rsuite'
 import {
   TrendingUp,
   TrendingDown,
@@ -19,7 +19,10 @@ import {
   CreditCard,
   Banknote,
   BarChart3,
-  Printer
+  Printer,
+  Plus,
+  Receipt,
+  BanknoteArrowDown
 } from 'lucide-react'
 import { IoLogoWhatsapp } from 'react-icons/io5'
 
@@ -50,7 +53,7 @@ const LEDGER_TYPES = [
 
 // Utility functions
 const toThousands = (value) => {
-  if (!value || isNaN(value)) return '₹0'
+  if (!value || isNaN(value)) return '0'
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR'
@@ -67,8 +70,6 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
   const isReceipt = receipt.type === 'Receipt'
   const isEven = index % 2 === 0
   const balanceColor = balance >= 0 ? 'text-emerald-600' : 'text-red-600'
-
-  console.log('receipt', receipt)
 
   return (
     <tr
@@ -673,14 +674,16 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
         </div>
 
         {/* Print Button */}
-        <button
-          className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
-          onClick={handlePrintPDF}
-          title="Print Sales Report"
-        >
-          <Printer size={16} />
-          <span className="text-sm">Print</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
+            onClick={handlePrintPDF}
+            title="Print Sales Report"
+          >
+            <Printer size={16} />
+            <span className="text-sm">Print</span>
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -812,7 +815,6 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
             transform: translateY(0);
           }
         }
-
         .animate-slideInUp {
           animation: slideInUp 0.3s ease-out forwards;
         }

@@ -215,7 +215,6 @@ const Bank = () => {
   const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false)
   const [isUpdatingReceipt, setIsUpdatingReceipt] = useState(false)
   const [selectedReceiptId, setSelectedReceiptId] = useState(null)
-  const [importFile, setImportFile] = useState(false)
 
   // Form state
   const [bankReceipt, setBankReceipt] = useState({
@@ -236,7 +235,9 @@ const Bank = () => {
     pendingFromOurs: '',
     paidAmount: '',
     quantity: '',
-    paymentType: 'full'
+    paymentType: 'full',
+    pageName: 'Bank',
+    jvAmount: 0
   })
 
   // Form validation errors
@@ -385,7 +386,9 @@ const Bank = () => {
       paidAmount: '',
       statusOfTransaction: 'pending',
       quantity: 0,
-      paymentType: 'full'
+      paymentType: 'full',
+      jvAmount: 0,
+      pageName: 'Bank'
     })
     setErrors({})
   }, [recentReceipts])

@@ -305,27 +305,24 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div
-              className="col-span-12 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer"
-              onClick={() => navigate('/sales')}
-            >
+            <div className="col-span-12 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer">
               {/* Animated background gradient */}
               <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-400/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
               {/* Decorative corner accent */}
               <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
 
-              <h3 className="font-semibold text-gray-700">
+              <h3 className="font-semibold text-white text-xl">
                 {fullMonth} {year}
               </h3>
               <div className="mt-4 flex flex-col space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Last BackUp</span>
-                  <span className="text-gray-500 text-sm">Sep 13, 10:00 AM</span>
+                  <span className="font-medium text-white text-sm">Last BackUp</span>
+                  <span className="text-white text-sm">Sep 13, 10:00 AM</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">Next BackUp</span>
-                  <span className="text-gray-500 text-sm">Sep 15, 09:00 AM</span>
+                  <span className="font-medium text-white text-sm">Next BackUp</span>
+                  <span className="text-white text-sm">Sep 15, 09:00 AM</span>
                 </div>
               </div>
             </div>
