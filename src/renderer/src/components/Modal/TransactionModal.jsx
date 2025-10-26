@@ -174,13 +174,19 @@ const TransactionModal = ({
 
       try {
         // Validation
-        if (!transaction.clientId || !transaction.productId) {
-          toast.error('Please select client and product')
+        if (!transaction.clientId) {
+          toast.error('Please select client')
           return
-        } else if (!transaction.quantity || transaction.quantity <= 0) {
+        } else if (
+          transaction.pageName === 'Bank' ? '' : !transaction.quantity || transaction.quantity <= 0
+        ) {
           toast.error('Please enter a valid quantity')
           return
-        } else if (!transaction.sellAmount || transaction.sellAmount <= 0) {
+        } else if (
+          transaction.pageName === 'Bank'
+            ? ''
+            : !transaction.sellAmount || transaction.sellAmount <= 0
+        ) {
           toast.error('Please enter a valid selling price')
           return
         } else if (transaction.paymentType === 'full') {
@@ -606,51 +612,57 @@ const TransactionModal = ({
                 />
               </div>
 
-              <div>
-                <label htmlFor="productPrice" className="block text-sm mb-1 text-gray-600">
-                  Product Price
-                </label>
-                <InputNumber
-                  prefix="₹"
-                  defaultValue={0}
-                  size="xs"
-                  formatter={toThousands}
-                  disabled
-                  value={selectedProduct?.price || 0}
-                  className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-              </div>
+              {transaction.pageName === 'Bank' ? (
+                ''
+              ) : (
+                <>
+                  <div>
+                    <label htmlFor="productPrice" className="block text-sm mb-1 text-gray-600">
+                      Product Price
+                    </label>
+                    <InputNumber
+                      prefix="₹"
+                      defaultValue={0}
+                      size="xs"
+                      formatter={toThousands}
+                      disabled
+                      value={selectedProduct?.price || 0}
+                      className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
 
-              <div>
-                <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
-                  Quantity {selectedProduct && `(Available: ${getAvailableStock()})`}
-                </label>
-                <InputNumber
-                  defaultValue={0}
-                  size="xs"
-                  formatter={toThousands}
-                  value={transaction.quantity}
-                  onChange={(value) => handleOnChangeEvent(value, 'quantity')}
-                  max={getAvailableStock()}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-              </div>
+                  <div>
+                    <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
+                      Quantity {selectedProduct && `(Available: ${getAvailableStock()})`}
+                    </label>
+                    <InputNumber
+                      defaultValue={0}
+                      size="xs"
+                      formatter={toThousands}
+                      value={transaction.quantity}
+                      onChange={(value) => handleOnChangeEvent(value, 'quantity')}
+                      max={getAvailableStock()}
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
 
-              {location.pathname === '/sales' && (
-                <div>
-                  <label htmlFor="sellingPrice" className="block text-sm mb-1 text-gray-600">
-                    Selling Price
-                  </label>
-                  <InputNumber
-                    prefix={<div className="">₹</div>}
-                    defaultValue={0}
-                    size="xs"
-                    value={transaction.sellAmount || 0}
-                    onChange={(value) => handleOnChangeEvent(value, 'sellingPrice')}
-                    formatter={toThousands}
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                </div>
+                  {location.pathname === '/sales' && (
+                    <div>
+                      <label htmlFor="sellingPrice" className="block text-sm mb-1 text-gray-600">
+                        Selling Price
+                      </label>
+                      <InputNumber
+                        prefix={<div className="">₹</div>}
+                        defaultValue={0}
+                        size="xs"
+                        value={transaction.sellAmount || 0}
+                        onChange={(value) => handleOnChangeEvent(value, 'sellingPrice')}
+                        formatter={toThousands}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="mb-4">
@@ -678,7 +690,7 @@ const TransactionModal = ({
                   defaultValue={0}
                   disabled
                   size="xs"
-                  value={grandTotal}
+                  value={transaction.pageName === 'Bank' ? transaction.totalAmount : grandTotal}
                   formatter={toThousands}
                   name="total"
                   id="total"

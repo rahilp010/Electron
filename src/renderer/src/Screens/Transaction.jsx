@@ -29,7 +29,8 @@ import {
   deleteTransaction,
   setClients,
   setProducts,
-  setTransactions
+  setTransactions,
+  updateTransaction
 } from '../app/features/electronSlice'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
@@ -137,7 +138,7 @@ const getPaymentStatusComponent = (transaction) => {
 
 // Memoized TransactionRow component
 const TransactionRow = memo(
-  ({ transaction, index, clients, products, location, onEdit, onDelete }) => {
+  ({ transaction, index, clients, products, location, onEdit, onDelete, onStatusChange }) => {
     const clientName = getClientName(transaction?.clientId, clients)
     const productName = getProductName(transaction?.productId, products)
     const totalAmount = (transaction?.sellAmount || 0) * (transaction?.quantity || 0)
@@ -231,20 +232,28 @@ const TransactionRow = memo(
         </td>
         <td className="px-4 py-3">{renderPendingAmount()}</td>
         <td className="px-4 py-3">{renderPaidAmount()}</td>
-        <td className="px-4 py-3 tracking-wide">{getPaymentStatusComponent(transaction)}</td>
+        <td className="px-4 py-3 tracking-wide">
+          <span onClick={() => onStatusChange(transaction.id)}>
+            {getPaymentStatusComponent(transaction)}
+          </span>
+        </td>
         <td className="w-28">
           <div className="flex gap-2 justify-center items-center">
             {/* Edit Button */}
-            <button
-              className="group relative p-2 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-purple-400 "
-              onClick={() => onEdit(transaction)}
-              title="Edit transaction"
-            >
-              <PenLine
-                size={14}
-                className="group-hover:rotate-12 transition-transform duration-300"
-              />
-            </button>
+            {transaction.pageName === 'Bank' ? (
+              ''
+            ) : (
+              <button
+                className="group relative p-2 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-purple-400 "
+                onClick={() => onEdit(transaction)}
+                title="Edit transaction"
+              >
+                <PenLine
+                  size={14}
+                  className="group-hover:rotate-12 transition-transform duration-300"
+                />
+              </button>
+            )}
 
             {/* Delete Button */}
             <button
@@ -340,6 +349,27 @@ const useTransactionOperations = () => {
     [dispatch, fetchAllTransactions]
   )
 
+  const handleStatusChange = useCallback(
+    async (id) => {
+      if (!window.confirm('Are you sure you want to update the transaction status?')) return
+      try {
+        const response = await window.api.getTransactionById(id)
+        if (response.statusOfTransaction === 'pending') {
+          response.statusOfTransaction = 'completed'
+        } else {
+          response.statusOfTransaction = 'pending'
+        }
+        const updatedResponse = await window.api.updateTransaction(response)
+        dispatch(updateTransaction(updatedResponse))
+        await fetchAllTransactions()
+        toast.success('Transaction status updated successfully')
+      } catch (error) {
+        toast.error('Failed to update transaction status: ' + error.message)
+      }
+    },
+    [dispatch, fetchAllTransactions]
+  )
+
   const handleEditTransaction = useCallback(
     async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowModal) => {
       try {
@@ -360,7 +390,8 @@ const useTransactionOperations = () => {
     fetchAllClients,
     fetchAllTransactions,
     handleDeleteTransaction,
-    handleEditTransaction
+    handleEditTransaction,
+    handleStatusChange
   }
 }
 
@@ -601,7 +632,8 @@ const Transaction = () => {
     fetchAllClients,
     fetchAllTransactions,
     handleDeleteTransaction,
-    handleEditTransaction
+    handleEditTransaction,
+    handleStatusChange
   } = useTransactionOperations()
 
   // State management
@@ -1059,6 +1091,7 @@ const Transaction = () => {
                           )
                         }
                         onDelete={handleDeleteTransaction}
+                        onStatusChange={handleStatusChange}
                       />
                     ))
                   )}

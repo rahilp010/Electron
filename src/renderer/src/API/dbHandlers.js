@@ -333,7 +333,14 @@ function adjustProductStock(productId, qty, type, rollback = false) {
 // 🔹 Update client balances
 function updateClientBalances(clientId, tx, mode = 'apply') {
   const factor = mode === 'rollback' ? -1 : 1
-  const total = tx.transactionType === 'sales' ? tx.sellAmount * tx.quantity : tx.purchaseAmount
+  const total =
+    tx.transactionType === 'sales'
+      ? tx.pageName === 'Bank'
+        ? tx.totalAmount
+        : tx.sellAmount * tx.quantity
+      : tx.pageName === 'Bank'
+        ? tx.totalAmount
+        : tx.purchaseAmount
 
   if (tx.transactionType === 'sales') {
     if (tx.paymentType === 'partial') {
@@ -354,7 +361,11 @@ function updateClientBalances(clientId, tx, mode = 'apply') {
       db.prepare(
         `UPDATE clients SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
       ).run(factor * tx.pendingAmount, clientId)
-    } else if (tx.statusOfTransaction === 'pending') {
+    } else if (tx.statusOfTransaction === 'completed') {
+      db.prepare(
+        `UPDATE clients SET paidAmount = paidAmount + ?,  updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+      ).run(factor * total, clientId)
+    } else {
       db.prepare(
         `UPDATE clients SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
       ).run(factor * total, clientId)

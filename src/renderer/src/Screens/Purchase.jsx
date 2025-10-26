@@ -31,7 +31,8 @@ import {
   deleteTransaction,
   setClients,
   setProducts,
-  setTransactions
+  setTransactions,
+  updateTransaction
 } from '../app/features/electronSlice'
 import { useDispatch, useSelector } from 'react-redux'
 import { clientApi, productApi, transactionApi } from '../API/Api'
@@ -147,150 +148,167 @@ const getPaymentStatusComponent = (transaction) => {
 }
 
 // Memoized PurchaseRow component
-const PurchaseRow = React.memo(({ transaction, index, clients, products, onEdit, onDelete }) => {
-  const clientName = getClientName(transaction?.clientId, clients)
-  const productName = getProductName(transaction?.productId, products)
-  const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
-  const totalAmount = (totalAmountProduct || 0) * (transaction?.quantity || 0)
+const PurchaseRow = React.memo(
+  ({ transaction, index, clients, products, onEdit, onDelete, onStatusChange }) => {
+    const clientName = getClientName(transaction?.clientId, clients)
+    const productName = getProductName(transaction?.productId, products)
+    const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
+    const totalAmount = (totalAmountProduct || 0) * (transaction?.quantity || 0)
 
-  const renderPendingAmount = () => {
-    if (transaction?.statusOfTransaction === 'pending' && transaction?.paymentType === 'partial') {
-      return (
-        <Whisper
-          trigger="hover"
-          placement="rightStart"
-          speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
-        >
-          <span>₹ {toThousands(Number(transaction?.pendingAmount).toFixed(0))}</span>
-        </Whisper>
-      )
+    const renderPendingAmount = () => {
+      if (
+        transaction?.statusOfTransaction === 'pending' &&
+        transaction?.paymentType === 'partial'
+      ) {
+        return (
+          <Whisper
+            trigger="hover"
+            placement="rightStart"
+            speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
+          >
+            <span>₹ {toThousands(Number(transaction?.pendingAmount).toFixed(0))}</span>
+          </Whisper>
+        )
+      }
+
+      if (transaction?.statusOfTransaction === 'completed') {
+        return '-'
+      }
+
+      return <HistoryToggleOffIcon className="text-yellow-500" />
     }
 
-    if (transaction?.statusOfTransaction === 'completed') {
-      return '-'
+    const renderPaidAmount = () => {
+      if (transaction?.paymentType === 'partial') {
+        return (
+          <Whisper
+            trigger="hover"
+            placement="rightStart"
+            speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
+          >
+            <span>₹ {toThousands(Number(transaction?.paidAmount).toFixed(0))}</span>
+          </Whisper>
+        )
+      }
+
+      if (transaction?.statusOfTransaction === 'pending') {
+        return '-'
+      }
+
+      return <CreditScoreIcon className="text-green-600" />
     }
 
-    return <HistoryToggleOffIcon className="text-yellow-500" />
-  }
-
-  const renderPaidAmount = () => {
-    if (transaction?.paymentType === 'partial') {
-      return (
-        <Whisper
-          trigger="hover"
-          placement="rightStart"
-          speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
-        >
-          <span>₹ {toThousands(Number(transaction?.paidAmount).toFixed(0))}</span>
-        </Whisper>
-      )
-    }
-
-    if (transaction?.statusOfTransaction === 'pending') {
-      return '-'
-    }
-
-    return <CreditScoreIcon className="text-green-600" />
-  }
-
-  return (
-    <tr className={`text-sm text-center`}>
-      {/* <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
+    return (
+      <tr className={`text-sm text-center`}>
+        {/* <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
         {formatTransactionId(transaction?.id)}
       </td> */}
-      <td className="px-4 py-3">
-        {' '}
-        {new Date(transaction?.createdAt).toLocaleDateString('en-IN', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        })}
-      </td>
-      <td className="px-4">
-        <div className="flex items-center gap-3 px-6">
-          <div className="relative group">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
-              {getInitials(clientName)}
+        <td className="px-4 py-3">
+          {' '}
+          {new Date(transaction?.createdAt).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          })}
+        </td>
+        <td className="px-4">
+          <div className="flex items-center gap-3 px-6">
+            <div className="relative group">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
+                {getInitials(clientName)}
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
             </div>
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
+            <span className="font-medium text-gray-700 transition-colors duration-200 group-hover:text-indigo-600">
+              {clientName.toUpperCase()}
+            </span>
           </div>
-          <span className="font-medium text-gray-700 transition-colors duration-200 group-hover:text-indigo-600">
-            {clientName.toUpperCase()}
+        </td>
+        <td className="px-4 py-3 tracking-wide font-medium">
+          {String(productName === 'Unknown Product' ? '-' : productName).toUpperCase()}
+        </td>
+        <td className="px-4 py-3">
+          <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
+            {transaction?.quantity || 0}
           </span>
-        </div>
-      </td>
-      <td className="px-4 py-3 tracking-wide font-medium">
-        {String(productName === 'Unknown Product' ? '-' : productName).toUpperCase()}
-      </td>
-      <td className="px-4 py-3">
-        <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
-          {transaction?.quantity || 0}
-        </span>
-      </td>
-      <td className="px-4 py-3 font-semibold">
-        <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
-          {transaction.purchaseAmount > 0
-            ? '₹ ' + toThousands(Number(transaction?.purchaseAmount).toFixed(0))
-            : '₹ ' + toThousands(Number(transaction?.totalAmount).toFixed(0))}
-        </div>
-      </td>
-      <td className="px-4 py-3">{renderPendingAmount()}</td>
-      <td className="px-4 py-3">{renderPaidAmount()}</td>
-      <td className="px-4 py-3 tracking-wide">{getPaymentStatusComponent(transaction)}</td>
+        </td>
+        <td className="px-4 py-3 font-semibold">
+          <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
+            {transaction.purchaseAmount > 0
+              ? '₹ ' + toThousands(Number(transaction?.purchaseAmount).toFixed(0))
+              : '₹ ' + toThousands(Number(transaction?.totalAmount).toFixed(0))}
+          </div>
+        </td>
+        <td className="px-4 py-3">{renderPendingAmount()}</td>
+        <td className="px-4 py-3">{renderPaidAmount()}</td>
+        <td className="px-4 py-3 tracking-wide">
+          {' '}
+          <span onClick={() => onStatusChange(transaction.id)}>
+            {getPaymentStatusComponent(transaction)}
+          </span>
+        </td>
 
-      <td className="w-28">
-        <div className="flex gap-2 justify-center items-center">
-          {/* Edit Button */}
-          <button
-            className="group relative p-2 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-purple-400 "
-            onClick={() => onEdit(transaction)}
-            title="Edit transaction"
-          >
-            <PenLine
-              size={14}
-              className="group-hover:rotate-12 transition-transform duration-300"
-            />
-          </button>
+        <td className="w-28">
+          <div className="flex gap-2 justify-center items-center">
+            {/* Edit Button */}
+            {transaction.pageName === 'Bank' ? (
+              ''
+            ) : (
+              <button
+                className="group relative p-2 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-purple-400 "
+                onClick={() => onEdit(transaction)}
+                title="Edit transaction"
+              >
+                <PenLine
+                  size={14}
+                  className="group-hover:rotate-12 transition-transform duration-300"
+                />
+              </button>
+            )}
 
-          {/* Delete Button */}
-          <button
-            className="group relative p-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-red-400"
-            onClick={() => onDelete(transaction?.id)}
-            title="Delete transaction"
-          >
-            <Trash size={14} className="group-hover:rotate-12 transition-transform duration-300" />
-          </button>
+            {/* Delete Button */}
+            <button
+              className="group relative p-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-red-400"
+              onClick={() => onDelete(transaction?.id)}
+              title="Delete transaction"
+            >
+              <Trash
+                size={14}
+                className="group-hover:rotate-12 transition-transform duration-300"
+              />
+            </button>
 
-          {/* WhatsApp Button */}
-          <button
-            className="group relative p-2 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-green-400"
-            onClick={() => {
-              const clientName = getClientName(transaction?.clientId, clients)
-              const productName = getProductName(transaction?.productId, products)
-              const amount = toThousands(Number(transaction?.sellAmount).toFixed(0))
+            {/* WhatsApp Button */}
+            <button
+              className="group relative p-2 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-green-400"
+              onClick={() => {
+                const clientName = getClientName(transaction?.clientId, clients)
+                const productName = getProductName(transaction?.productId, products)
+                const amount = toThousands(Number(transaction?.sellAmount).toFixed(0))
 
-              const message = `Hello ${clientName},\n\nHere are your transaction details:\n📦 Product: ${productName}\n💰 Amount: ₹${amount}\n📅 Date: ${new Date(
-                transaction?.createdAt
-              ).toLocaleDateString()}\n\nThank you for your business!`
+                const message = `Hello ${clientName},\n\nHere are your transaction details:\n📦 Product: ${productName}\n💰 Amount: ₹${amount}\n📅 Date: ${new Date(
+                  transaction?.createdAt
+                ).toLocaleDateString()}\n\nThank you for your business!`
 
-              const client = clients.find((c) => c.id === transaction.clientId)
-              if (client?.phoneNo) {
-                const url = `https://wa.me/${client.phoneNo}?text=${encodeURIComponent(message)}`
-                window.open(url, '_blank')
-              }
-            }}
-            title="Send on WhatsApp"
-          >
-            <IoLogoWhatsapp
-              size={16}
-              className="group-hover:scale-110 transition-transform duration-300"
-            />
-          </button>
-        </div>
-      </td>
-    </tr>
-  )
-})
+                const client = clients.find((c) => c.id === transaction.clientId)
+                if (client?.phoneNo) {
+                  const url = `https://wa.me/${client.phoneNo}?text=${encodeURIComponent(message)}`
+                  window.open(url, '_blank')
+                }
+              }}
+              title="Send on WhatsApp"
+            >
+              <IoLogoWhatsapp
+                size={16}
+                className="group-hover:scale-110 transition-transform duration-300"
+              />
+            </button>
+          </div>
+        </td>
+      </tr>
+    )
+  }
+)
 
 // Custom hook for purchase operations
 const usePurchaseOperations = () => {
@@ -346,6 +364,27 @@ const usePurchaseOperations = () => {
     [dispatch, fetchAllTransactions]
   )
 
+  const handleStatusChange = useCallback(
+    async (id) => {
+      if (!window.confirm('Are you sure you want to update the transaction status?')) return
+      try {
+        const response = await window.api.getTransactionById(id)
+        if (response.statusOfTransaction === 'pending') {
+          response.statusOfTransaction = 'completed'
+        } else {
+          response.statusOfTransaction = 'pending'
+        }
+        const updatedResponse = await window.api.updateTransaction(response)
+        dispatch(updateTransaction(updatedResponse))
+        await fetchAllTransactions()
+        toast.success('Transaction status updated successfully')
+      } catch (error) {
+        toast.error('Failed to update transaction status: ' + error.message)
+      }
+    },
+    [dispatch, fetchAllTransactions]
+  )
+
   const handleEditTransaction = useCallback(
     async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowModal) => {
       try {
@@ -388,6 +427,7 @@ const usePurchaseOperations = () => {
     fetchAllClients,
     fetchAllTransactions,
     handleDeleteTransaction,
+    handleStatusChange,
     handleEditTransaction,
     handleUpdatePaymentStatus
   }
@@ -651,6 +691,7 @@ const Purchase = () => {
     fetchAllTransactions,
     handleDeleteTransaction,
     handleEditTransaction,
+    handleStatusChange,
     handleUpdatePaymentStatus
   } = usePurchaseOperations()
 
@@ -1134,6 +1175,7 @@ const Purchase = () => {
                           )
                         }
                         onDelete={handleDeleteTransaction}
+                        onStatusChange={handleStatusChange}
                         onUpdateStatus={handleUpdatePaymentStatus}
                       />
                     ))
