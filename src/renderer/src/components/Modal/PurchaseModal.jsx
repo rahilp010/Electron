@@ -32,6 +32,8 @@ const PurchaseModal = ({
   const dispatch = useDispatch()
   const location = useLocation()
 
+  const [nextBillId, setNextBillId] = useState(null)
+
   const fetchProducts = async () => {
     const response = await window.api.getAllProducts()
     dispatch(setProducts(response))
@@ -62,6 +64,16 @@ const PurchaseModal = ({
     dispatch(setSettings(response))
   }
 
+  const fetchNextTransactionId = async () => {
+    const allTransactions = await window.api.getAllTransactions()
+    if (allTransactions?.length) {
+      const lastTransaction = allTransactions[allTransactions.length - 1]
+      setNextBillId(lastTransaction.id + 1)
+    } else {
+      setNextBillId(1)
+    }
+  }
+
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
   const settings = useSelector((state) => state.electron.settings.data || [])
@@ -74,6 +86,7 @@ const PurchaseModal = ({
   const getInitialTransaction = () => {
     if (isUpdateExpense && existingTransaction) {
       return {
+        id: existingTransaction.id || '',
         clientId: existingTransaction.clientId || '',
         productId: existingTransaction.productId || '',
         quantity: Number(existingTransaction.quantity) || 0,
@@ -91,6 +104,7 @@ const PurchaseModal = ({
       }
     }
     return {
+      id: '',
       clientId: '',
       productId: '',
       quantity: 0,
@@ -117,6 +131,7 @@ const PurchaseModal = ({
     fetchBankReceipt()
     fetchTransaction()
     fetchSettings()
+    fetchNextTransactionId()
   }, [])
 
   useEffect(() => {
@@ -136,8 +151,8 @@ const PurchaseModal = ({
 
     if (Array.isArray(transaction?.taxAmount)) {
       transaction?.taxAmount.forEach((tax) => {
-        breakdown[tax.name] = tax.value
-        totalTax += tax.value
+        breakdown[tax?.name] = tax?.value
+        totalTax += tax?.value
       })
     }
 
@@ -145,7 +160,8 @@ const PurchaseModal = ({
   }
 
   const { breakdown: taxBreakdown, totalTax } = calculateTaxBreakdown()
-  const grandTotal = subtotal + totalTax
+  const totalAmount = transaction.sellAmount * transaction.quantity
+  const grandTotal = totalAmount + totalTax
 
   useEffect(() => {
     if (transaction.paymentType === 'full') {
@@ -169,9 +185,14 @@ const PurchaseModal = ({
     return product ? product.name : 'Unknown Product'
   }
 
-  const totalAmount = products.filter((p) => p.id === transaction.productId).map((p) => p.price)
+  const getClientName = (clientId, clients) => {
+    if (!clientId) return 'Unknown Client'
 
-  const totalPurchaseAmount = totalAmount.toString()
+    // Handle both direct ID and nested object structure
+    const id = typeof clientId === 'object' ? clientId.id : clientId
+    const client = clients.find((c) => String(c?.id) === String(id))
+    return client ? client.clientName : 'Unknown Client'
+  }
 
   const handleSubmitTransaction = useCallback(
     async (e) => {
@@ -209,6 +230,7 @@ const PurchaseModal = ({
         }
 
         const transactionData = {
+          id: transaction.id,
           clientId: transaction.clientId,
           productId: transaction.productId,
           quantity: Number(transaction.quantity),
@@ -236,6 +258,7 @@ const PurchaseModal = ({
             date: new Date().toISOString().slice(0, 19).replace('T', ' '),
             statusOfTransaction: createdTransaction.statusOfTransaction,
             clientId: createdTransaction.clientId,
+            clientName: getClientName(createdTransaction.clientId, clients),
             paymentType: createdTransaction.paymentType,
             party:
               clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
@@ -248,6 +271,8 @@ const PurchaseModal = ({
             paidAmount: Number(transactionData.paidAmount) || 0,
             pendingFromOurs: Number(grandTotal) || 0,
             quantity: Number(transactionData.quantity) || 0,
+            createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+            pageName: 'Purchase'
           }
 
           if (transaction.paymentMethod === 'bank') {
@@ -439,6 +464,10 @@ const PurchaseModal = ({
     { label: 'Freight Charges', value: 'frightChanged' }
   ]
 
+  const formatTransactionId = (id) => {
+    return id ? `PB${String(id).slice(-3).toUpperCase()}` : 'PB---'
+  }
+
   return (
     <div
       className="fixed z-50 inset-0 flex items-center justify-center transition-all duration-300 bg-black/50"
@@ -462,9 +491,15 @@ const PurchaseModal = ({
       {type === 'transaction' ? (
         <form onSubmit={handleSubmitTransaction}>
           <div className="bg-white p-6 rounded-lg shadow-2xl w-full min-w-4xl relative">
-            <p className="text-lg font-semibold mb-4">
+            <p className="text-lg font-semibold flex items-center gap-3">
               {isUpdateExpense ? 'Update Purchase' : 'Add Purchase'}
+              <span className="bg-amber-300 p-1 text-sm rounded-full text-white px-4">
+                {isUpdateExpense
+                  ? formatTransactionId(transaction.id)
+                  : formatTransactionId(nextBillId)}
+              </span>
             </p>
+
             <CircleX
               className="absolute top-4 right-4 cursor-pointer text-red-400 hover:text-red-600"
               size={30}
@@ -553,36 +588,36 @@ const PurchaseModal = ({
                 />
               </div>
 
-              <div>
-                <label htmlFor="productPrice" className="block text-sm mb-1 text-gray-600">
-                  Product Price
-                </label>
-                <InputNumber
-                  prefix="₹"
-                  defaultValue={0}
-                  size="xs"
-                  formatter={toThousands}
-                  disabled
-                  value={selectedProduct?.price || 0}
-                  className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-              </div>
+              <div className="grid grid-cols-3 col-span-2 gap-3">
+                <div>
+                  <label htmlFor="productPrice" className="block text-sm mb-1 text-gray-600">
+                    Product Price
+                  </label>
+                  <InputNumber
+                    prefix="₹"
+                    defaultValue={0}
+                    size="xs"
+                    formatter={toThousands}
+                    disabled
+                    value={selectedProduct?.price || 0}
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
 
-              <div>
-                <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
-                  Quantity
-                </label>
-                <InputNumber
-                  defaultValue={0}
-                  size="xs"
-                  formatter={toThousands}
-                  value={Number(transaction.quantity)}
-                  onChange={(value) => handleOnChangeEvent(value, 'quantity')}
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-              </div>
+                <div>
+                  <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
+                    Quantity
+                  </label>
+                  <InputNumber
+                    defaultValue={0}
+                    size="xs"
+                    formatter={toThousands}
+                    value={Number(transaction.quantity)}
+                    onChange={(value) => handleOnChangeEvent(value, 'quantity')}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
 
-              {location.pathname === '/sales' && (
                 <div>
                   <label htmlFor="sellingPrice" className="block text-sm mb-1 text-gray-600">
                     Selling Price
@@ -600,7 +635,7 @@ const PurchaseModal = ({
                     className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
                 </div>
-              )}
+              </div>
 
               <div className="mb-4">
                 <label htmlFor="tax" className="block text-sm mb-1 text-gray-600">
@@ -611,7 +646,7 @@ const PurchaseModal = ({
                   searchable={taxOptions.length > 6}
                   size="md"
                   placeholder="Select Tax"
-                  value={transaction?.taxAmount.map((t) => t.code)}
+                  value={transaction?.taxAmount.map((t) => t?.code)}
                   onChange={(value) => handleOnChangeEvent(value, 'taxAmount')}
                   style={{ width: '100%', zIndex: clientModal ? 1 : 999 }}
                   menuStyle={{ zIndex: clientModal ? 1 : 999 }}
@@ -627,7 +662,7 @@ const PurchaseModal = ({
                   defaultValue={0}
                   disabled
                   size="xs"
-                  value={grandTotal}
+                  value={grandTotal || 0}
                   formatter={toThousands}
                   name="total"
                   id="total"
@@ -636,7 +671,7 @@ const PurchaseModal = ({
               </div>
 
               <Animation.Collapse
-                in={transaction?.taxAmount.find((t) => t.code === 'frightChanged')}
+                in={transaction?.taxAmount.find((t) => t?.code === 'frightChanged')}
               >
                 <div className="col-span-2">
                   <label htmlFor="frightCharges" className="block text-sm mb-1 text-gray-600">

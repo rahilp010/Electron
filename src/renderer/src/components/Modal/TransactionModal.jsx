@@ -57,6 +57,18 @@ const TransactionModal = ({
     dispatch(setSettings(response))
   }
 
+  const [nextBillId, setNextBillId] = useState(null)
+
+  const fetchNextTransactionId = async () => {
+    const allTransactions = await window.api.getAllTransactions()
+    if (allTransactions?.length) {
+      const lastTransaction = allTransactions[allTransactions.length - 1]
+      setNextBillId(lastTransaction.id + 1)
+    } else {
+      setNextBillId(1)
+    }
+  }
+
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
   const settings = useSelector((state) => state.electron.settings.data || [])
@@ -113,6 +125,7 @@ const TransactionModal = ({
     fetchBankReceipt()
     fetchTransaction()
     fetchSettings()
+    fetchNextTransactionId()
   }, [])
 
   useEffect(() => {
@@ -507,6 +520,12 @@ const TransactionModal = ({
     { label: 'Freight Charges', value: 'frightChanged' }
   ]
 
+  const formatTransactionId = (id) => {
+    if (!id) return ''
+    const padded = id.toString().padStart(6, '0')
+    return `SB${padded}`
+  }
+
   return (
     <div
       className="fixed z-50 inset-0 flex items-center justify-center transition-all duration-300 bg-black/50"
@@ -530,8 +549,13 @@ const TransactionModal = ({
       {type === 'transaction' ? (
         <form onSubmit={handleSubmitTransaction}>
           <div className="bg-white p-6 rounded-lg shadow-2xl w-full min-w-4xl relative">
-            <p className="text-lg font-semibold mb-4">
+            <p className="text-lg font-semibold mb-4 flex items-center gap-3">
               {isUpdateExpense ? 'Update Transaction' : 'Add Transaction'}
+              <span className="bg-amber-300 p-1 text-sm rounded-full text-white px-4">
+                {isUpdateExpense
+                  ? formatTransactionId(transaction.id)
+                  : formatTransactionId(nextBillId)}
+              </span>
             </p>
             <CircleX
               className="absolute top-4 right-4 cursor-pointer text-red-400 hover:text-red-600"

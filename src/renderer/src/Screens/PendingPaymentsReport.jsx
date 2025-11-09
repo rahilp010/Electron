@@ -16,7 +16,8 @@ import {
   Banknote,
   Search,
   Users,
-  Printer
+  Printer,
+  BarChart3
 } from 'lucide-react'
 import { clientApi, transactionApi } from '../API/Api'
 import { setClients, setTransactions } from '../app/features/electronSlice'
@@ -29,6 +30,7 @@ const TABLE_HEADERS = [
   { key: 'bank', label: 'Bank', width: 'w-[150px]', icon: Building2 },
   { key: 'accountName', label: 'Account Name', width: 'w-[250px]', icon: CreditCard },
   { key: 'credit', label: 'Pending', width: 'w-[200px]', icon: ClockArrowDown },
+  { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
   { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText }
 ]
 
@@ -67,9 +69,18 @@ const getInitials = (name) => {
 }
 
 // Memoized Transaction Row Component
-const TransactionRow = memo(({ receipt, index, selectedType }) => {
+const TransactionRow = memo(({ receipt, index, selectedType, clients, balance }) => {
   const isEven = index % 2 === 0
   const LedgerIcon = selectedType === 'Bank' ? Building2 : Banknote
+
+  const getClientName = (clientId, clients) => {
+    if (!clientId) return 'Unknown Client'
+
+    // Handle both direct ID and nested object structure
+    const id = typeof clientId === 'object' ? clientId.id : clientId
+    const client = clients.find((c) => String(c?.id) === String(id))
+    return client ? client.clientName : 'Unknown Client'
+  }
 
   return (
     <tr
@@ -103,9 +114,11 @@ const TransactionRow = memo(({ receipt, index, selectedType }) => {
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {getInitials(receipt.clientName)}
+            {getInitials(getClientName(receipt.clientId, clients))}
           </div>
-          <span className="font-medium text-gray-800 tracking-wide">{receipt.clientName}</span>
+          <span className="font-medium text-gray-800 tracking-wide">
+            {getClientName(receipt.clientId, clients)}
+          </span>
         </div>
       </td>
 
@@ -117,6 +130,12 @@ const TransactionRow = memo(({ receipt, index, selectedType }) => {
           <span className="font-semibold text-red-600 px-3 py-1 rounded-full">
             {toThousands(receipt.amount)}
           </span>
+        </div>
+      </td>
+
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-[16px] text-red-600">{toThousands(balance)}</span>
         </div>
       </td>
 
@@ -252,19 +271,37 @@ const PendingPaymentsReport = ({ client, onClose }) => {
   // Memoized filtered data
   const filteredData = useMemo(() => {
     const sourceData = selectedType === 'Bank' ? recentBankReceipts : recentCashReceipts
-    console.log('sourceData', sourceData)
 
     const receipts = sourceData.filter(
       (r) => r.type === 'Payment' && r.statusOfTransaction === 'pending'
     )
-    console.log('receipts', receipts)
 
     if (selectedClient?.id) {
-      return receipts.filter((r) => r.clientName === getClientName(selectedClient.id))
+      return receipts.filter(
+        (r) =>
+          String(r.clientId) === String(selectedClient.id) ||
+          r.clientName?.toLowerCase()?.trim() ===
+            getClientName(selectedClient.id)?.toLowerCase()?.trim()
+      )
     }
 
     return receipts
   }, [selectedType, recentBankReceipts, recentCashReceipts, selectedClient, getClientName])
+
+  // Memoized running balance calculation
+  const balances = useMemo(() => {
+    const receipts = [...filteredData].reverse()
+    let balance = 0
+    const calculatedBalances = []
+
+    receipts.forEach((receipt, idx) => {
+      const amount = getAmount(receipt.type, receipt.amount)
+      balance += amount
+      calculatedBalances[receipts.length - 1 - idx] = balance
+    })
+
+    return calculatedBalances
+  }, [filteredData])
 
   // Memoized statistics
   const statistics = useMemo(() => {
@@ -687,7 +724,7 @@ const PendingPaymentsReport = ({ client, onClose }) => {
                         className={`text-xs truncate
                           ${selectedClient?.id === client.id ? 'text-gray-500' : 'text-gray-500'}`}
                       >
-                        {client.accountType || 'Other'} • {toThousands(client.pendingAmount || 0)}
+                        {client.accountType || 'Other'} • {toThousands(client.pendingFromOurs || 0)}
                       </p>
                     </div>
                   </div>
@@ -787,8 +824,6 @@ const PendingPaymentsReport = ({ client, onClose }) => {
               className="w-52 flex flex-shrink-0 items-center justify-center transition-all duration-200 transform hover:scale-105 cursor-pointer"
               onClick={() => {
                 try {
-                  console.log(selectedClient);
-                  
                   const clientName = selectedClient?.clientName
                   const amount = toThousands(Number(selectedClient?.pendingFromOurs).toFixed(0))
 
@@ -802,7 +837,6 @@ const PendingPaymentsReport = ({ client, onClose }) => {
                     window.open(url, '_blank')
                   }
                 } catch (error) {
-                  console.log(error)
                   toast.error('Failed to share to WhatsApp : ', error)
                 }
               }}
@@ -862,7 +896,9 @@ const PendingPaymentsReport = ({ client, onClose }) => {
                       key={`${receipt.id || receipt.transactionId}-${index}`}
                       receipt={receipt}
                       index={index}
+                      balance={balances[index]}
                       selectedType={selectedType}
+                      clients={clients}
                     />
                   ))
                 )}

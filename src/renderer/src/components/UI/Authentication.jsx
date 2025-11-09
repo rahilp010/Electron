@@ -167,7 +167,7 @@ const Authentication = () => {
       return
     } else if (code === response.passcode) {
       setIsVerifying(true)
-      toast.success('Authenticated successfully ✅')
+      toast.success('Authenticated successfully')
       setTimeout(() => {
         setIsVerifying(false)
         setShowPasscode(false)

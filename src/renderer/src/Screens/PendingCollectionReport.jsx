@@ -70,18 +70,8 @@ const getInitials = (name) => {
     .toUpperCase()
 }
 
-const getClientName = (clientId, clients) => {
-  const client = clients.find((c) => c.id === clientId)
-  return client ? client.clientName : 'Unknown Client'
-}
-
-const getProductName = (productId, products) => {
-  const product = products.find((p) => p.id === productId)
-  return product ? product.name : 'Unknown Product'
-}
-
 // Memoized Transaction Row Component
-const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
+const TransactionRow = memo(({ receipt, index, balance, clientName, selectedType }) => {
   const isEven = index % 2 === 0
 
   return (
@@ -107,16 +97,18 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
           <div className="p-1 rounded-full bg-blue-200">
             <Building2 size={14} className="text-blue-600" />
           </div>
-          <span className="font-medium text-gray-700">{receipt.bank}</span>
+          <span className="font-medium text-gray-700">
+            {receipt.bank ? `${receipt.bank} Bank` : selectedType}
+          </span>
         </div>
       </td>
 
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {getInitials(receipt.clientName)}
+            {getInitials(clientName)}
           </div>
-          <span className="font-medium text-gray-800 tracking-wide">{receipt.clientName}</span>
+          <span className="font-medium text-gray-800 tracking-wide">{clientName}</span>
         </div>
       </td>
 
@@ -246,18 +238,22 @@ const PendingCollectionReport = ({ client, onClose }) => {
     const receipts = sourceData.filter(
       (r) => r.type === 'Receipt' && r.statusOfTransaction === 'pending'
     )
-    console.log('receipts', receipts)
 
     if (selectedClient?.id) {
-      return receipts.filter((r) => r.clientName === getClientName(selectedClient.id))
+      return receipts.filter(
+        (r) =>
+          String(r.clientId) === String(selectedClient.id) ||
+          r.clientName?.toLowerCase()?.trim() ===
+            getClientName(selectedClient.id)?.toLowerCase()?.trim()
+      )
     }
 
-    return receipts
+    return receipts.sort((a, b) => new Date(b.date) - new Date(a.date))
   }, [selectedType, recentBankReceipts, recentCashReceipts, selectedClient, getClientName])
 
   // Memoized running balance calculation
   const balances = useMemo(() => {
-    const receipts = [...filteredData].reverse()
+    const receipts = [...filteredData]
     let balance = 0
     const calculatedBalances = []
 
@@ -270,9 +266,6 @@ const PendingCollectionReport = ({ client, onClose }) => {
     return calculatedBalances
   }, [filteredData])
 
-  const transaction = useSelector((state) => state.electron.transaction.data || [])
-
-  // Memoized statistics
   const statistics = useMemo(() => {
     const totalReceipts = filteredData.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
     const transactionCount = filteredData.length
@@ -846,12 +839,20 @@ const PendingCollectionReport = ({ client, onClose }) => {
               className="w-52 flex flex-shrink-0 items-center justify-center transition-all duration-200 transform hover:scale-105 cursor-pointer"
               onClick={() => {
                 try {
-                  console.log(selectedClient)
-
                   const clientName = selectedClient?.clientName
                   const amount = toThousands(Number(selectedClient?.pendingAmount).toFixed(0))
 
-                  const message = `Hello ${clientName},\n\n!!! just a reminder that the ${amount} amount is still pending till ${new Date(selectedClient?.createdAt).toLocaleDateString('en-US', { month: 'long' })}.\n\nPlease make the payment as soon as possible.\nThank you for your business!`
+                  const message = `Hello ${clientName},\n\n!!! just a reminder that the ${amount} amount is still pending till ${new Date().toLocaleDateString('en-US', { month: 'long' })}.\n\nPlease make the payment as soon as possible.\nThank you for your business!`
+
+                  console.log(selectedClient)
+
+                  if (
+                    selectedClient.phoneNo === '' ||
+                    selectedClient.phoneNo === null ||
+                    selectedClient.phoneNo === undefined
+                  ) {
+                    toast.error('Phone number not found')
+                  }
 
                   // Replace with client’s phone number if available in DB
                   if (selectedClient?.phoneNo) {
@@ -921,6 +922,7 @@ const PendingCollectionReport = ({ client, onClose }) => {
                       key={`${receipt.id || receipt.transactionId}-${index}`}
                       receipt={receipt}
                       index={index}
+                      selectedType={selectedType}
                       balance={balances[index]}
                       clientName={getClientName(receipt.clientId)}
                     />

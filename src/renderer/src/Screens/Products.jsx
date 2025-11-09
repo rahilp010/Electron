@@ -333,7 +333,6 @@ const Products = () => {
     )
     const totalQuantity = filteredData.length
 
-
     return { totalAssetsValue, totalQuantity }
   }, [filteredData])
 
@@ -555,7 +554,7 @@ const Products = () => {
             {/* Table */}
             <div
               ref={tableContainerRef}
-              className="overflow-x-auto customScrollbar border border-gray-200 rounded-2xl h-screen mt-5"
+              className="overflow-x-auto customScrollbar border border-gray-200 rounded-2xl h-screen mt-5 mb-40"
             >
               <table className="min-w-max table-fixed">
                 <thead className="relative z-20">

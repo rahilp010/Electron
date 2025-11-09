@@ -21,9 +21,9 @@ import Reports from './Screens/Reports.jsx'
 import PendingPaymentsReport from './Screens/PendingPaymentsReport.jsx'
 import PendingCollectionReport from './Screens/PendingCollectionReport.jsx'
 import Settings from './Screens/Settings.jsx'
-import PurchaseBill from './components/UI/PurchaseBill.jsx'
 import NotFound from './components/UI/NotFound.jsx'
 import Salary from './Screens/Salary.jsx'
+import PurchaseBill from './components/Modal/PurchaseBill.jsx'
 
 function App() {
   return (

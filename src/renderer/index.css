@@ -112,3 +112,19 @@ html {
 .selectPicker {
   z-index: 999 !important;
 }
+
+@media print {
+  .hidden-print {
+    display: none !important;
+  }
+  .print-block {
+    display: block !important;
+  }
+  body * {
+    visibility: visible !important;
+  }
+  table,
+  .grid {
+    display: table !important;
+  } /* Force table/grid fallback */
+}

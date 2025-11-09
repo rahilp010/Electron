@@ -41,7 +41,8 @@ import Navbar from '../components/UI/Navbar'
 import { useLocation } from 'react-router-dom'
 import ImportExcel from '../components/UI/ImportExcel'
 import * as XLSX from 'xlsx'
-import { IoLogoWhatsapp } from 'react-icons/io5'
+import { IoLogoWhatsapp, IoReceipt } from 'react-icons/io5'
+import SalesBill from '../components/Modal/SalesBill'
 
 // Constants
 const TABLE_HEADERS = [
@@ -639,6 +640,7 @@ const Transaction = () => {
   // State management
   const [showLoader, setShowLoader] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [showSalesBillModal, setShowSalesBillModal] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [isUpdateExpense, setIsUpdateExpense] = useState(false)
@@ -977,6 +979,19 @@ const Transaction = () => {
             <p className="text-sm font-light mb-1">Total Pending Amount</p>
             <p className="text-2xl font-light">₹ {toThousands(statistics.totalPendingAmount)}</p>
           </div>
+          <div className="mx-5 border-r w-52">
+            <p className="text-sm font-light mb-1">Sales Bill</p>
+            <div className="flex items-center gap-2">
+              <IoReceipt
+                size={34}
+                className="text-[#897ee8] cursor-pointer hover:scale-110 transition-all duration-300 z-30 bg-[#edecff] border p-1.5 rounded-full"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowSalesBillModal(true)
+                }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Main Content */}
@@ -1043,7 +1058,7 @@ const Transaction = () => {
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto customScrollbar border border-gray-200 rounded-2xl h-screen mt-5">
+            <div className="overflow-x-auto customScrollbar border border-gray-200 rounded-2xl h-screen mt-5 mb-40">
               <table className="min-w-max border-collapse table-fixed">
                 <thead className="relative z-20">
                   <tr className="text-sm sticky top-0 z-20 bg-gradient-to-r from-gray-50 to-gray-100">
@@ -1106,6 +1121,14 @@ const Transaction = () => {
       {showModal && (
         <TransactionModal
           setShowModal={setShowModal}
+          existingTransaction={selectedTransaction}
+          isUpdateExpense={isUpdateExpense}
+          type="transaction"
+        />
+      )}
+      {showSalesBillModal && (
+        <SalesBill
+          setShowSalesBillModal={setShowSalesBillModal}
           existingTransaction={selectedTransaction}
           isUpdateExpense={isUpdateExpense}
           type="transaction"

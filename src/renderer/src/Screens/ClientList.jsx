@@ -235,21 +235,24 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
       <td className="w-28">
         <div className="flex gap-3 justify-center items-center">
           <button
-            className="text-red-500 p-2 border border-red-500 rounded-full hover:bg-red-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
-            onClick={() => onDelete(client.id)}
-            title="Delete client"
-          >
-            <Trash size={12} />
-          </button>
-          <button
-            className="text-purple-500 p-2 border border-purple-500 rounded-full hover:bg-purple-500 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+            className="group relative p-2 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-purple-400 "
             onClick={() => onEdit(client)}
             title="Edit client"
           >
-            <PenLine size={12} />
+            <PenLine
+              size={14}
+              className="group-hover:rotate-12 transition-transform duration-300"
+            />
           </button>
           <button
-            className="text-green-600 p-1.5 border border-green-600 rounded-full hover:bg-green-600 hover:text-white transition-all duration-300 hover:scale-110 cursor-pointer"
+            className="group relative p-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-red-400"
+            onClick={() => onDelete(client.id)}
+            title="Delete client"
+          >
+            <Trash size={14} className="group-hover:rotate-12 transition-transform duration-300" />
+          </button>
+          <button
+            className="group relative p-2 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-green-400"
             onClick={() => {
               // Get all transactions for this client
               const clientTransactions = transactions.filter((t) => t.clientId === client.id)
@@ -278,7 +281,10 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
             }}
             title="Send on WhatsApp"
           >
-            <IoLogoWhatsapp size={18} />
+            <IoLogoWhatsapp
+              size={16}
+              className="group-hover:rotate-12 transition-transform duration-300"
+            />
           </button>
         </div>
       </td>
@@ -799,6 +805,7 @@ const ClientList = () => {
                     <div className="flex items-center gap-2">
                       <IndianRupee size={24} className="text-orange-600" />
                       <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+                        {console.log(clientHistory)}
                         {toThousands(
                           clientHistory.reduce((total, t) => total + t.pendingFromOurs, 0)
                         )}
