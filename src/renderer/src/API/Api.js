@@ -33,4 +33,12 @@ const cashReceiptApi = {
   createCashReceipt: (cashReceipt) => window.api.createCashReceipt(cashReceipt)
 }
 
-export { productApi, clientApi, transactionApi, bankReceiptApi, cashReceiptApi }
+const accountApi = {
+  getAllAccounts: () => window.api.getAllAccounts(),
+  createAccount: (account) => window.api.createAccount(account),
+  updateAccount: (account) => window.api.updateAccount(account),
+  deleteAccount: (id) => window.api.deleteAccount(id),
+  getAccountById: (id) => window.api.getAccountById(id)
+}
+
+export { productApi, clientApi, transactionApi, bankReceiptApi, cashReceiptApi, accountApi }

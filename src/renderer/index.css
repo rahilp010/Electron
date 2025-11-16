@@ -128,3 +128,10 @@ html {
     display: table !important;
   } /* Force table/grid fallback */
 }
+
+.rs-picker-popup,
+.rs-picker-select-menu,
+.rs-picker-check-menu,
+.rs-picker-menu {
+  z-index: 999999 !important;
+}

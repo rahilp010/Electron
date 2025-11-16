@@ -29,8 +29,7 @@ import { IoLogoWhatsapp } from 'react-icons/io5'
 // Constants
 const TABLE_HEADERS = [
   { key: 'date', label: 'Date', width: 'w-[170px]', icon: Calendar },
-  { key: 'bank', label: 'Bank', width: 'w-[200px]', icon: Building2 },
-  // { key: 'accountName', label: 'Account Name', width: 'w-[250px]', icon: CreditCard },
+  { key: 'bank', label: 'Account Type', width: 'w-[200px]', icon: Building2 },
   { key: 'debit', label: 'Debit', width: 'w-[200px]', icon: TrendingDown },
   { key: 'credit', label: 'Credit', width: 'w-[200px]', icon: TrendingUp },
   { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
@@ -40,15 +39,10 @@ const TABLE_HEADERS = [
 
 const TABLE_HEADERS_PRINT = [
   { key: 'date', label: 'Date' },
-  { key: 'accountName', label: 'Account Name' },
+  { key: 'bank', label: 'Account Type' },
   { key: 'debit', label: 'Debit' },
   { key: 'credit', label: 'Credit' },
   { key: 'balance', label: 'Balance' }
-]
-
-const LEDGER_TYPES = [
-  { label: 'Bank', value: 'Bank', icon: Building2, color: 'blue' },
-  { label: 'Cash', value: 'Cash', icon: Banknote, color: 'green' }
 ]
 
 // Utility functions
@@ -62,7 +56,7 @@ const toThousands = (value) => {
 
 const getAmount = (type, amount) => {
   if (!amount) return 0
-  return type === 'Receipt' ? Number(amount) : -Number(amount)
+  return type === 'Receipt' ? -Number(amount) : Number(amount)
 }
 
 // Memoized Transaction Row Component
@@ -96,28 +90,21 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
 
       <td className="px-6 py-4 no-print">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded-full bg-blue-200">
-            <Building2 size={14} className="text-blue-600" />
+          <div
+            className={`p-1 rounded-full ${receipt.bank === 'Bank' ? 'bg-blue-200' : 'bg-green-200'}`}
+          >
+            {receipt.bank === 'Bank' ? (
+              <Building2 size={14} className="text-blue-600" />
+            ) : (
+              <Banknote size={14} className="text-green-600" />
+            )}
           </div>
-          <span className="font-medium text-gray-700">{receipt.bank} Account</span>
+          <span className="font-medium text-gray-700 capitalize">{receipt.bank} Account</span>
         </div>
       </td>
 
-      {/* <td className="px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {receipt.clientName
-              .split(' ')
-              .map((n) => n[0])
-              .join('')
-              .toUpperCase()}
-          </div>
-          <span className="font-medium text-gray-800 tracking-wide">{receipt.clientName}</span>
-        </div>
-      </td> */}
-
       <td className="px-6 py-4">
-        {receipt.type === 'Payment' || receipt.type === 'Salary' ? (
+        {receipt.type === 'Receipt' ? (
           <div className="flex items-center gap-2">
             <div className="p-1 rounded-full bg-red-200">
               <TrendingDown size={14} className="text-red-600" />
@@ -132,7 +119,7 @@ const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
       </td>
 
       <td className="px-6 py-4">
-        {receipt.type === 'Receipt' ? (
+        {receipt.type === 'Payment' || receipt.type === 'Salary' ? (
           <div className="flex items-center gap-2">
             <div className="p-1 rounded-full bg-emerald-200">
               <TrendingUp size={14} className="text-emerald-600" />
@@ -251,7 +238,6 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
     useAccountOperations()
 
   // State management
-  const [selectedType, setSelectedType] = useState('Bank')
   const [showLoader, setShowLoader] = useState(false)
   const [rawBankReceipts, setRawBankReceipts] = useState([])
   const [rawCashReceipts, setRawCashReceipts] = useState([])
@@ -284,17 +270,20 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
     }))
   }, [rawCashReceipts, getClientName])
 
-  // Memoized filtered data
-  const filteredData = useMemo(() => {
-    const sourceData = selectedType === 'Bank' ? processedBankReceipts : processedCashReceipts
+  // Memoized combined data (no filter, show all entries)
+  const combinedData = useMemo(() => {
+    return [...processedBankReceipts, ...processedCashReceipts]
+  }, [processedBankReceipts, processedCashReceipts])
 
+  // Memoized filtered data by client only
+  const filteredData = useMemo(() => {
     if (client?.id) {
       const targetClientName = getClientName(client.id)
-      return sourceData.filter((r) => r.clientName === targetClientName)
+      return combinedData.filter((r) => r.clientName === targetClientName)
     }
 
-    return sourceData
-  }, [selectedType, processedBankReceipts, processedCashReceipts, client, getClientName])
+    return combinedData
+  }, [combinedData, client, getClientName])
 
   // Memoized sorted transactions (ascending by date)
   const sortedTransactions = useMemo(() => {
@@ -328,17 +317,12 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
       .filter((r) => r.type === 'Payment')
       .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
 
-    const change = totalReceipts - totalPayments
+    const change = totalReceipts + totalPayments
     const closingBalance = openingBalance + change
     const transactionCount = filteredData.length
 
     return { totalReceipts, totalPayments, closingBalance, transactionCount }
   }, [filteredData, openingBalance])
-
-  // Event handlers
-  const handleTypeChange = useCallback((type) => {
-    setSelectedType(type)
-  }, [])
 
   // Utility function to generate dynamic print HTML
   const generatePrintHTML = (data, headers, title) => {
@@ -348,8 +332,8 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
           return row.date === 'Opening Balance' || row.date === 'No Transactions'
             ? row.date
             : new Date(row.date).toLocaleDateString('en-IN')
-        case 'accountName':
-          return row.accountName || ''
+        case 'bank':
+          return row.bank || ''
         case 'debit':
           return row.debit || ''
         case 'credit':
@@ -559,7 +543,7 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
       printData = [
         {
           date: 'No Transactions',
-          accountName: client?.clientName || 'All Accounts',
+          bank: 'All Accounts',
           debit: '-',
           credit: '-',
           balance: openingBalance
@@ -570,14 +554,14 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
       printData = [
         ...reversedTransactions.map((row, revIndex) => ({
           date: row.date,
-          accountName: row.clientName || '',
+          bank: row.bank || 'All Accounts',
           debit: row.type === 'Payment' ? toThousands(Number(row.amount) || 0) : '-',
           credit: row.type === 'Receipt' ? toThousands(Number(row.amount) || 0) : '-',
           balance: runningBalancesForPrint[sortedTransactionsForPrint.length - 1 - revIndex]
         })),
         {
           date: 'Opening Balance',
-          accountName: client?.clientName || 'All Accounts',
+          bank: 'All Accounts',
           debit: '-',
           credit: '-',
           balance: openingBalance
@@ -585,7 +569,7 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
       ]
     }
 
-    const title = `Account Ledger Report - ${client?.clientName || 'All Accounts'} (${selectedType})`
+    const title = `Account Ledger Report - ${client?.clientName || 'All Accounts'}`
 
     const printHTML = generatePrintHTML(printData, printHeaders, title)
 
@@ -620,7 +604,7 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
       console.error('Error initiating print:', error)
       toast.error('Failed to initiate print: ' + error.message)
     }
-  }, [filteredData, client, selectedType, openingBalance])
+  }, [filteredData, client, openingBalance])
 
   // Data fetching
   const loadData = useCallback(async () => {
@@ -649,36 +633,13 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
   return (
     <div className="space-y-6 mx-7 -mt-4">
       {/* Client Header */}
-      <div className="flex items-center justify-between gap-5">
-        {/* Type Selector */}
-        <div className="flex items-center gap-2">
-          {LEDGER_TYPES.map((type) => {
-            const Icon = type.icon
-            return (
-              <button
-                key={type.value}
-                onClick={() => handleTypeChange(type.value)}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-xl font-medium transition-all duration-200 transform hover:scale-105
-                ${
-                  selectedType === type.value
-                    ? `bg-gradient-to-r from-${type.color}-500 to-${type.color}-600 text-white shadow-lg`
-                    : `bg-white border border-${type.color}-200 text-${type.color}-600 hover:bg-${type.color}-50`
-                }
-              `}
-              >
-                <Icon size={18} />
-                {type.label}
-              </button>
-            )
-          })}
-        </div>
-
+      <div className="flex items-center justify-end gap-5">
         {/* Print Button */}
         <div className="flex items-center gap-2">
           <button
             className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
             onClick={handlePrintPDF}
-            title="Print Sales Report"
+            title="Print Ledger Report"
           >
             <Printer size={16} />
             <span className="text-sm">Print</span>
@@ -706,7 +667,7 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
             </div>
             <div>
               <p className="text-gray-600 text-sm">Total Credits</p>
-              <p className="text-xl font-light">{toThousands(statistics.totalReceipts)}</p>
+              <p className="text-xl font-light">{toThousands(statistics.totalPayments)}</p>
             </div>
           </div>
         </div>
@@ -717,7 +678,7 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
             </div>
             <div>
               <p className="text-gray-600 text-sm">Total Debits</p>
-              <p className="text-xl font-light">{toThousands(statistics.totalPayments)}</p>
+              <p className="text-xl font-light">{toThousands(statistics.totalReceipts)}</p>
             </div>
           </div>
         </div>
@@ -730,7 +691,9 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
             </div>
             <div>
               <p className="text-gray-600 text-sm">Closing Balance</p>
-              <p className="text-xl font-light">{toThousands(statistics.closingBalance)}</p>
+              <p className={`text-xl font-light ${closingBalanceColor}`}>
+                {toThousands(statistics.closingBalance)}
+              </p>
             </div>
           </div>
         </div>
@@ -769,7 +732,7 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
                       <div className="text-center">
                         <p className="text-xl font-medium text-gray-500">No transactions found</p>
                         <p className="text-gray-400 mt-1">
-                          No {selectedType.toLowerCase()} transactions available for this account
+                          No transactions available for this account
                         </p>
                         <p className="text-sm text-gray-500 mt-2">
                           Current Balance: {toThousands(openingBalance)}

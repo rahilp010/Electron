@@ -250,6 +250,12 @@ const Bank = () => {
     { label: 'SBI Bank', value: 'SBI', icon: SBI }
   ]
 
+  const accountBalance = async () => {
+    const response = await window.api.getAllAccounts()
+    console.log(response)
+  }
+
+  accountBalance()
   const STATIC_BANK_BALANCES = {
     IDBI: 3017655,
     HDFC: 0,
@@ -653,11 +659,10 @@ const Bank = () => {
       {showLoader && <Loader />}
 
       {/* Form Section */}
-      <form
+      {/* <form
         onSubmit={handleSubmitBankReceipt}
         className="bg-white rounded-2xl shadow-xl mx-7 mb-8 overflow-hidden border border-gray-200"
       >
-        {/* Form Header */}
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
             <CreditCard size={20} />
@@ -665,7 +670,6 @@ const Bank = () => {
           </h3>
         </div>
 
-        {/* Type and Bank Selection */}
         <div className="p-6">
           <div className="flex items-center gap-5 mb-6">
             <div className="flex-1">
@@ -763,9 +767,7 @@ const Bank = () => {
             </div>
           </div>
 
-          {/* Form Fields Grid */}
           <div className="grid grid-cols-4 gap-6 mb-5">
-            {/* Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Transaction Date
@@ -786,7 +788,6 @@ const Bank = () => {
               )}
             </div>
 
-            {/* Party */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Party / Account
@@ -810,7 +811,6 @@ const Bank = () => {
               )}
             </div>
 
-            {/* Amount */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
               <Input
@@ -829,7 +829,6 @@ const Bank = () => {
               )}
             </div>
 
-            {/* Due Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Due Date (Optional)
@@ -844,7 +843,6 @@ const Bank = () => {
               />
             </div>
 
-            {/* Description */}
             <div className="col-span-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
               <Input
@@ -858,7 +856,6 @@ const Bank = () => {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex justify-end gap-3">
             <button
               type="button"
@@ -890,9 +887,8 @@ const Bank = () => {
             </button>
           </div>
         </div>
-      </form>
+      </form> */}
 
-      {/* Receipts Table */}
       <div className="bg-white rounded-2xl shadow-xl mx-7 mb-10 overflow-hidden border border-gray-200">
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
@@ -921,20 +917,18 @@ const Bank = () => {
             </thead>
             <tbody className="text-sm">
               {recentReceipts.length > 0 ? (
-                recentReceipts
-                  .slice(0, 3)
-                  .map((receipt, index) => (
-                    <ReceiptRow
-                      key={receipt.id}
-                      receipt={receipt}
-                      index={index}
-                      balance={balances[index]}
-                      clients={clients}
-                      onEdit={handleUpdateReceipt}
-                      onDelete={handleDeleteReceipt}
-                      isSelected={selectedReceiptId === receipt.id}
-                    />
-                  ))
+                recentReceipts.map((receipt, index) => (
+                  <ReceiptRow
+                    key={receipt.id}
+                    receipt={receipt}
+                    index={index}
+                    balance={balances[index]}
+                    clients={clients}
+                    onEdit={handleUpdateReceipt}
+                    onDelete={handleDeleteReceipt}
+                    isSelected={selectedReceiptId === receipt.id}
+                  />
+                ))
               ) : (
                 <tr>
                   <td

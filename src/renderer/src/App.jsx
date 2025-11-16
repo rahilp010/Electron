@@ -24,6 +24,10 @@ import Settings from './Screens/Settings.jsx'
 import NotFound from './components/UI/NotFound.jsx'
 import Salary from './Screens/Salary.jsx'
 import PurchaseBill from './components/Modal/PurchaseBill.jsx'
+import BankManagment from './Screens/BankManagment.jsx'
+import AccountList from './components/BankSystem/AccountList.jsx'
+import Bankledger from './components/BankSystem/BankLedger.jsx'
+import TransferAmount from './components/BankSystem/TransferAmount.jsx'
 
 function App() {
   return (
@@ -64,6 +68,10 @@ function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/purchaseBill" element={<PurchaseBill />} />
               <Route path="/salary" element={<Salary />} />
+              <Route path="/bankManagment" element={<BankManagment />} />
+              <Route path="/createAccount" element={<AccountList />} />
+              <Route path="/bankLedger" element={<Bankledger />} />
+              <Route path="/transferAmount" element={<TransferAmount />} />
             </Routes>
           </KeyBind>
         </HashRouter>

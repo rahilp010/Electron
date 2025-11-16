@@ -1,0 +1,309 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable no-case-declarations */
+/* eslint-disable react/prop-types */
+/* eslint-disable no-unused-vars */
+import React, { useCallback, useEffect, useState } from 'react'
+import {
+  createAccount,
+  getAccount,
+  setAccount,
+  updateAccount // Assuming you have an updateAccount action
+} from '../../app/features/electronSlice' // Adjust path as needed
+import { CircleX } from 'lucide-react'
+import { toast } from 'react-toastify'
+import { InputNumber, Toggle, Input } from 'rsuite'
+import { useDispatch, useSelector } from 'react-redux' // Added for dispatch
+import { useLocation } from 'react-router-dom'
+
+const CreateAccountModal = ({
+  setShowModal,
+  existingAccount = null,
+  isUpdateAccount = false,
+  type = 'account' // Changed default to 'account' for clarity
+}) => {
+  const dispatch = useDispatch() // Added dispatch
+  const location = useLocation()
+  const [accountData, setAccountData] = useState({
+    // Local state for account
+    id: '',
+    accountName: '',
+    balance: 0,
+    status: 'active',
+    openingBalance: 0,
+    closingBalance: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    pageName: 'Account'
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false) // Renamed and added state
+
+  const getInitialAccount = useCallback(() => {
+    if (isUpdateAccount && existingAccount) {
+      return {
+        id: existingAccount.id || '',
+        accountName: existingAccount.accountName || '',
+        balance: existingAccount.balance || 0,
+        status: existingAccount.status || 'active',
+        openingBalance: existingAccount.openingBalance || 0,
+        closingBalance: existingAccount.closingBalance || 0,
+        createdAt: existingAccount.createdAt || new Date(),
+        updatedAt: existingAccount.updatedAt || new Date(),
+        pageName: 'Account'
+      }
+    }
+    return {
+      id: '',
+      accountName: '',
+      balance: 0,
+      status: 'active',
+      openingBalance: 0,
+      closingBalance: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      pageName: 'Account'
+    }
+  }, [isUpdateAccount, existingAccount])
+
+  const accounts = useSelector((state) => state.electron.account.data)
+
+  const [recentReceipts, setRecentReceipts] = useState([])
+
+  console.log(accounts)
+
+  const fetchAccounts = useCallback(async () => {
+    console.log('Fetching accounts...')
+    const accounts = await window.api.getAllAccounts()
+    dispatch(setAccount(accounts))
+  }, [dispatch])
+
+  useEffect(() => {
+    fetchAccounts()
+  }, [fetchAccounts])
+
+  const fetchRecentReceipts = useCallback(async () => {
+    try {
+      const receipts = await window.api.getRecentBankReceipts()
+      const sorted = receipts.sort((a, b) => b.id - a.id) // latest first
+      setRecentReceipts(sorted)
+    } catch (err) {
+      console.error('Error fetching recent receipts:', err)
+      toast.error('Failed to fetch recent receipts')
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchRecentReceipts()
+  }, [fetchRecentReceipts])
+
+  console.log('recentReceipts', recentReceipts)
+
+  useEffect(() => {
+    const initialAccount = getInitialAccount()
+    setAccountData(initialAccount)
+  }, [getInitialAccount, isUpdateAccount])
+
+  const handleOnChangeEvent = useCallback((value, fieldName) => {
+    setAccountData((prev) => ({ ...prev, [fieldName]: value }))
+  }, [])
+
+  const toThousands = useCallback((value) => {
+    if (!value) return value
+    return new Intl.NumberFormat('en-IN').format(value)
+  }, [])
+
+  const handleSubmitAccount = useCallback(
+    async (e) => {
+      e.preventDefault()
+      if (isSubmitting) return
+      setIsSubmitting(true)
+
+      try {
+        if (!accountData.accountName.trim()) {
+          toast.error('Please enter a valid account name')
+          return
+        }
+        if (
+          accountData.balance < 0 ||
+          accountData.openingBalance < 0 ||
+          accountData.closingBalance < 0
+        ) {
+          toast.error('Balances cannot be negative')
+          return
+        }
+        if (isUpdateAccount && accountData.openingBalance > accountData.closingBalance) {
+          toast.error('Opening balance cannot exceed closing balance')
+          return
+        }
+
+        const formattedAccountData = {
+          ...accountData,
+          id: accountData.id || undefined,
+          balance: Number(accountData.openingBalance) || 0,
+          openingBalance: accountData.openingBalance || 0,
+          closingBalance: isUpdateAccount
+            ? Number(accountData.closingBalance)
+            : Number(accountData.openingBalance),
+          accountName: accountData.accountName.trim()
+        }
+
+        let result
+        let successMessage
+
+        if (isUpdateAccount && accountData.id) {
+          result = await window.api.updateAccount({
+            id: accountData.id,
+            ...formattedAccountData
+          })
+          if (result && result.success !== false) {
+            dispatch(updateAccount(result.data || result))
+            successMessage = 'Account updated successfully'
+          } else {
+            throw new Error(result?.message || 'Update failed')
+          }
+        } else {
+          result = await window.api.createAccount(formattedAccountData)
+          if (result && result.success !== false) {
+            const createdAccount = result.data || result
+            dispatch(createAccount(createdAccount))
+            successMessage = 'Account created successfully'
+          } else {
+            throw new Error(result?.message || 'Creation failed')
+          }
+        }
+
+        toast.success(successMessage)
+        setShowModal(false)
+      } catch (error) {
+        console.error('Account submission error:', error)
+        toast.error(error.message || 'An error occurred while processing your request')
+      } finally {
+        setIsSubmitting(false)
+      }
+    },
+    [accountData, isUpdateAccount, setShowModal, dispatch, isSubmitting]
+  )
+
+  return (
+    <div
+      className="fixed z-50 inset-0 flex items-center justify-center transition-all duration-300 bg-black/50"
+      role="dialog"
+      aria-modal="true"
+    >
+      <form onSubmit={handleSubmitAccount}>
+        <div className="bg-white p-6 rounded-lg shadow-2xl w-full min-w-3xl relative">
+          {/* Adjusted width for better modal size */}
+          <p className="text-lg font-semibold flex items-center gap-3">
+            {isUpdateAccount ? 'Update Account' : 'Add Account'}
+          </p>
+          <CircleX
+            className="absolute top-4 right-4 cursor-pointer text-red-400 hover:text-red-600"
+            size={30}
+            onClick={() => setShowModal(false)}
+          />
+          <div className="grid grid-cols-2 gap-4 my-4">
+            {/* <div>
+              <label htmlFor="accountId" className="block text-sm mb-1 text-gray-600">
+                Account ID
+              </label>
+              <Input
+                id="accountId"
+                value={accountData.id || ''}
+                disabled={isUpdateAccount}
+                placeholder="Auto-generated on create"
+                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div> */}
+            <div>
+              <label htmlFor="accountName" className="block text-sm mb-1 text-gray-600">
+                Account Name
+              </label>
+              <Input
+                id="accountName"
+                value={accountData.accountName}
+                onChange={(value) => handleOnChangeEvent(value.toUpperCase(), 'accountName')}
+                placeholder="Enter Account Name (e.g., Savings, Business Bank)"
+                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <div>
+              <label htmlFor="balance" className="block text-sm mb-1 text-gray-600">
+                Current Balance
+              </label>
+              <InputNumber
+                id="balance"
+                prefix="₹"
+                placeholder="0"
+                value={accountData.balance}
+                onChange={(value) => handleOnChangeEvent(value, 'balance')}
+                formatter={toThousands}
+                className="w-full"
+                min={0}
+              />
+            </div>
+            <div>
+              <label htmlFor="openingBalance" className="block text-sm mb-1 text-gray-600">
+                Opening Balance
+              </label>
+              <InputNumber
+                id="openingBalance"
+                prefix="₹"
+                placeholder="0"
+                value={accountData.openingBalance}
+                onChange={(value) => handleOnChangeEvent(value, 'openingBalance')}
+                formatter={toThousands}
+                className="w-full"
+                min={0}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="closingBalance" className="block text-sm mb-1 text-gray-600">
+                Closing Balance
+              </label>
+              <InputNumber
+                id="closingBalance"
+                prefix="₹"
+                placeholder="0"
+                value={accountData.closingBalance}
+                onChange={(value) => handleOnChangeEvent(value, 'closingBalance')}
+                formatter={toThousands}
+                className="w-full"
+                min={0}
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <Toggle
+              id="status"
+              size="lg"
+              checkedChildren="Active"
+              unCheckedChildren="Inactive"
+              checked={accountData.status === 'active'}
+              onChange={(checked) => handleOnChangeEvent(checked ? 'active' : 'inactive', 'status')}
+            />
+          </div>
+          <div className="flex items-center justify-end gap-2 mt-4">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="px-7 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-all duration-300"
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || !accountData.accountName.trim()}
+              className="px-7 py-2 bg-[#566dff] hover:bg-[#566dff]/60 text-white rounded-lg transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Processing...' : isUpdateAccount ? 'Update' : 'Create'}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+export default CreateAccountModal

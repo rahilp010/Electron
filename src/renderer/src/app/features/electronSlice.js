@@ -111,6 +111,19 @@ export const electronSlice = createSlice({
         }
       })(),
       isLoading: false
+    },
+    account: {
+      data: (() => {
+        try {
+          const stored = localStorage.getItem('account')
+          return stored ? JSON.parse(stored) : []
+        } catch (error) {
+          console.error('Error parsing account from localStorage:', error)
+          localStorage.removeItem('account') // Clear corrupted data
+          return []
+        }
+      })(),
+      isLoading: false
     }
   },
   reducers: {
@@ -570,6 +583,49 @@ export const electronSlice = createSlice({
     },
     deleteKeyBinding: (state, action) => {
       state.keyBindings.data = state.keyBindings.data.filter((kb) => kb.id !== action.payload)
+    },
+
+    createAccount: (state, action) => {
+      state.account.data.push(action.payload)
+      // Sort newest first
+      state.account.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      localStorage.setItem('account', JSON.stringify(state.account.data))
+    },
+
+    updateAccount: (state, action) => {
+      const index = state.account.data.findIndex((account) => account.id === action.payload.id)
+      if (index !== -1) {
+        state.account.data[index] = action.payload
+        // Re-sort in case date changed
+        state.account.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        localStorage.setItem('account', JSON.stringify(state.account.data))
+      }
+    },
+
+    deleteAccount: (state, action) => {
+      state.account.data = state.account.data.filter((account) => account.id !== action.payload)
+      localStorage.setItem('account', JSON.stringify(state.account.data))
+    },
+
+    getAccount: (state) => {
+      try {
+        const data = localStorage.getItem('account')
+        if (data) {
+          const parsed = JSON.parse(data)
+          state.account.data = Array.isArray(parsed) ? parsed : []
+        } else {
+          state.account.data = []
+        }
+      } catch (error) {
+        console.error('Error loading account from localStorage:', error)
+        state.account.data = []
+        localStorage.removeItem('account')
+      }
+    },
+
+    setAccount: (state, action) => {
+      state.account.data = Array.isArray(action.payload) ? action.payload : [action.payload]
+      localStorage.setItem('account', JSON.stringify(state.account.data))
     }
   }
 })
@@ -607,6 +663,11 @@ export const {
   deleteKeyBinding,
   clientProducts,
   deleteBankReceipt,
-  deleteCashReceipt
+  deleteCashReceipt,
+  getAccount,
+  setAccount,
+  deleteAccount,
+  updateAccount,
+  createAccount
 } = electronSlice.actions
 export default electronSlice.reducer

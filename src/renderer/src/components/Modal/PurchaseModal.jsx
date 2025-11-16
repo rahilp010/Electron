@@ -620,7 +620,7 @@ const PurchaseModal = ({
 
                 <div>
                   <label htmlFor="sellingPrice" className="block text-sm mb-1 text-gray-600">
-                    Selling Price
+                    Purchase Price
                   </label>
                   <InputNumber
                     prefix={<div className="">₹</div>}
@@ -681,7 +681,9 @@ const PurchaseModal = ({
                     prefix={<div className="">₹</div>}
                     defaultValue={0}
                     size="xs"
-                    value={transaction.frightCharges}
+                    value={
+                      transaction.taxAmount.find((t) => t?.code === 'frightChanged')?.value || 0
+                    }
                     onChange={(value) => handleFrightChange(value)}
                     formatter={toThousands}
                     min={0}

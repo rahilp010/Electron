@@ -62,6 +62,7 @@ const getInitials = (name) => {
 
 // Memoized AccountRow component
 const AccountRow = memo(({ client, onOpenLedger }) => {
+
   return (
     <tr className="transition-colors hover:bg-blue-50 cursor-pointer group">
       <td className="px-6 py-3 font-medium" onClick={() => onOpenLedger(client)}>

@@ -19,18 +19,17 @@ import {
   Printer,
   BarChart3
 } from 'lucide-react'
-import { clientApi, transactionApi } from '../API/Api'
-import { setClients, setTransactions } from '../app/features/electronSlice'
-import Navbar from '../components/UI/Navbar'
+import { clientApi, transactionApi } from '../../API/Api'
+import { setClients, setTransactions } from '../../app/features/electronSlice'
+import Navbar from '../../components/UI/Navbar'
 import { IoLogoWhatsapp } from 'react-icons/io5'
 
 // Constants
 const TABLE_HEADERS = [
   { key: 'date', label: 'Date', width: 'w-[150px]', icon: Calendar },
-  { key: 'bank', label: 'Bank', width: 'w-[150px]', icon: Building2 },
-  { key: 'accountName', label: 'Account Name', width: 'w-[250px]', icon: CreditCard },
-  { key: 'credit', label: 'Pending', width: 'w-[200px]', icon: ClockArrowDown },
-  { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
+  { key: 'debit', label: 'Debit', width: 'w-[150px]', icon: ClockArrowDown },
+  { key: 'credit', label: 'Credit', width: 'w-[150px]', icon: CreditCard },
+  { key: 'balance', label: 'Balance', width: 'w-[150px]', icon: BarChart3 },
   { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText }
 ]
 
@@ -47,16 +46,18 @@ const LEDGER_TYPES = [
 
 // Utility functions
 const toThousands = (value) => {
-  if (!value || isNaN(value)) return '₹0'
+  if (value === null || value === undefined || isNaN(Number(value))) return '₹0'
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR'
-  }).format(value)
+  }).format(Number(value))
 }
 
 const getAmount = (type, amount) => {
   if (!amount) return 0
-  return type === 'Receipt' ? Number(amount) : -Number(amount)
+  return type === 'Receipt'
+    ? Number(amount) // Receipt = credit = add
+    : -Number(amount) // Payment = debit = subtract
 }
 
 const getInitials = (name) => {
@@ -69,18 +70,20 @@ const getInitials = (name) => {
 }
 
 // Memoized Transaction Row Component
-const TransactionRow = memo(({ receipt, index, selectedType, clients, balance }) => {
+const TransactionRow = memo(({ receipt, index, selectedType, bankAccount, balance }) => {
   const isEven = index % 2 === 0
   const LedgerIcon = selectedType === 'Bank' ? Building2 : Banknote
 
-  const getClientName = (clientId, clients) => {
+  const getClientName = (clientId, bankAccount) => {
     if (!clientId) return 'Unknown Client'
-
-    // Handle both direct ID and nested object structure
     const id = typeof clientId === 'object' ? clientId.id : clientId
-    const client = clients.find((c) => String(c?.id) === String(id))
-    return client ? client.clientName : 'Unknown Client'
+    const client = bankAccount.find((c) => String(c?.id) === String(id))
+    return client ? client.accountName : 'Unknown Client'
   }
+
+  const isDebit = receipt.type === 'Payment'
+  const isCredit = receipt.type === 'Receipt'
+  const isOpening = receipt.type === 'Opening'
 
   return (
     <tr
@@ -89,56 +92,60 @@ const TransactionRow = memo(({ receipt, index, selectedType, clients, balance })
       `}
       style={{ animationDelay: `${index * 50}ms` }}
     >
+      {/* Date */}
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
           <div className="p-1 rounded-full bg-red-200">
             <Calendar size={14} className="text-red-600" />
           </div>
           <span className="font-medium text-gray-700">
-            {new Date(receipt.date).toLocaleDateString()}
+            {receipt.date ? new Date(receipt.date).toLocaleDateString() : ''}
           </span>
         </div>
       </td>
 
-      <td className="px-6 py-4 no-print">
-        <div className="flex items-center gap-2">
-          <div className="p-1 rounded-full bg-blue-200">
-            <LedgerIcon size={14} className="text-blue-600" />
-          </div>
-          <span className="font-medium text-gray-700">
-            {receipt.bank ? `${receipt.bank} Bank` : selectedType}
-          </span>
-        </div>
-      </td>
-
+      {/* Debit (Payment) */}
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {getInitials(getClientName(receipt.clientId, clients))}
-          </div>
-          <span className="font-medium text-gray-800 tracking-wide">
-            {getClientName(receipt.clientId, clients)}
-          </span>
+          {isDebit ? (
+            <>
+              <div className="p-1 rounded-full bg-red-200">
+                <ClockArrowDown size={14} className="text-red-600" />
+              </div>
+              <span className="font-semibold text-red-600 px-3 py-1 rounded-full">
+                {toThousands(receipt.amount)}
+              </span>
+            </>
+          ) : (
+            <span className="text-gray-400 text-xs">—</span>
+          )}
         </div>
       </td>
 
+      {/* Credit (Receipt) */}
       <td className="px-6 py-4">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded-full bg-red-200">
-            <ClockArrowDown size={14} className="text-red-600" />
-          </div>
-          <span className="font-semibold text-red-600 px-3 py-1 rounded-full">
-            {toThousands(receipt.amount)}
-          </span>
+          {isCredit ? (
+            <>
+              <div className="p-1 rounded-full bg-green-200">
+                <CreditCard size={14} className="text-green-700" />
+              </div>
+              <span className="font-semibold text-green-600 px-3 py-1 rounded-full">
+                {toThousands(receipt.amount)}
+              </span>
+            </>
+          ) : (
+            <span className="text-gray-400 text-xs">—</span>
+          )}
         </div>
       </td>
 
+      {/* Balance */}
       <td className="px-6 py-4">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-[16px] text-red-600">{toThousands(balance)}</span>
-        </div>
+        <span className="font-semibold text-[16px] text-blue-600">{toThousands(balance)}</span>
       </td>
 
+      {/* Description */}
       <td className="px-6 py-4 max-w-[350px] no-print">
         <Whisper
           trigger="hover"
@@ -146,16 +153,23 @@ const TransactionRow = memo(({ receipt, index, selectedType, clients, balance })
           speaker={
             <Tooltip>
               <div className="max-w-xs">
-                <p className="text-sm">{receipt.description || 'No description provided'}</p>
+                <p className="text-sm">
+                  {receipt.description ||
+                    (isOpening ? 'Opening Balance' : 'No description provided')}
+                </p>
               </div>
             </Tooltip>
           }
         >
           <div className="flex items-center gap-2 cursor-pointer">
             <FileText size={14} className="text-gray-400 flex-shrink-0" />
-            <span className="truncate text-gray-600">
-              {receipt.description || 'No description provided'}
-            </span>
+            {isOpening ? (
+              <span className="truncate text-gray-800 font-bold">Opening Balance</span>
+            ) : (
+              <span className="truncate text-gray-600">
+                {receipt.description || 'No description provided'}
+              </span>
+            )}
           </div>
         </Whisper>
       </td>
@@ -221,7 +235,7 @@ const useAccountOperations = () => {
 }
 
 // Main Component
-const PendingPaymentsReport = ({ client, onClose }) => {
+const BankLedger = ({ client, onClose }) => {
   const {
     fetchAllClients,
     fetchAllTransactions,
@@ -239,6 +253,7 @@ const PendingPaymentsReport = ({ client, onClose }) => {
   const [selectedClient, setSelectedClient] = useState(client || null)
 
   const clients = useSelector((state) => state.electron.clients?.data || [])
+  const bankAccount = useSelector((state) => state.electron.account?.data || [])
   const transaction = useSelector((state) => state.electron.transaction?.data || [])
 
   // Get client name helper
@@ -262,53 +277,57 @@ const PendingPaymentsReport = ({ client, onClose }) => {
   )
 
   // Memoized filtered sidebar clients
-  const filteredSidebarClients = useMemo(() => {
-    if (!sidebarSearch) return clients
+  const filteredSidebarAccounts = useMemo(() => {
+    if (!sidebarSearch) return bankAccount
     const query = sidebarSearch.toLowerCase()
-    return clients.filter((client) => client.clientName?.toLowerCase().includes(query))
-  }, [clients, sidebarSearch])
+    return bankAccount.filter((account) => account.accountName?.toLowerCase().includes(query))
+  }, [bankAccount, sidebarSearch])
 
-  // Memoized filtered data
+  // Add opening balance row at top of ledger and then the filtered pending receipts
+  // FILTER ONLY REAL RECEIPTS — NO OPENING ROW
   const filteredData = useMemo(() => {
-    const sourceData = selectedType === 'Bank' ? recentBankReceipts : recentCashReceipts
+    const allReceipts = [...recentBankReceipts, ...recentCashReceipts]
 
-    const receipts = sourceData.filter(
-      (r) => r.type === 'Payment' && r.statusOfTransaction === 'pending'
-    )
+    // const receipts = allReceipts.filter((r) => r.statusOfTransaction === 'pending')
+    if (!selectedClient?.id) return []
+    const account = bankAccount.find((a) => a.id === selectedClient.id)
+    if (!account) return []
 
-    if (selectedClient?.id) {
-      return receipts.filter(
-        (r) =>
-          String(r.clientId) === String(selectedClient.id) ||
-          r.clientName?.toLowerCase()?.trim() ===
-            getClientName(selectedClient.id)?.toLowerCase()?.trim()
-      )
-    }
+    const accountName = account.accountName?.toLowerCase().trim()
 
-    return receipts.sort(
-      (a, b) => new Date(b?.date || b?.createdAt || 0) - new Date(a?.date || a?.createdAt || 0)
-    )
-  }, [selectedType, recentBankReceipts, recentCashReceipts, selectedClient, getClientName])
+    // normal receipt filtering
+    const actualReceipts = allReceipts
+      .filter((r) => {
+        const sendTo = (r?.sendTo || '').toLowerCase().trim()
 
-  // Memoized running balance calculation
+        return sendTo.includes(accountName)
+      })
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+
+    return actualReceipts
+  }, [recentBankReceipts, recentCashReceipts, selectedClient, bankAccount])
+
+  // Running balance calculation: opening balance sets starting balance, then apply entries in order
   const balances = useMemo(() => {
     const receipts = [...filteredData].reverse()
-    let balance = 0
-    const calculatedBalances = []
+    let balance = Number(selectedClient?.openingBalance || 0)
+    const output = []
 
     receipts.forEach((receipt, idx) => {
-      const amount = getAmount(receipt.type, receipt.amount)
-      balance += amount
-      calculatedBalances[receipts.length - 1 - idx] = balance
+      balance += getAmount(receipt.type, receipt.amount)
+      output[receipts.length - 1 - idx] = balance
     })
 
-    return calculatedBalances
-  }, [filteredData])
+    return output
+  }, [filteredData, selectedClient])
 
   // Memoized statistics
   const statistics = useMemo(() => {
     const totalPending = filteredData.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-    const transactionCount = filteredData.length
+    const transactionCount = Math.max(
+      0,
+      filteredData.length - (filteredData[0]?.type === 'Opening' ? 1 : 0)
+    )
 
     return { totalPending, transactionCount }
   }, [filteredData])
@@ -344,8 +363,6 @@ const PendingPaymentsReport = ({ client, onClose }) => {
       setShowLoader(false)
     }
   }, [fetchAllClients, fetchAllTransactions, fetchRecentBankReceipts, fetchRecentCashReceipts])
-
-  console.log('receipt', recentBankReceipts)
 
   // Utility function to generate dynamic print HTML
   const generatePrintHTML = (data, headers, title, totalPending) => {
@@ -624,12 +641,11 @@ const PendingPaymentsReport = ({ client, onClose }) => {
     loadData()
   }, [loadData])
 
-  // Sync selectedClient with client prop
   // useEffect(() => {
-  //   if (!selectedClient && clients.length > 0) {
-  //     setSelectedClient(clients[0]) // auto select first client
+  //   if (!selectedClient && bankAccount.length > 0) {
+  //     setSelectedClient(bankAccount[0]) // auto select first client
   //   }
-  // }, [clients, selectedClient])
+  // }, [bankAccount, selectedClient])
 
   return (
     <div className="select-none gap-10 h-screen overflow-x-auto min-w-[720px] overflow-auto customScrollbar relative">
@@ -664,8 +680,8 @@ const PendingPaymentsReport = ({ client, onClose }) => {
                 <Users size={20} />
               </div>
               <div>
-                <h3 className="font-semibold text-lg">Client Accounts</h3>
-                <p className="text-blue-100 text-sm">{clients.length} total accounts</p>
+                <h3 className="font-semibold text-lg">Bank Accounts</h3>
+                <p className="text-blue-100 text-sm">{bankAccount.length} total accounts</p>
               </div>
             </div>
           </div>
@@ -688,12 +704,12 @@ const PendingPaymentsReport = ({ client, onClose }) => {
           {/* Client List */}
           <div className="flex-1 overflow-y-auto customScrollbar p-2">
             <div className="space-y-1">
-              {filteredSidebarClients.map((client, index) => (
+              {filteredSidebarAccounts.map((account, index) => (
                 <div
-                  key={client.id}
+                  key={account?.id}
                   className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-200 mx-2
                     ${
-                      selectedClient?.id === client.id
+                      selectedClient?.id === account?.id
                         ? 'bg-gray-200 shadow-md transform scale-[1.02]'
                         : 'hover:bg-white/60 hover:shadow-sm'
                     }
@@ -701,40 +717,40 @@ const PendingPaymentsReport = ({ client, onClose }) => {
                   style={{
                     animationDelay: `${index * 50}ms`
                   }}
-                  onClick={() => handleClientSelect(client)}
+                  onClick={() => handleClientSelect(account)}
                   role="button"
-                  aria-label={`Select client ${client.clientName}`}
+                  aria-label={`Select account ${account?.accountName}`}
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200
                         ${
-                          selectedClient?.id === client.id
+                          selectedClient?.id === account?.id
                             ? 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600 backdrop-blur-sm'
                             : 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600'
                         }`}
                     >
-                      {getInitials(client.clientName)}
+                      {getInitials(account?.accountName)}
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <p
                         className={`font-medium truncate text-sm
-                          ${selectedClient?.id === client.id ? 'text-black' : 'text-gray-800'}`}
+                          ${selectedClient?.id === account?.id ? 'text-black' : 'text-gray-800'}`}
                       >
-                        {client.clientName}
+                        {account?.accountName}
                       </p>
                       <p
                         className={`text-xs truncate
-                          ${selectedClient?.id === client.id ? 'text-gray-500' : 'text-gray-500'}`}
+                          ${selectedClient?.id === account?.id ? 'text-gray-500' : 'text-gray-500'}`}
                       >
-                        {client.accountType || 'Other'} • {toThousands(client.pendingFromOurs || 0)}
+                        {/* {client.accountType || 'Other'} • {toThousands(client.pendingFromOurs || 0)} */}
                       </p>
                     </div>
                   </div>
 
                   {/* Enhanced selection indicator */}
-                  {selectedClient?.id === client.id && (
+                  {selectedClient?.id === account?.id && (
                     <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
                       <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                     </div>
@@ -743,10 +759,10 @@ const PendingPaymentsReport = ({ client, onClose }) => {
               ))}
             </div>
 
-            {filteredSidebarClients.length === 0 && (
+            {filteredSidebarAccounts.length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 <Users size={32} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No clients found</p>
+                <p className="text-sm">No Accounts found</p>
               </div>
             )}
           </div>
@@ -759,39 +775,23 @@ const PendingPaymentsReport = ({ client, onClose }) => {
           ${showSideBar ? 'ml-76' : 'ml-6'}`}
       >
         {/* Client Header */}
-        <div className="flex items-center justify-between  gap-5 mt-10">
-          <div className="flex justify-between items-center">
+        <div className="flex items-center justify-between mt-10">
+          <div className="flex justify-between items-center gap-2">
             <div className="flex items-center gap-4 mx-1">
-              <p className="text-3xl font-light">Pending Payments Report</p>
+              <p className="text-3xl font-light">Account Ledger</p>
             </div>
+            {selectedClient && (
+              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-full shadow-lg">
+                <span className="font-semibold text-sm">{selectedClient?.accountName}</span>
+              </div>
+            )}
           </div>
 
-          {/* Type Selector */}
           <div className="flex items-center gap-2">
-            {LEDGER_TYPES.map((type) => {
-              const Icon = type.icon
-              return (
-                <button
-                  key={type.value}
-                  onClick={() => handleTypeChange(type.value)}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-xl font-medium transition-all duration-200 transform hover:scale-105
-                    ${
-                      selectedType === type.value
-                        ? `bg-gradient-to-r from-${type.color}-500 to-${type.color}-600 text-white shadow-lg`
-                        : `bg-white border border-${type.color}-200 text-${type.color}-600 hover:bg-${type.color}-50`
-                    }
-                  `}
-                  aria-label={`Select ${type.label} transactions`}
-                >
-                  <Icon size={18} />
-                  {type.label}
-                </button>
-              )
-            })}
             <button
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 hover:bg-gradient-to-r from-blue-400 to-blue-600 hover:text-white hover:shadow-lg bg-white border border-blue-200 text-blue-600 hover:bg-blue-50`}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-xl font-medium 
+               bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 cursor-pointer"
               onClick={handlePrintPDF}
-              title="Print Sales Report"
             >
               <Printer size={18} />
               <span className="text-sm">Print</span>
@@ -812,17 +812,7 @@ const PendingPaymentsReport = ({ client, onClose }) => {
               </div>
             </div>
           </div>
-          <div className="mx-4 border-r w-52 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg">
-                <ClockArrowDown size={20} className="text-red-600" />
-              </div>
-              <div>
-                <p className="text-gray-600 text-sm">Total Pending Amount</p>
-                <p className="text-xl font-light">{toThousands(statistics.totalPending)}</p>
-              </div>
-            </div>
-          </div>
+
           {selectedClient && (
             <div
               className="w-52 flex flex-shrink-0 items-center justify-center transition-all duration-200 transform hover:scale-105 cursor-pointer"
@@ -897,15 +887,33 @@ const PendingPaymentsReport = ({ client, onClose }) => {
                 ) : (
                   filteredData.map((receipt, index) => (
                     <TransactionRow
-                      key={`${receipt.id || receipt.transactionId}-${index}`}
+                      key={`${receipt.id || receipt.transactionId || receipt.type}-${index}`}
                       receipt={receipt}
                       index={index}
                       balance={balances[index]}
                       selectedType={selectedType}
-                      clients={clients}
+                      bankAccount={bankAccount}
                     />
                   ))
                 )}
+                {/* Opening Balance at LAST ROW */}
+                <tr className="bg-blue-50 font-bold">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <Calendar size={14} className="text-blue-600" />
+                      <span>Opening Balance</span>
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4 text-gray-400">—</td>
+                  <td className="px-6 py-4 text-gray-400">—</td>
+
+                  <td className="px-6 py-4 text-blue-700 font-bold">
+                    {toThousands(selectedClient?.openingBalance || 0)}
+                  </td>
+
+                  <td className="px-6 py-4 text-gray-600">Opening Balance</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -978,4 +986,4 @@ const PendingPaymentsReport = ({ client, onClose }) => {
   )
 }
 
-export default PendingPaymentsReport
+export default BankLedger

@@ -201,9 +201,6 @@ const PurchaseRow = React.memo(
 
     return (
       <tr className={`text-sm text-center`}>
-        {/* <td className={`px-4 py-3 w-[80px] sticky left-0 ${rowBg} z-10 text-xs`}>
-        {formatTransactionId(transaction?.id)}
-      </td> */}
         <td className="px-4 py-3">
           {' '}
           {new Date(transaction?.createdAt).toLocaleDateString('en-IN', {
@@ -357,6 +354,7 @@ const usePurchaseOperations = () => {
         console.log('response', response)
         dispatch(deleteTransaction(response))
         await fetchAllTransactions()
+
         toast.success('Purchase deleted successfully')
       } catch (error) {
         toast.error('Failed to delete purchase: ' + error.message)
@@ -370,6 +368,7 @@ const usePurchaseOperations = () => {
       if (!window.confirm('Are you sure you want to update the transaction status?')) return
       try {
         const response = await window.api.getTransactionById(id)
+
         if (response.statusOfTransaction === 'pending') {
           response.statusOfTransaction = 'completed'
         } else {
@@ -854,7 +853,8 @@ const Purchase = () => {
   const handleCreateTransaction = useCallback(() => {
     setSelectedTransaction(null)
     setIsUpdateExpense(false)
-    setShowModal(true)
+    // setShowModal(true)
+    setShowPurchaseBillModal(true)
   }, [])
 
   const handleSearchChange = useCallback((value) => {

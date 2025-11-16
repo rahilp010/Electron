@@ -46,6 +46,24 @@ contextBridge.exposeInMainWorld('api', {
   // PDF Export
   generatePDF: (options) => ipcRenderer.invoke('generate-pdf', options),
 
+  //ladger
+
+  getLedgerTransactions: () => ipcRenderer.invoke('getLedgerTransactions'),
+  getAccountBalances: () => ipcRenderer.invoke('getAccountBalances'),
+  createLedgerTransaction: (ledgerTransaction) =>
+    ipcRenderer.invoke('createLedgerTransaction', ledgerTransaction),
+  updateLedgerTransaction: (ledgerTransaction) =>
+    ipcRenderer.invoke('updateLedgerTransaction', ledgerTransaction),
+  deleteLedgerTransaction: (id) => ipcRenderer.invoke('deleteLedgerTransaction', id),
+  transferAmount: (data) => ipcRenderer.invoke('transferAmount', data),
+
+  // Account methods
+  getAllAccounts: () => ipcRenderer.invoke('getAllAccounts'),
+  createAccount: (account) => ipcRenderer.invoke('createAccount', account),
+  updateAccount: (account) => ipcRenderer.invoke('updateAccount', account),
+  deleteAccount: (id) => ipcRenderer.invoke('deleteAccount', id),
+  getAccountById: (id) => ipcRenderer.invoke('getAccountById', id),
+
   // Settings
   getSettings: () => ipcRenderer.invoke('getSettings'),
   createSettings: (settings) => ipcRenderer.invoke('createSettings', settings),

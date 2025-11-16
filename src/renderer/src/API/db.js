@@ -19,6 +19,7 @@ db.pragma('foreign_keys = ON')
 // db.prepare('DROP TABLE transactions;').run()
 // db.prepare('DROP TABLE bankReceipts;').run()
 // db.prepare('DROP TABLE cashReceipts;').run()
+// db.prepare('DROP TABLE accounts;').run()
 // Execute SQL statements one by one
 db.prepare(
   `CREATE TABLE IF NOT EXISTS products (
@@ -62,6 +63,7 @@ db.prepare(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     clientId INTEGER NOT NULL,
     productId INTEGER NULL,
+    date DATETIME NOT NULL,
     quantity INTEGER NOT NULL,
     sellAmount REAL NOT NULL,
     purchaseAmount REAL NOT NULL,
@@ -72,6 +74,11 @@ db.prepare(
     pendingAmount REAL NOT NULL DEFAULT 0,
     paidAmount REAL NOT NULL DEFAULT 0,
     taxAmount TEXT,
+    freightCharges REAL,
+    freightTaxAmount TEXT,
+    billNo TEXT,
+    bank TEXT,
+    cash TEXT,
     dueDate DATETIME,
     transactionType TEXT CHECK (transactionType IN ('purchase', 'sales')),
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -104,6 +111,9 @@ db.prepare(
   paidAmount REAL DEFAULT 0,
   quantity REAL,
   pageName TEXT DEFAULT 'Bank Receipt',
+  sendTo TEXT,
+  chequeNumber TEXT,
+  transactionAccount TEXT,
   createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE,
@@ -135,11 +145,45 @@ db.prepare(
     paidAmount REAL DEFAULT 0,
     quantity REAL,
     pageName TEXT DEFAULT 'Cash Receipt',
+    sendTo TEXT,
+    chequeNumber TEXT,
+    transactionAccount TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE,
     FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE,
     FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
+  )
+`
+).run()
+
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT DEFAULT CURRENT_TIMESTAMP,
+    description TEXT,
+    debitAccount TEXT,
+    creditAccount TEXT,
+    amount REAL,
+    paymentMethod TEXT,
+    referenceId INTEGER,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`
+).run()
+
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    accountName TEXT NOT NULL,
+    balance REAL NOT NULL,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    openingBalance REAL,
+    closingBalance REAL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `
 ).run()

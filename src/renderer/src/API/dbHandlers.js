@@ -7,6 +7,7 @@ import PDFDocument from 'pdfkit'
 import crypto from 'crypto'
 import { app } from 'electron'
 import path from 'path'
+const { v4: uuidv4 } = require('uuid')
 // import { sendWhatsAppPDF, getWhatsAppStatus, logoutWhatsApp } from '../../../main/whatsappClient.js'
 // import cron from 'node-cron'
 
@@ -330,17 +331,65 @@ function adjustProductStock(productId, qty, type, rollback = false) {
   ).run(sign * qty, productId)
 }
 
+function calculateTotalWithTax(tx) {
+  let taxArray = []
+  let freightTaxArray = []
+
+  // Parse main tax
+  try {
+    if (typeof tx.taxAmount === 'string') {
+      taxArray = JSON.parse(tx.taxAmount)
+    } else if (Array.isArray(tx.taxAmount)) {
+      taxArray = tx.taxAmount
+    }
+  } catch {
+    taxArray = []
+  }
+
+  // Parse freight tax
+  try {
+    if (typeof tx.freightTaxAmount === 'string') {
+      freightTaxArray = JSON.parse(tx.freightTaxAmount)
+    } else if (Array.isArray(tx.freightTaxAmount)) {
+      freightTaxArray = tx.freightTaxAmount
+    }
+  } catch {
+    freightTaxArray = []
+  }
+
+  // Calculate base amount
+  const base =
+    tx.transactionType === 'sales'
+      ? Number(tx.sellAmount || 0) * Number(tx.quantity || 0)
+      : Number(tx.purchaseAmount || 0)
+
+  console.log('base', base)
+
+  // Sum product tax
+  const taxTotal = taxArray.reduce((sum, t) => sum + Number(t.value || 0), 0)
+
+  // Freight charges
+  const freight = Number(tx.freightCharges || 0)
+
+  // Freight taxes
+  const freightTaxTotal = freightTaxArray.reduce((sum, t) => sum + Number(t.value || 0), 0)
+
+  // FINAL TOTAL including ALL extras
+  if (tx.transactionType === 'sales') {
+    return base + taxTotal + freight + freightTaxTotal
+  } else {
+    return base + freight + freightTaxTotal
+  }
+}
+
 // 🔹 Update client balances
 function updateClientBalances(clientId, tx, mode = 'apply') {
   const factor = mode === 'rollback' ? -1 : 1
-  const total =
-    tx.transactionType === 'sales'
-      ? tx.pageName === 'Bank'
-        ? tx.totalAmount
-        : tx.sellAmount * tx.quantity
-      : tx.pageName === 'Bank'
-        ? tx.totalAmount
-        : tx.purchaseAmount
+
+  // Always calculate total with tax
+  const total = calculateTotalWithTax(tx)
+
+  console.log('💰 FINAL CALCULATED TOTAL (with tax) =', total)
 
   if (tx.transactionType === 'sales') {
     if (tx.paymentType === 'partial') {
@@ -352,6 +401,7 @@ function updateClientBalances(clientId, tx, mode = 'apply') {
         `UPDATE clients SET paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
       ).run(factor * total, clientId)
     } else {
+      // SALES, FULL, PENDING → add total with tax
       db.prepare(
         `UPDATE clients SET pendingAmount = pendingAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
       ).run(factor * total, clientId)
@@ -363,9 +413,10 @@ function updateClientBalances(clientId, tx, mode = 'apply') {
       ).run(factor * tx.pendingAmount, clientId)
     } else if (tx.statusOfTransaction === 'completed') {
       db.prepare(
-        `UPDATE clients SET paidAmount = paidAmount + ?,  updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
+        `UPDATE clients SET paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
       ).run(factor * total, clientId)
     } else {
+      // PURCHASE full pending
       db.prepare(
         `UPDATE clients SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
       ).run(factor * total, clientId)
@@ -408,14 +459,6 @@ function handleReceipt(table, transactionId, receipt, productName, clientId, amo
   )
 }
 
-function calculateTotalWithTax(tx) {
-  const base = tx.transactionType === 'sales' ? tx.sellAmount * tx.quantity : tx.purchaseAmount
-  const taxTotal = Array.isArray(tx.taxAmount)
-    ? tx.taxAmount.reduce((sum, t) => sum + (t.value || 0), 0)
-    : 0
-  return base + taxTotal
-}
-
 // ✅ Fetch all transactions
 ipcMain.handle('getAllTransactions', () => {
   const stmt = db.prepare('SELECT * FROM transactions ORDER BY createdAt DESC')
@@ -434,9 +477,9 @@ ipcMain.handle('createTransaction', (event, tx, bankReceipt = {}, cashReceipt = 
         clientId, productId, quantity, sellAmount, purchaseAmount, 
         paymentMethod, statusOfTransaction, paymentType, 
         pendingAmount, paidAmount, transactionType, dueDate, 
-        taxAmount, totalAmount, pageName
+        taxAmount, totalAmount, pageName, date, billNo, freightCharges, freightTaxAmount
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const result = stmt.run(
@@ -454,14 +497,40 @@ ipcMain.handle('createTransaction', (event, tx, bankReceipt = {}, cashReceipt = 
       tx.dueDate,
       JSON.stringify(tx.taxAmount || []),
       tx.totalAmount || 0,
-      tx.pageName || null
+      tx.pageName || null,
+      tx.date || new Date().toISOString().slice(0, 19).replace('T', ' '),
+      tx.billNo || null,
+      tx.freightCharges || 0,
+      JSON.stringify(tx.freightTaxAmount || [])
     )
 
     const transactionId = result.lastInsertRowid
 
+    const debitAccount = tx.transactionType === 'sales' ? tx.clientId : tx.bankId || 'Main Bank'
+    const creditAccount = tx.transactionType === 'sales' ? tx.bankId || 'Main Bank' : tx.clientId
+
+    db.prepare(
+      `
+  INSERT INTO ledger (date, description, debitAccount, creditAccount, amount, paymentMethod, referenceId)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+    ).run(
+      new Date().toISOString(),
+      `${tx.transactionType} transaction`,
+      debitAccount,
+      creditAccount,
+      tx.totalAmount,
+      tx.paymentMethod,
+      transactionId
+    )
+
     // Stock + balances
     adjustProductStock(tx.productId, tx.quantity, tx.transactionType)
-    updateClientBalances(tx.clientId, tx, 'apply')
+
+    const safeTx = { ...tx }
+    safeTx.taxAmount = JSON.stringify(tx.taxAmount || [])
+
+    updateClientBalances(tx.clientId, safeTx, 'apply')
 
     // Receipts
     const totalAmount = calculateTotalWithTax(tx)
@@ -487,6 +556,8 @@ ipcMain.handle('updateTransaction', (event, updatedTx) => {
 
       // Rollback old
       adjustProductStock(oldTx.productId, oldTx.quantity, oldTx.transactionType, true)
+
+      oldTx.taxAmount = JSON.parse(oldTx.taxAmount || '[]')
       updateClientBalances(oldTx.clientId, oldTx, 'rollback')
 
       // Update transaction
@@ -495,7 +566,7 @@ ipcMain.handle('updateTransaction', (event, updatedTx) => {
          SET clientId=?, productId=?, quantity=?, sellAmount=?, purchaseAmount=?,
              paymentMethod=?, statusOfTransaction=?, paymentType=?, 
              pendingAmount=?, paidAmount=?, transactionType=?, dueDate=?, 
-             taxAmount=?, totalAmount=?, pageName=?, updatedAt=CURRENT_TIMESTAMP
+             taxAmount=?, totalAmount=?, pageName=?, date=?, billNo=?, freightCharges=?, freightTaxAmount=?, updatedAt=CURRENT_TIMESTAMP
          WHERE id=?`
       ).run(
         updatedTx.clientId,
@@ -513,12 +584,22 @@ ipcMain.handle('updateTransaction', (event, updatedTx) => {
         JSON.stringify(updatedTx.taxAmount || []),
         updatedTx.totalAmount,
         updatedTx.pageName || null,
+        updatedTx.date,
+        updatedTx.billNo,
+        updatedTx.freightCharges,
+        JSON.stringify(updatedTx.freightTaxAmount || []),
         updatedTx.id
       )
 
       // Apply new
       adjustProductStock(updatedTx.productId, updatedTx.quantity, updatedTx.transactionType)
-      updateClientBalances(updatedTx.clientId, updatedTx, 'apply')
+
+      const safeNewTx = { ...updatedTx }
+      safeNewTx.taxAmount = Array.isArray(updatedTx.taxAmount)
+        ? updatedTx.taxAmount
+        : JSON.parse(updatedTx.taxAmount || '[]')
+
+      updateClientBalances(updatedTx.clientId, safeNewTx, 'apply')
 
       // Receipts update
       const totalAmount = calculateTotalWithTax(updatedTx)
@@ -622,6 +703,7 @@ ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
     quantity,
     paymentType,
     pageName,
+    sendTo,
     createdAt,
     updatedAt
   } = bankReceipt
@@ -635,8 +717,8 @@ ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
         `
     INSERT INTO bankReceipts (
       clientId, productId, transactionId, type, bank, date, amount,
-      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName, sendTo, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?)
   `
       )
       .run(
@@ -656,6 +738,7 @@ ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
         quantity,
         paymentType,
         pageName,
+        sendTo,
         createdAt,
         updatedAt
       )
@@ -684,7 +767,8 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
     paidAmount,
     paymentType,
     quantity,
-    pageName
+    pageName,
+    sendTo
   } = bankReceipt
 
   const formattedDate =
@@ -700,7 +784,7 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
       // 2️⃣ Update existing
       db.prepare(
         `UPDATE bankReceipts
-         SET type = ?, bank = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?,pageName = ?,updatedAt = CURRENT_TIMESTAMP
+         SET type = ?, bank = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?,pageName = ?, sendTo = ?, updatedAt = CURRENT_TIMESTAMP
          WHERE transactionId = ?`
       ).run(
         type,
@@ -716,6 +800,7 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
         paymentType,
         quantity,
         pageName,
+        sendTo,
         transactionId
       )
 
@@ -725,8 +810,8 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
       // 4️⃣ Insert new record if not exists
       const result = db
         .prepare(
-          `INSERT INTO bankReceipts (transactionId, type, bank, date, amount, description, statusOfTransaction, dueDate,pendingAmount,pendingFromOurs,paidAmount,paymentType,quantity,pageName)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO bankReceipts (transactionId, type, bank, date, amount, description, statusOfTransaction, dueDate,pendingAmount,pendingFromOurs,paidAmount,paymentType,quantity,pageName, sendTo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           transactionId,
@@ -742,7 +827,8 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
           paidAmount,
           paymentType,
           quantity,
-          pageName
+          pageName,
+          sendTo
         )
 
       // 5️⃣ Return newly created record
@@ -788,6 +874,9 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
     quantity,
     paymentType,
     pageName,
+    sendTo,
+    chequeNumber,
+    transactionAccount,
     createdAt,
     updatedAt
   } = cashReceipt
@@ -801,8 +890,8 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
         `
        INSERT INTO cashReceipts (
       clientId, productId, transactionId, type, cash, date, amount,
-      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName,createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) `
+      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName,sendTo,chequeNumber,transactionAccount,createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?) `
       )
       .run(
         clientId,
@@ -821,6 +910,9 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
         quantity,
         paymentType,
         pageName,
+        sendTo,
+        chequeNumber,
+        transactionAccount,
         createdAt,
         updatedAt
       )
@@ -848,7 +940,10 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
     paidAmount,
     paymentType,
     quantity,
-    pageName
+    pageName,
+    sendTo,
+    chequeNumber,
+    transactionAccount
   } = cashReceipt
 
   const formattedDate =
@@ -864,7 +959,7 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
       // 2️⃣ Update existing
       db.prepare(
         `UPDATE cashReceipts
-         SET type = ?, cash = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?, pageName = ?, updatedAt = CURRENT_TIMESTAMP
+         SET type = ?, cash = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?, pageName = ?,sendTo = ?,chequeNumber = ?,transactionAccount = ?, updatedAt = CURRENT_TIMESTAMP
          WHERE transactionId = ?`
       ).run(
         type,
@@ -880,6 +975,9 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
         paymentType,
         quantity,
         pageName,
+        sendTo,
+        chequeNumber,
+        transactionAccount,
         transactionId
       )
 
@@ -889,8 +987,8 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
       // 4️⃣ Insert new record if not exists
       const result = db
         .prepare(
-          `INSERT INTO cashReceipts (transactionId, type, cash, date, amount, description, statusOfTransaction, dueDate,pendingAmount,pendingFromOurs,paidAmount,paymentType,quantity, pageName)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO cashReceipts (transactionId, type, cash, date, amount, description, statusOfTransaction, dueDate,pendingAmount,pendingFromOurs,paidAmount,paymentType,quantity, pageName,sendTo,chequeNumber,transactionAccount)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           transactionId,
@@ -906,7 +1004,10 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
           paidAmount,
           paymentType,
           quantity,
-          pageName
+          pageName,
+          sendTo,
+          chequeNumber,
+          transactionAccount
         )
 
       // 5️⃣ Return newly created record
@@ -1077,6 +1178,237 @@ ipcMain.handle('generate-pdf', async (_, { tableName, savePath }) => {
   } catch (err) {
     return { success: false, error: err.message }
   }
+})
+
+ipcMain.handle('getAccountBalances', () => {
+  const accounts = db
+    .prepare(
+      `
+    SELECT debitAccount AS account FROM ledger
+    UNION
+    SELECT creditAccount AS account FROM ledger
+  `
+    )
+    .all()
+
+  return accounts.map((acc) => {
+    const debit =
+      db.prepare(`SELECT SUM(amount) AS total FROM ledger WHERE debitAccount = ?`).get(acc.account)
+        ?.total || 0
+    const credit =
+      db.prepare(`SELECT SUM(amount) AS total FROM ledger WHERE creditAccount = ?`).get(acc.account)
+        ?.total || 0
+    return { account: acc.account, balance: debit - credit }
+  })
+})
+
+function createLedgerEntry({
+  date,
+  description,
+  debitAccount,
+  creditAccount,
+  amount,
+  paymentMethod,
+  referenceId
+}) {
+  db.prepare(
+    `
+    INSERT INTO ledger (date, description, debitAccount, creditAccount, amount, paymentMethod, referenceId)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `
+  ).run(date, description, debitAccount, creditAccount, amount, paymentMethod, referenceId || null)
+}
+
+// Extend Transaction to Ledger
+ipcMain.handle('createLedgerTransaction', (event, tx) => {
+  const date = new Date().toISOString()
+  createLedgerEntry({
+    date,
+    description: tx.description || 'General Transaction',
+    debitAccount: tx.debitAccount,
+    creditAccount: tx.creditAccount,
+    amount: tx.amount,
+    paymentMethod: tx.paymentMethod || 'bank',
+    referenceId: tx.referenceId || null
+  })
+  return { success: true }
+})
+
+ipcMain.handle('updateLedgerTransaction', (event, tx) => {
+  const date = new Date().toISOString()
+  createLedgerEntry({
+    date,
+    description: tx.description || 'General Transaction',
+    debitAccount: tx.debitAccount,
+    creditAccount: tx.creditAccount,
+    amount: tx.amount,
+    paymentMethod: tx.paymentMethod || 'bank',
+    referenceId: tx.referenceId || null
+  })
+  return { success: true }
+})
+
+ipcMain.handle('deleteLedgerTransaction', (event, id) => {
+  db.prepare('DELETE FROM ledger WHERE id = ?').run(id)
+  return { success: true }
+})
+
+ipcMain.handle('getLedgerTransactions', () => {
+  const stmt = db.prepare(`SELECT * FROM ledger`)
+  const rows = stmt.all()
+  return rows
+})
+
+// Transfer Amount API
+ipcMain.handle(
+  'transferAmount',
+  (
+    event,
+    { fromAccount, toAccount, amount, description = 'Funds Transfer', paymentMethod = 'bank' }
+  ) => {
+    if (!fromAccount || !toAccount || !amount) throw new Error('Invalid transfer data')
+    const date = new Date().toISOString()
+    createLedgerEntry({
+      date,
+      description,
+      debitAccount: toAccount,
+      creditAccount: fromAccount,
+      amount,
+      paymentMethod
+    })
+    return { success: true, message: `₹${amount}  ${fromAccount} → ${toAccount}` }
+  }
+)
+
+// Create Account
+ipcMain.handle('createAccount', async (event, accountData) => {
+  console.log('🔥 RECEIVED FROM FRONTEND:', accountData)
+
+  try {
+    const {
+      accountName,
+      openingBalance = 0,
+      closingBalance = openingBalance,
+      balance = openingBalance,
+      status = 'active'
+    } = accountData
+
+    if (!accountName.trim()) {
+      return { success: false, message: 'Account name is required' }
+    }
+
+    const existing = db
+      .prepare('SELECT id FROM accounts WHERE accountName = ?')
+      .get(accountName.trim())
+    if (existing) {
+      return { success: false, message: 'Account name already exists' }
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO accounts (accountName, balance, status, openingBalance, closingBalance, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `)
+
+    const info = stmt.run(accountName.trim(), balance, status, openingBalance, closingBalance)
+
+    const insertedId = info.lastInsertRowid
+    const timestamp = new Date().toISOString()
+
+    return {
+      success: true,
+      message: `Account "${accountName}" created successfully`,
+      data: {
+        id: insertedId,
+        accountName: accountName.trim(),
+        balance,
+        status,
+        openingBalance,
+        closingBalance,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        pageName: 'Account'
+      }
+    }
+  } catch (error) {
+    console.error('Create account error:', error)
+    return { success: false, message: error.message }
+  }
+})
+
+// Update Account
+ipcMain.handle('updateAccount', async (event, { id, ...updates }) => {
+  try {
+    if (!id) {
+      return { success: false, message: 'Account ID is required' }
+    }
+
+    // Validate updates
+    const { accountName, balance, status } = updates
+    if (accountName && !accountName.trim()) {
+      return { success: false, message: 'Account name cannot be empty' }
+    }
+    if (typeof balance === 'number' && balance < 0) {
+      return { success: false, message: 'Balance cannot be negative' }
+    }
+
+    // Check duplicate name if changing name
+    if (accountName) {
+      const existing = db
+        .prepare('SELECT id FROM accounts WHERE accountName = ? AND id != ?')
+        .get(accountName.trim(), id)
+      if (existing) {
+        return { success: false, message: 'Account name already exists' }
+      }
+    }
+
+    // Fetch current to update closingBalance etc.
+    const current = db.prepare('SELECT * FROM accounts WHERE id = ?').get(id)
+    if (!current) {
+      return { success: false, message: 'Account not found' }
+    }
+
+    const newBalance = balance !== undefined ? balance : current.balance
+    const newClosingBalance = newBalance // Simplify: closing = current balance after update
+
+    const stmt = db.prepare(`
+      UPDATE accounts 
+      SET accountName = ?, balance = ?, status = ?, closingBalance = ?, updatedAt = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `)
+    stmt.run(
+      accountName?.trim() || current.accountName,
+      newBalance,
+      status || current.status,
+      newClosingBalance,
+      id
+    )
+
+    const updatedAccount = {
+      ...current,
+      ...(accountName && { accountName: accountName.trim() }),
+      ...(balance !== undefined && { balance: newBalance }),
+      ...(status && { status }),
+      closingBalance: newClosingBalance,
+      updatedAt: new Date().toISOString()
+    }
+
+    return { success: true, message: 'Account updated successfully', data: updatedAccount }
+  } catch (error) {
+    console.error('Update account error:', error)
+    return { success: false, message: error.message }
+  }
+})
+
+ipcMain.handle('deleteAccount', async (event, id) => {
+  db.prepare('DELETE FROM accounts WHERE id = ?').run(id)
+})
+
+ipcMain.handle('getAllAccounts', async () => {
+  return db.prepare('SELECT * FROM accounts').all()
+})
+
+ipcMain.handle('getAccountById', async (event, id) => {
+  return db.prepare('SELECT * FROM accounts WHERE id = ?').get(id)
 })
 
 // Settings

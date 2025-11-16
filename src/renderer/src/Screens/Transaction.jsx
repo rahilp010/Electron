@@ -194,7 +194,7 @@ const TransactionRow = memo(
         </td> */}
         <td className="px-4 py-3">
           {' '}
-          {new Date(transaction?.createdAt).toLocaleDateString('en-IN', {
+          {new Date(transaction?.date).toLocaleDateString('en-IN', {
             day: '2-digit',
             month: 'short',
             year: 'numeric'
@@ -372,12 +372,12 @@ const useTransactionOperations = () => {
   )
 
   const handleEditTransaction = useCallback(
-    async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowModal) => {
+    async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowSalesBillModal) => {
       try {
         const response = await window.api.getTransactionById(transaction.id)
         setSelectedTransaction(response)
         setIsUpdateExpense(true)
-        setShowModal(true)
+        setShowSalesBillModal(true)
       } catch (error) {
         console.error('Error fetching transaction:', error)
         toast.error('Failed to load transaction data: ' + error.message)
@@ -763,7 +763,8 @@ const Transaction = () => {
   const handleCreateTransaction = useCallback(() => {
     setSelectedTransaction(null)
     setIsUpdateExpense(false)
-    setShowModal(true)
+    // setShowModal(true)
+    setShowSalesBillModal(true)
   }, [])
 
   const handleSearchChange = useCallback((value) => {
@@ -1102,7 +1103,7 @@ const Transaction = () => {
                             transaction,
                             setSelectedTransaction,
                             setIsUpdateExpense,
-                            setShowModal
+                            setShowSalesBillModal
                           )
                         }
                         onDelete={handleDeleteTransaction}
