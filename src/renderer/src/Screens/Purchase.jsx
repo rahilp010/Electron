@@ -20,10 +20,11 @@ import {
   Box,
   Phone,
   MoreHorizontal,
-  PenLine
+  PenLine,
+  ChevronDown
 } from 'lucide-react'
 import Loader from '../components/Loader'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import SearchIcon from '@mui/icons-material/Search'
 import { DateRangePicker, SelectPicker, Whisper, Tooltip, InputGroup, Input } from 'rsuite'
 import 'rsuite/dist/rsuite-no-reset.min.css'
@@ -53,7 +54,7 @@ const TABLE_HEADERS = [
   { key: 'clientName', label: 'Client Name', width: 'w-[300px]', icon: User },
   { key: 'productName', label: 'Product Name', width: 'w-[250px]', icon: Box },
   { key: 'quantity', label: 'Quantity', width: 'w-[150px]', icon: Box },
-  { key: 'sellingPrice', label: 'Selling Price', width: 'w-[170px]', conditional: true },
+  // { key: 'sellingPrice', label: 'Selling Price', width: 'w-[170px]', conditional: true },
   { key: 'totalAmount', label: 'Total Amount', width: 'w-[200px]', icon: IndianRupee },
   { key: 'pendingAmount', label: 'Pending Amount', width: 'w-[200px]', icon: TrendingUp },
   { key: 'paidAmount', label: 'Paid Amount', width: 'w-[200px]', icon: Receipt },
@@ -108,11 +109,18 @@ const getInitials = (name) => {
 }
 
 const getPaymentStatusComponent = (transaction) => {
-  const { statusOfTransaction, paymentType } = transaction
-
-  // Common style base
+  const { statusOfTransaction } = transaction
   const baseStyle =
     'inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ring-1'
+
+  if (statusOfTransaction === 'mixed') {
+    return (
+      <span className={`${baseStyle} bg-indigo-50 text-indigo-700 ring-indigo-200`}>
+        <span className="h-2 w-2 rounded-full bg-indigo-500"></span>
+        Mixed
+      </span>
+    )
+  }
 
   if (statusOfTransaction === 'completed') {
     return (
@@ -123,7 +131,7 @@ const getPaymentStatusComponent = (transaction) => {
     )
   }
 
-  if (statusOfTransaction === 'pending' && paymentType === 'partial') {
+  if (statusOfTransaction === 'pending' && transaction.paymentType === 'partial') {
     return (
       <span className={`${baseStyle} bg-indigo-50 text-indigo-600 ring-indigo-200`}>
         <span className="h-2 w-2 rounded-full bg-indigo-500"></span>
@@ -150,7 +158,16 @@ const getPaymentStatusComponent = (transaction) => {
 
 // Memoized PurchaseRow component
 const PurchaseRow = React.memo(
-  ({ transaction, index, clients, products, onEdit, onDelete, onStatusChange }) => {
+  ({
+    transaction,
+    index,
+    clients,
+    products,
+    onEdit,
+    onDelete,
+    onStatusChange,
+    isSubRow = false
+  }) => {
     const clientName = getClientName(transaction?.clientId, clients)
     const productName = getProductName(transaction?.productId, products)
     const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
@@ -200,16 +217,15 @@ const PurchaseRow = React.memo(
     }
 
     return (
-      <tr className={`text-sm text-center`}>
-        <td className="px-4 py-3">
-          {' '}
-          {new Date(transaction?.createdAt).toLocaleDateString('en-IN', {
+      <tr className={`text-sm text-center ${isSubRow ? 'bg-indigo-100' : ''}`}>
+        <td className={`px-4 py-3 text-center `}>
+          {new Date(transaction?.date).toLocaleDateString('en-IN', {
             day: '2-digit',
             month: 'short',
             year: 'numeric'
           })}
         </td>
-        <td className="px-4">
+        <td className={`px-4 `}>
           <div className="flex items-center gap-3 px-6">
             <div className="relative group">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
@@ -222,49 +238,42 @@ const PurchaseRow = React.memo(
             </span>
           </div>
         </td>
-        <td className="px-4 py-3 tracking-wide font-medium">
+        <td className={`px-4 py-3 tracking-wide font-medium `}>
           {String(productName === 'Unknown Product' ? '-' : productName).toUpperCase()}
         </td>
-        <td className="px-4 py-3">
+        <td className={`px-4 py-3 `}>
           <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
             {transaction?.quantity || 0}
           </span>
         </td>
-        <td className="px-4 py-3 font-semibold">
+        <td className={`px-4 py-3 font-semibold `}>
           <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
             {transaction.purchaseAmount > 0
               ? '₹ ' + toThousands(Number(transaction?.purchaseAmount).toFixed(0))
               : '₹ ' + toThousands(Number(transaction?.totalAmount).toFixed(0))}
           </div>
         </td>
-        <td className="px-4 py-3">{renderPendingAmount()}</td>
-        <td className="px-4 py-3">{renderPaidAmount()}</td>
-        <td className="px-4 py-3 tracking-wide">
-          {' '}
+        <td className={`px-4 py-3 `}>{renderPendingAmount()}</td>
+        <td className={`px-4 py-3 `}>{renderPaidAmount()}</td>
+        <td className={`px-4 py-3 tracking-wide `}>
           <span onClick={() => onStatusChange(transaction.id)}>
             {getPaymentStatusComponent(transaction)}
           </span>
         </td>
 
-        <td className="w-28">
+        <td className={`w-28`}>
           <div className="flex gap-2 justify-center items-center">
-            {/* Edit Button */}
-            {transaction.pageName === 'Bank' ? (
-              ''
-            ) : (
-              <button
-                className="group relative p-2 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-purple-400 "
-                onClick={() => onEdit(transaction)}
-                title="Edit transaction"
-              >
-                <PenLine
-                  size={14}
-                  className="group-hover:rotate-12 transition-transform duration-300"
-                />
-              </button>
-            )}
+            <button
+              className="group relative p-2 rounded-full bg-purple-50 text-purple-600 hover:bg-purple-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-purple-400 "
+              onClick={() => onEdit(transaction)}
+              title="Edit transaction"
+            >
+              <PenLine
+                size={14}
+                className="group-hover:rotate-12 transition-transform duration-300"
+              />
+            </button>
 
-            {/* Delete Button */}
             <button
               className="group relative p-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-red-400"
               onClick={() => onDelete(transaction?.id)}
@@ -276,7 +285,6 @@ const PurchaseRow = React.memo(
               />
             </button>
 
-            {/* WhatsApp Button */}
             <button
               className="group relative p-2 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-all duration-300 hover:scale-110 cursor-pointer border border-green-400"
               onClick={() => {
@@ -363,6 +371,28 @@ const usePurchaseOperations = () => {
     [dispatch, fetchAllTransactions]
   )
 
+  const handleDeleteGroup = useCallback(
+    async (items, billNo) => {
+      if (
+        !window.confirm(
+          `Are you sure you want to delete ${items.length} purchases in bill ${billNo}?`
+        )
+      )
+        return
+
+      try {
+        for (const item of items) {
+          await transactionApi.deleteTransaction(item.id)
+        }
+        await fetchAllTransactions()
+        toast.success('Bill deleted successfully')
+      } catch (error) {
+        toast.error('Failed to delete bill: ' + error.message)
+      }
+    },
+    [fetchAllTransactions]
+  )
+
   const handleStatusChange = useCallback(
     async (id) => {
       if (!window.confirm('Are you sure you want to update the transaction status?')) return
@@ -385,17 +415,50 @@ const usePurchaseOperations = () => {
     [dispatch, fetchAllTransactions]
   )
 
+  const handleToggleGroupStatus = useCallback(
+    async (items, currentStatus) => {
+      if (!window.confirm('Are you sure you want to update the status for all items in this bill?'))
+        return
+      const newStatus = currentStatus === 'completed' ? 'pending' : 'completed'
+      try {
+        for (const item of items) {
+          const updatedItem = { ...item, statusOfTransaction: newStatus }
+          await window.api.updateTransaction(updatedItem)
+        }
+        await fetchAllTransactions()
+        toast.success('Bill status updated successfully')
+      } catch (error) {
+        toast.error('Failed to update bill status: ' + error.message)
+      }
+    },
+    [fetchAllTransactions]
+  )
+
   const handleEditTransaction = useCallback(
-    async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowModal) => {
+    async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowPurchaseBillModal) => {
       try {
         const response = await transactionApi.getTransactionById(transaction.id)
         setSelectedTransaction(response)
         setIsUpdateExpense(true)
-        setShowModal(true)
+        setShowPurchaseBillModal(true)
       } catch (error) {
         console.error('Error fetching transaction:', error)
         toast.error('Failed to load purchase data: ' + error.message)
       }
+    },
+    []
+  )
+
+  const handleEditGroup = useCallback(
+    (items, setSelectedTransaction, setIsUpdateExpense, setShowPurchaseBillModal) => {
+      const groupData = {
+        ...items[0],
+        multipleProducts: items,
+        isMultiProduct: true
+      }
+      setSelectedTransaction(groupData)
+      setIsUpdateExpense(true)
+      setShowPurchaseBillModal(true)
     },
     []
   )
@@ -427,8 +490,11 @@ const usePurchaseOperations = () => {
     fetchAllClients,
     fetchAllTransactions,
     handleDeleteTransaction,
+    handleDeleteGroup,
     handleStatusChange,
+    handleToggleGroupStatus,
     handleEditTransaction,
+    handleEditGroup,
     handleUpdatePaymentStatus
   }
 }
@@ -463,6 +529,8 @@ const generatePrintHTML = (
 ) => {
   const getCellValue = (row, headerKey) => {
     switch (headerKey) {
+      case 'billNo':
+        return row.billNo || ''
       case 'date':
         return new Date(row.createdAt).toLocaleDateString()
       case 'clientName':
@@ -684,14 +752,18 @@ const generatePrintHTML = (
 // Main Component
 const Purchase = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const dispatch = useDispatch()
   const {
     fetchAllProducts,
     fetchAllClients,
     fetchAllTransactions,
     handleDeleteTransaction,
-    handleEditTransaction,
+    handleDeleteGroup,
     handleStatusChange,
+    handleToggleGroupStatus,
+    handleEditTransaction,
+    handleEditGroup,
     handleUpdatePaymentStatus
   } = usePurchaseOperations()
 
@@ -708,6 +780,7 @@ const Purchase = () => {
   const [assetsTypeFilter, setAssetsTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [importFile, setImportFile] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState(new Set())
   const [visibleCount, setVisibleCount] = useState(30)
   const tableContainerRef = useRef(null)
 
@@ -715,18 +788,22 @@ const Purchase = () => {
   const clients = useSelector((state) => state.electron.clients.data || [])
   const transactions = useSelector((state) => state.electron.transaction.data || [])
 
-  // Memoized filtered data
-  const filteredData = useMemo(() => {
-    if (!Array.isArray(transactions)) return []
-    const query = searchQuery?.toLowerCase()
+  const isMatch = useCallback(
+    (
+      data,
+      query,
+      clientFilter,
+      productFilter,
+      assetsTypeFilter,
+      dateRange,
+      statusFilter,
+      clients,
+      products
+    ) => {
+      const q = query?.toLowerCase()
 
-    return transactions.filter((data) => {
-      // Only show purchase transactions
-      if (data?.transactionType !== 'purchase') return false
-
-      // Search filter
       const matchesSearch =
-        !query ||
+        !q ||
         [
           data?.id?.toString(),
           getClientName(data?.clientId, clients)?.toLowerCase(),
@@ -734,7 +811,7 @@ const Purchase = () => {
           getProductName(data?.productId, products)?.toLowerCase(),
           data?.quantity?.toString(),
           data?.statusOfTransaction?.toLowerCase()
-        ].some((field) => field?.includes(query))
+        ].some((field) => field?.includes(q))
 
       // Client filter - handle nested object structure
       const matchesClient =
@@ -745,6 +822,11 @@ const Purchase = () => {
       // Product filter - handle nested object structure
       const matchesProduct =
         !productFilter || String(data.productId?.id || data.productId) === String(productFilter)
+
+      // Assets type filter
+      const product = products.find((p) => String(p?.id) === String(data?.productId))
+      const matchesAssets =
+        !assetsTypeFilter || (product?.type || product?.assetsType) === assetsTypeFilter
 
       // Status filter
       const matchesStatus = !statusFilter || data?.statusOfTransaction === statusFilter
@@ -761,27 +843,82 @@ const Purchase = () => {
         matchesSearch &&
         matchesClient &&
         matchesProduct &&
+        matchesAssets &&
         matchesDate &&
         matchesStatus &&
         matchesPageName
       )
+    },
+    [clients, products]
+  )
+
+  const candidateBills = useMemo(() => {
+    const bills = new Set()
+    transactions.forEach((t) => {
+      if (
+        t.transactionType === 'purchase' &&
+        t.pageName !== 'Salary' &&
+        isMatch(
+          t,
+          searchQuery,
+          clientFilter,
+          productFilter,
+          assetsTypeFilter,
+          dateRange,
+          statusFilter,
+          clients,
+          products
+        )
+      ) {
+        bills.add(t.billNo)
+      }
     })
+    return bills
   }, [
     transactions,
     searchQuery,
     clientFilter,
     productFilter,
+    assetsTypeFilter,
     dateRange,
     statusFilter,
     clients,
-    products
+    products,
+    isMatch
   ])
 
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(
+      (t) =>
+        candidateBills.has(t.billNo) && t.transactionType === 'purchase' && t.pageName !== 'Salary'
+    )
+  }, [transactions, candidateBills])
+
+  const filteredGrouped = useMemo(() => {
+    return filteredTransactions.reduce((acc, item) => {
+      if (!acc[item.billNo]) acc[item.billNo] = []
+      acc[item.billNo].push(item)
+      return acc
+    }, {})
+  }, [filteredTransactions])
+
+  const toggleGroup = useCallback((billNo) => {
+    setExpandedGroups((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(billNo)) {
+        newSet.delete(billNo)
+      } else {
+        newSet.add(billNo)
+      }
+      return newSet
+    })
+  }, [])
+
   const loadMore = useCallback(() => {
-    if (visibleCount < filteredData.length) {
+    if (visibleCount < Object.keys(filteredGrouped).length) {
       setVisibleCount((prev) => prev + 30)
     }
-  }, [visibleCount, filteredData.length])
+  }, [visibleCount, filteredGrouped])
 
   const handleScroll = useCallback(() => {
     if (tableContainerRef.current) {
@@ -800,15 +937,10 @@ const Purchase = () => {
     }
   }, [handleScroll])
 
-  // Memoized visible data for rendering
-  const visibleData = useMemo(() => {
-    return filteredData.slice(0, visibleCount)
-  }, [filteredData, visibleCount])
-
   // Reset visible count when filters change
   useEffect(() => {
     setVisibleCount(30)
-  }, [filteredData])
+  }, [filteredGrouped])
 
   // Memoized statistics
   const statistics = useMemo(() => {
@@ -882,7 +1014,8 @@ const Purchase = () => {
 
   const handleExportExcel = useCallback(() => {
     try {
-      const exportData = filteredData.map((transaction) => ({
+      const exportData = filteredTransactions.map((transaction) => ({
+        'Bill No': transaction.billNo,
         ID: formatTransactionId(transaction.id),
         Date: new Date(transaction.createdAt).toLocaleDateString(),
         'Client Name': getClientName(transaction.clientId, clients),
@@ -904,9 +1037,10 @@ const Purchase = () => {
     } catch (error) {
       toast.error('Failed to export data: ' + error.message)
     }
-  }, [filteredData, clients, products])
+  }, [filteredTransactions, clients, products])
 
   const TABLE_HEADERS_PRINT = [
+    { key: 'billNo', label: 'Bill No', width: 'w-[100px]' },
     { key: 'date', label: 'Date', width: 'w-[100px]' },
     { key: 'clientName', label: 'Client Name', width: 'w-[250px]' },
     { key: 'productName', label: 'Product Name', width: 'w-[230px]' },
@@ -920,7 +1054,7 @@ const Purchase = () => {
     (reportType = 'default') => {
       // Define columns to print (customize per report type)
       let printHeaders = TABLE_HEADERS_PRINT.filter((h) => h.key !== 'action') // Exclude action column by default
-      let printData = filteredData
+      let printData = filteredTransactions
 
       if (reportType === 'ledger') {
         // Example: For ledger report, filter to specific client/product and add balance logic
@@ -936,7 +1070,7 @@ const Purchase = () => {
           ].includes(h.key)
         ) // Only specific columns for ledger
         // Simulate ledger data with balance (adjust based on your data)
-        printData = filteredData.map((row, index) => ({
+        printData = filteredTransactions.map((row, index) => ({
           ...row,
           balance:
             index % 2 === 0
@@ -987,7 +1121,7 @@ const Purchase = () => {
         toast.error('Failed to initiate print: ' + error.message)
       }
     },
-    [filteredData, clients, products]
+    [filteredTransactions, clients, products]
   )
 
   // Effects
@@ -1007,6 +1141,11 @@ const Purchase = () => {
       return true
     })
   }, [location.pathname])
+
+  const renderedGroups = useMemo(() => {
+    const entries = Object.entries(filteredGrouped)
+    return entries.slice(0, visibleCount)
+  }, [filteredGrouped, visibleCount])
 
   return (
     <div className="select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-hidden">
@@ -1117,6 +1256,19 @@ const Purchase = () => {
                   menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
                 <SelectPicker
+                  data={clients.map((client) => ({
+                    label: client?.clientName,
+                    value: client?.id
+                  }))}
+                  onChange={setClientFilter}
+                  placeholder="Select Client"
+                  virtualized={true}
+                  style={{ width: 200 }}
+                  placement="bottomEnd"
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
+                />
+                <SelectPicker
                   data={products.map((product) => ({
                     label: product?.name,
                     value: product?.id
@@ -1140,12 +1292,29 @@ const Purchase = () => {
                   menuStyle={{ zIndex: 99999, position: 'absolute' }}
                   virtualized={true}
                 />
+                <SelectPicker
+                  data={[
+                    { label: 'All', value: '' },
+                    { label: 'Pending', value: 'pending' },
+                    { label: 'Completed', value: 'completed' }
+                  ]}
+                  onChange={setStatusFilter}
+                  placeholder="Select Status"
+                  style={{ width: 150 }}
+                  placement="bottomEnd"
+                  searchable={false}
+                  container={() => document.body}
+                  menuStyle={{ zIndex: 99999, position: 'absolute' }}
+                />
               </div>
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto customScrollbar border border-gray-200 rounded-2xl h-screen mt-5 mb-40">
-              <table className="min-w-max border-collapse table-fixed">
+            <div
+              ref={tableContainerRef}
+              className="overflow-x-auto customScrollbar border border-gray-200 rounded-2xl h-screen mt-5 mb-40"
+            >
+              <table className="min-w-max border-collapse table-fixed text-center">
                 <thead className="relative z-20">
                   <tr className="text-sm sticky top-0 z-20 bg-gradient-to-r from-gray-50 to-gray-100">
                     {visibleHeaders.map((header) => {
@@ -1153,10 +1322,10 @@ const Purchase = () => {
                       return (
                         <th
                           key={header.key}
-                          className={`px-4 py-3 border-b border-gray-300 ${header.width} ${header.sticky} bg-transparent`}
+                          className={`px-4 py-3 border-b border-gray-300 text-center ${header.width} ${header.sticky} bg-transparent`}
                         >
                           <div className="flex items-center justify-center gap-2">
-                            <IconTable size={16} className="text-gray-500" />
+                            {IconTable && <IconTable size={16} className="text-gray-500" />}
                             {header.label}
                           </div>
                         </th>
@@ -1165,36 +1334,193 @@ const Purchase = () => {
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-200">
-                  {filteredData.length === 0 ? (
+                  {Object.entries(filteredGrouped).length === 0 ? (
                     <tr className="text-center h-80">
                       <td
-                        colSpan={TABLE_HEADERS.length}
+                        colSpan={visibleHeaders.length}
                         className="text-center font-light tracking-wider text-gray-500 text-lg"
                       >
                         No Data Found
                       </td>
                     </tr>
                   ) : (
-                    visibleData.map((transaction, index) => (
-                      <PurchaseRow
-                        key={transaction?.id || index}
-                        transaction={transaction}
-                        index={index}
-                        clients={clients}
-                        products={products}
-                        onEdit={(transaction) =>
-                          handleEditTransaction(
-                            transaction,
-                            setSelectedTransaction,
-                            setIsUpdateExpense,
-                            setShowModal
-                          )
-                        }
-                        onDelete={handleDeleteTransaction}
-                        onStatusChange={handleStatusChange}
-                        onUpdateStatus={handleUpdatePaymentStatus}
-                      />
-                    ))
+                    renderedGroups.map(([billNo, items]) => {
+                      if (items.length === 1) {
+                        // Single item: Render directly as PurchaseRow without group header
+                        const item = items[0]
+                        return (
+                          <PurchaseRow
+                            key={`${billNo}-single-${item.id}`}
+                            transaction={item}
+                            index={0}
+                            clients={clients}
+                            products={products}
+                            onEdit={(transaction) =>
+                              handleEditTransaction(
+                                transaction,
+                                setSelectedTransaction,
+                                setIsUpdateExpense,
+                                setShowPurchaseBillModal
+                              )
+                            }
+                            onDelete={handleDeleteTransaction}
+                            onStatusChange={handleStatusChange}
+                            onUpdateStatus={handleUpdatePaymentStatus}
+                            isSubRow={false}
+                          />
+                        )
+                      } else {
+                        // Multi-item: Render group header and sub-rows if expanded
+                        const firstItem = items[0]
+                        const isExpanded = expandedGroups.has(billNo)
+                        const clientName = getClientName(firstItem?.clientId, clients)
+                        const date = new Date(firstItem?.date).toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        })
+                        const totalQty = items.reduce((sum, i) => sum + (i.quantity || 0), 0)
+                        const totalAmount = items.reduce(
+                          (sum, i) => sum + (i.purchaseAmount || 0),
+                          0
+                        )
+                        const totalPending = items.reduce((sum, i) => {
+                          if (i.statusOfTransaction === 'pending') {
+                            return (
+                              sum +
+                              (i.paymentType === 'partial'
+                                ? i.pendingAmount || 0
+                                : i.purchaseAmount || 0)
+                            )
+                          }
+                          return sum
+                        }, 0)
+                        const totalPaid = items.reduce((sum, i) => sum + (i.paidAmount || 0), 0)
+                        const statusCounts = items.reduce((acc, i) => {
+                          acc[i.statusOfTransaction] = (acc[i.statusOfTransaction] || 0) + 1
+                          return acc
+                        }, {})
+                        const status =
+                          Object.keys(statusCounts).length === 1
+                            ? Object.keys(statusCounts)[0]
+                            : 'mixed'
+
+                        return (
+                          <>
+                            {/* Group Header Row */}
+                            <tr
+                              key={`header-${billNo}`}
+                              className="bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+                              onClick={() => toggleGroup(billNo)}
+                            >
+                              <td className="px-4 py-3 font-medium">{date}</td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3 px-6">
+                                  <div className="relative group">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
+                                      {getInitials(clientName)}
+                                    </div>
+                                    <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
+                                  </div>
+                                  <span className="font-medium text-gray-700">
+                                    {clientName.toUpperCase()}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 tracking-wide font-medium">
+                                <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
+                                  Multiple Products ({items.length})
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
+                                  {totalQty}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 font-semibold">
+                                <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
+                                  ₹ {toThousands(totalAmount.toFixed(0))}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                {totalPending > 0 ? (
+                                  <Whisper
+                                    trigger="hover"
+                                    placement="rightStart"
+                                    speaker={<Tooltip>{toThousands(totalPending)}</Tooltip>}
+                                  >
+                                    <span>₹ {toThousands(Number(totalPending).toFixed(0))}</span>
+                                  </Whisper>
+                                ) : (
+                                  '-'
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {totalPaid > 0 ? (
+                                  <CreditScoreIcon className="text-green-600" />
+                                ) : (
+                                  '-'
+                                )}
+                              </td>
+                              <td className="px-4 py-3 tracking-wide">
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (status !== 'mixed') {
+                                      handleToggleGroupStatus(items, status)
+                                    } else {
+                                      toast.info('Mixed status: Update items individually')
+                                    }
+                                  }}
+                                  className={`cursor-pointer ${status === 'mixed' ? 'cursor-not-allowed' : ''}`}
+                                >
+                                  {getPaymentStatusComponent({
+                                    statusOfTransaction: status,
+                                    paymentType: firstItem?.paymentType
+                                  })}
+                                </span>
+                              </td>
+                              <td className="w-28 px-4 py-3 text-center">
+                                <div className="flex gap-2 justify-center items-center">
+                                  {/* Expand/Collapse Icon Only */}
+                                  <ChevronDown
+                                    size={20}
+                                    className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleGroup(billNo)
+                                    }}
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                            {/* Sub Rows */}
+                            {isExpanded &&
+                              items.map((item, idx) => (
+                                <PurchaseRow
+                                  key={`${billNo}-sub-${item.id || idx}`}
+                                  transaction={item}
+                                  index={idx}
+                                  clients={clients}
+                                  products={products}
+                                  onEdit={(transaction) =>
+                                    handleEditTransaction(
+                                      transaction,
+                                      setSelectedTransaction,
+                                      setIsUpdateExpense,
+                                      setShowPurchaseBillModal
+                                    )
+                                  }
+                                  onDelete={handleDeleteTransaction}
+                                  onStatusChange={handleStatusChange}
+                                  onUpdateStatus={handleUpdatePaymentStatus}
+                                  isSubRow={true}
+                                />
+                              ))}
+                          </>
+                        )
+                      }
+                    })
                   )}
                 </tbody>
               </table>

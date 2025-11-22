@@ -66,6 +66,7 @@ const getInitials = (name) => {
     .map((n) => n[0])
     .join('')
     .toUpperCase()
+    .slice(0, 2)
 }
 
 // Memoized Transaction Row Component
@@ -111,12 +112,15 @@ const TransactionRow = memo(({ receipt, index, selectedType, clients, balance })
         </div>
       </td>
 
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {getInitials(getClientName(receipt.clientId, clients))}
+      <td>
+        <div className="flex items-center gap-3">
+          <div className="relative group">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
+              {getInitials(getClientName(receipt.clientId, clients))}
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
           </div>
-          <span className="font-medium text-gray-800 tracking-wide">
+          <span className="font-medium text-gray-700 transition-colors duration-200 group-hover:text-indigo-600">
             {getClientName(receipt.clientId, clients)}
           </span>
         </div>

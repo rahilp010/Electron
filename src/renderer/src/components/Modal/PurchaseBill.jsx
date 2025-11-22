@@ -79,15 +79,27 @@ const ProductRow = ({ index, row, products, settings, onChange, onRemove, toThou
     >
       <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
         <SelectPicker
-          data={products.map((p) => ({ label: p.name, value: p.id, qty: p.stockQuantity || 0 }))}
+          data={products.map((p) => ({ label: p.name, value: p.id, qty: p.quantity || 0 }))}
           value={row.productId}
           placeholder="Select Product"
           virtualized={true}
           container={() => document.getElementById('purchase-bill-container')}
           menuMaxHeight={200}
           menuStyle={{ zIndex: 99999, position: 'absolute' }}
-          className="w-full [&_.rs-picker-toggle]:rounded-lg [&_.rs-picker-toggle]:border-gray-300/50  [&_.rs-picker-toggle]:bg-white/50 hover:[&_.rs-picker-toggle]:bg-white/70"
+          className="w-full [&_.rs-picker-toggle]:rounded-lg [&_.rs-picker-toggle]:border-gray-300/50 [&_.rs-picker-toggle]:bg-white/50 hover:[&_.rs-picker-toggle]:bg-white/70"
           onChange={(val) => onChange(index, 'productId', val)}
+          renderMenuItem={(label, item) => (
+            <div className="flex justify-between w-full">
+              <span>{label}</span>
+              <span
+                className={`text-gray-500 text-xs font-thin tracking-wider ${
+                  item.qty > 0 ? 'text-green-400' : 'text-red-400'
+                }`}
+              >
+                Qty: {item.qty}
+              </span>
+            </div>
+          )}
         />
       </td>
       <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
@@ -150,7 +162,7 @@ const ProductRow = ({ index, row, products, settings, onChange, onRemove, toThou
   )
 }
 /* ========= Main Component ========= */
-const PurchaseBill = ({ setShowPurchaseBillModal }) => {
+const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateExpense }) => {
   const dispatch = useDispatch()
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
@@ -179,6 +191,62 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
     ]
   })
   const [nextBillId, setNextBillId] = useState(null)
+
+  /* ========= Prefill for Update ========= */
+  useEffect(() => {
+    if (!existingTransaction || !isUpdateExpense) return
+
+    const init = existingTransaction
+
+    let productsList = []
+
+    // If it's a multi-product transaction → use multipleProducts array
+    if (
+      init.multipleProducts &&
+      Array.isArray(init.multipleProducts) &&
+      init.multipleProducts.length > 0
+    ) {
+      productsList = init.multipleProducts.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity || 1,
+        price: item.sellAmount || item.price || 0,
+        taxAmount: item.taxAmount || [],
+        description: item.description || ''
+      }))
+    }
+    // Fallback: single product (old format)
+    else if (init.productId) {
+      productsList = [
+        {
+          productId: init.productId,
+          quantity: init.quantity || 1,
+          price: init.sellAmount || 0,
+          taxAmount: init.taxAmount || [],
+          description: init.description || ''
+        }
+      ]
+    }
+
+    setPurchaseBill((prev) => ({
+      ...prev,
+      clientId: init.clientId || '',
+      billNumber: init.billNo || '',
+      billDate:
+        init.date?.split('T')[0] ||
+        init.createdAt?.split('T')[0] ||
+        new Date().toISOString().split('T')[0],
+      paymentType: init.paymentType || 'full',
+      paymentMethod: init.paymentMethod || 'bank',
+      statusOfTransaction: init.statusOfTransaction || 'pending',
+      paidAmount: init.paidAmount || 0,
+      freightCharges: init.freightCharges || 0,
+      products:
+        productsList.length > 0
+          ? productsList
+          : [{ productId: '', quantity: 1, taxAmount: [], price: 0, description: '' }]
+    }))
+  }, [existingTransaction, isUpdateExpense])
+
   /* ========= Fetch Data ========= */
   const fetchAllData = useCallback(async () => {
     try {
@@ -207,13 +275,16 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
     fetchAllData()
     fetchNextTransactionId()
   }, [fetchAllData])
+
   const inputRef = useRef(null)
   useEffect(() => {
     setTimeout(() => {
       inputRef.current?.focus?.()
     }, 200)
   }, [])
+
   const toThousands = (v) => new Intl.NumberFormat('en-IN').format(Number(v) || 0)
+
   const handleProductChange = (index, field, value) => {
     setPurchaseBill((prev) => {
       const updatedRows = [...prev.products]
@@ -262,6 +333,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
       return { ...prev, products: updatedRows }
     })
   }
+
   const handleAddRow = () => {
     setPurchaseBill((prev) => ({
       ...prev,
@@ -271,6 +343,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
       ]
     }))
   }
+
   const handleRemoveRow = (index) => {
     setPurchaseBill((prev) => ({
       ...prev,
@@ -285,11 +358,11 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
       const tax = Array.isArray(p.taxAmount)
         ? p.taxAmount.reduce((a, t) => a + (t.value || 0), 0)
         : 0
-      const freight = p.taxAmount?.find((t) => t.code === 'freightCharges')?.value || 0
+      const freight = Number(purchaseBill.freightCharges || 0)
       const total = base + tax + freight
       return { base, tax, freight, total }
     })
-  }, [purchaseBill.products])
+  }, [purchaseBill.products, purchaseBill.freightCharges])
   const billSubTotal = useMemo(() => {
     return productRowTotals.reduce((s, r) => s + r.base, 0)
   }, [productRowTotals])
@@ -532,7 +605,6 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
       }
       let paidDistribution = []
       const totalBillAmount = rowsDetailed.reduce((s, r) => s + r.total, 0)
-
       if (purchaseBill.statusOfTransaction !== 'completed') {
         paidDistribution = rowsDetailed.map(() => 0)
       } else {
@@ -557,7 +629,6 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
           paidDistribution = rowsDetailed.map(() => 0)
         }
       }
-
       const getClientName = (clientId, clients) => {
         if (!clientId) return 'Unknown Client'
         // Handle both direct ID and nested object structure
@@ -565,10 +636,10 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
         const client = clients.find((c) => String(c?.id) === String(id))
         return client ? client.clientName : 'Unknown Client'
       }
-
       const clientInfo = clients.find((c) => c.id === purchaseBill.clientId)
       const clientAccountName = clientInfo?.clientName || `Client-${purchaseBill.clientId}`
       const createdTransactionIds = []
+
       for (let i = 0; i < rowsDetailed.length; i++) {
         const row = rowsDetailed[i]
         const itemPaid = Number(paidDistribution[i] || 0)
@@ -579,10 +650,10 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
             : purchaseBill.paymentType === 'partial'
               ? Math.max(0, Math.round((purchaseAmount - itemPaid) * 100) / 100)
               : purchaseAmount
-
         const transactionData = {
           clientId: purchaseBill.clientId,
           productId: row.productId,
+          multipleProducts: rowsDetailed,
           quantity: Number(row.quantity),
           purchaseAmount: purchaseAmount,
           paymentType: purchaseBill.paymentType,
@@ -596,19 +667,17 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
           freightCharges: billFreight,
           freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
           paidAmount: itemPaid,
+          dueDate: new Date().setMonth(new Date().getMonth() + 1),
           taxAmount: row.taxes.map((t) => ({ ...t })) || [],
-          createdAt:
-            purchaseBill.billDate || new Date().toISOString().slice(0, 19).replace('T', ' ')
+          date: purchaseBill.billDate || new Date().toISOString().slice(0, 19).replace('T', ' '),
+          isMultiProduct: rowsDetailed.length > 1 ? 1 : 0
         }
         const createdTransaction = await window.api.createTransaction(transactionData)
         createdTransactionIds.push(createdTransaction.id)
-
-        debugger
-
         const baseReceipt = {
           transactionId: createdTransaction.id,
           type: 'Payment',
-          date: purchaseBill.billDate,
+          date: purchaseBill.billDate || new Date().toISOString().slice(0, 19).replace('T', ' '),
           statusOfTransaction: createdTransaction.statusOfTransaction,
           clientId: createdTransaction.clientId,
           paymentType: createdTransaction.paymentType,
@@ -689,14 +758,154 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
       toast.error('Error saving purchase bill: ' + (err.message || err))
     }
   }
+
+  const handleUpdate = async (paymentData) => {
+    try {
+      if (!existingTransaction) {
+        toast.error('No transaction found to update.')
+        return
+      }
+
+      const validRows = purchaseBill.products.filter((p) => p.productId && p.quantity > 0)
+      if (validRows.length === 0) {
+        toast.error('Add at least one product')
+        return
+      }
+
+      // Recalculate everything like in create mode
+      const rowsDetailed = validRows.map((r) => {
+        const price = Number(r.price || 0)
+        const qty = Number(r.quantity || 0)
+        const base = price * qty
+        const taxes = (r.taxAmount || []).map((t) => ({
+          ...t,
+          value: t.percentage > 0 ? (base * t.percentage) / 100 : Number(t.value || 0)
+        }))
+        const taxTotal = taxes.reduce((a, t) => a + (t.value || 0), 0)
+        return { ...r, base, taxes, taxTotal, total: base + taxTotal }
+      })
+
+      const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
+      let totalBillAmount = totalBase
+
+      // Re-apply freight proportionally
+      if (billFreight > 0 && totalBase > 0) {
+        rowsDetailed.forEach((r) => {
+          const share = r.base / totalBase
+          const allocated = Math.round(billFreight * share * 100) / 100
+          r.taxes.push({
+            code: 'freightCharges',
+            name: 'Freight Charges',
+            percentage: 0,
+            value: allocated
+          })
+          r.total += allocated
+          r.taxTotal += allocated
+        })
+        totalBillAmount += billFreight
+      }
+
+      // Determine paid/pending
+      let totalPaid = 0
+      if (purchaseBill.paymentType === 'full') {
+        totalPaid = totalBillAmount
+      } else if (purchaseBill.paymentType === 'partial') {
+        totalPaid = Number(purchaseBill.paidAmount || 0)
+      }
+
+      // Update ALL child transactions that belong to this bill
+      // We identify them by billNo + clientId or by parent reference if you have one
+      // Since you create one transaction per row, we need to update each
+
+      const allTransactions = await window.api.getAllTransactions()
+      const relatedTransactions = allTransactions.filter(
+        (tx) =>
+          tx.billNo === existingTransaction.billNo &&
+          tx.clientId === existingTransaction.clientId &&
+          tx.pageName === 'Purchase'
+      )
+
+      // Delete old receipts
+      for (const tx of relatedTransactions) {
+        if (tx.paymentMethod === 'cash') {
+          await window.api.deleteCashReceiptByTransaction(tx.id).catch(() => {})
+        } else {
+          await window.api.deleteBankReceiptByTransaction(tx.id).catch(() => {})
+        }
+      }
+
+      // Update each transaction with new data
+      for (let i = 0; i < rowsDetailed.length; i++) {
+        const row = rowsDetailed[i]
+        const itemTotal = row.total
+        const itemPaid =
+          purchaseBill.paymentType === 'full'
+            ? itemTotal
+            : purchaseBill.paymentType === 'partial'
+              ? Math.round((itemTotal / totalBillAmount) * totalPaid * 100) / 100
+              : 0
+
+        const pending = Math.max(0, itemTotal - itemPaid)
+
+        let targetTx = relatedTransactions[i]
+
+        const updatedTxData = {
+          id: targetTx?.id || existingTransaction.id, // fallback to first
+          clientId: purchaseBill.clientId,
+          productId: row.productId,
+          multipleProducts: rowsDetailed, // ← Save full list again
+          quantity: row.quantity,
+          sellAmount: row.price,
+          purchaseAmount: itemTotal,
+          paymentType: purchaseBill.paymentType,
+          paymentMethod: purchaseBill.paymentMethod,
+          billNo: purchaseBill.billNumber,
+          statusOfTransaction: purchaseBill.statusOfTransaction,
+          pendingAmount: pending,
+          paidAmount: itemPaid,
+          taxAmount: row.taxes,
+          freightCharges: billFreight,
+          date: purchaseBill.billDate || new Date().toISOString().slice(0, 10)
+        }
+
+        if (targetTx) {
+          await window.api.updateTransaction(updatedTxData)
+        } else {
+          // If somehow missing, recreate
+          await window.api.createTransaction(updatedTxData)
+        }
+
+        // Recreate receipt if paid > 0
+        if (itemPaid > 0) {
+          const receiptBase = {
+            /* same as before */
+          }
+          if (purchaseBill.paymentMethod === 'bank') {
+            await window.api.createBankReceipt(receiptBase)
+          } else {
+            await window.api.createCashReceipt(receiptBase)
+          }
+        }
+      }
+
+      // Update ledger too if needed...
+
+      toast.success('Multi-product purchase updated successfully!')
+      const list = await window.api.getAllTransactions()
+      dispatch(setTransactions(list))
+      setShowPurchaseBillModal(false)
+    } catch (err) {
+      console.error(err)
+      toast.error('Update failed')
+    }
+  }
+
   /* ========= Next Handler ========= */
   const handleNext = async () => {
     if (!validateForm()) return
     setShowPaymentModal(true)
   }
-
   const [accounts, setAccounts] = useState([])
-
   useEffect(() => {
     const fetchAccounts = async () => {
       const accounts = await window.api.getAllAccounts()
@@ -704,13 +913,10 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
     }
     fetchAccounts()
   }, [])
-
   const cashAccount = accounts.find((acc) => acc.accountName.toUpperCase() === 'CASH ACCOUNT')
   const bankAccount = accounts.find((acc) => acc.accountName.toUpperCase() === 'BANK ACCOUNT')
-
   const CASH_ACCOUNT_ID = cashAccount?.id
   const BANK_ACCOUNT_ID = bankAccount?.id
-
   const handlePaymentConfirm = async (paymentData) => {
     try {
       // Update local state for UI only
@@ -769,29 +975,29 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
       }
       // Update source account balance (subtract amount)
       // if (sourceAccount) {
-      //   try {
-      //     // ensure numeric balance
-      //     const prevBal = Number(sourceAccount.balance || 0)
-      //     const newBal = Math.round((prevBal - amount) * 100) / 100
-      //     const updatedAccount = { ...sourceAccount, balance: newBal }
-      //     // call update API
-      //     if (typeof window.api.updateAccount === 'function') {
-      //       const response = await window.api.updateAccount(updatedAccount)
-      //       dispatch(setAccount(response))
-      //     } else if (typeof accountApi.updateAccount === 'function') {
-      //       const response = await accountApi.updateAccount(updatedAccount)
-      //       dispatch(setAccount(response))
-      //     } else {
-      //       console.warn('No updateAccount method found on window.api or accountApi')
-      //     }
-      //   } catch (err) {
-      //     console.error('Failed to update source account balance', err)
-      //     // continue but warn user
-      //     toast.warn('Failed to update source account balance (check console).')
-      //   }
+      // try {
+      // // ensure numeric balance
+      // const prevBal = Number(sourceAccount.balance || 0)
+      // const newBal = Math.round((prevBal - amount) * 100) / 100
+      // const updatedAccount = { ...sourceAccount, balance: newBal }
+      // // call update API
+      // if (typeof window.api.updateAccount === 'function') {
+      // const response = await window.api.updateAccount(updatedAccount)
+      // dispatch(setAccount(response))
+      // } else if (typeof accountApi.updateAccount === 'function') {
+      // const response = await accountApi.updateAccount(updatedAccount)
+      // dispatch(setAccount(response))
       // } else {
-      //   // If no account object available (maybe external cash), you can still create ledger tx with label
-      //   console.warn('Source account not found, ledger will be created with name only.')
+      // console.warn('No updateAccount method found on window.api or accountApi')
+      // }
+      // } catch (err) {
+      // console.error('Failed to update source account balance', err)
+      // // continue but warn user
+      // toast.warn('Failed to update source account balance (check console).')
+      // }
+      // } else {
+      // // If no account object available (maybe external cash), you can still create ledger tx with label
+      // console.warn('Source account not found, ledger will be created with name only.')
       // }
       // Create ledger transaction record
       try {
@@ -808,7 +1014,13 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
       }
       // Continue with existing purchase submission which will create receipts & transactions for each row.
       // Pass paymentData so handleSubmit uses sendTo/amount etc.
-      await handleSubmit(paymentData)
+
+      if (isUpdateExpense) {
+        await handleUpdate(paymentData) // Now passes paymentData with sendTo
+      } else {
+        await handleSubmit(paymentData)
+      }
+
       setShowPaymentModal(false)
     } catch (error) {
       console.error('Payment processing failed:', error)
@@ -837,6 +1049,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
         toast.error('Failed to generate PDF. Check console for details.')
       })
   }, [generateInvoiceHtml])
+
   const formatTransactionId = (id) => {
     if (!id) return ''
     const padded = id.toString().padStart(6, '0')
@@ -854,66 +1067,33 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
     exit: { opacity: 0, transition: { duration: 0.1 } }
   }
 
-  // Add this state near other useState (e.g., after purchaseBill)
-  const [freightTaxOpen, setFreightTaxOpen] = useState(false)
-
-  // Add this useCallback for stability (near other handlers)
-  const handleFreightTaxChange = useCallback(
-    (values) => {
-      console.log('Freight Tax onChange fired:', values) // Debug: Check console on select
-      if (!values || values.length === 0) {
-        setPurchaseBill((prev) => ({ ...prev, freightTaxAmount: [] }))
-        return
-      }
-      const selectedItems = settings.filter((s) => values.includes(s.id))
-      console.log('Selected items from settings:', selectedItems) // Debug
-      const newTaxes = selectedItems.map((item) => {
-        const taxValue = ((purchaseBill.freightCharges || 0) * item.rate) / 100
-        return {
-          id: item.value, // Matches data.value (t.id)
-          name: item.name,
-          rate: item.rate,
-          value: taxValue
+  useEffect(() => {
+    if (isUpdateExpense && existingTransaction && showPaymentModal) {
+      // Fetch existing receipt to get sendTo, etc.
+      const fetchExistingReceipt = async () => {
+        try {
+          let existingReceipt
+          if (existingTransaction.paymentMethod === 'cash') {
+            existingReceipt = await window.api.getCashReceiptByTransactionId(existingTransaction.id)
+          } else {
+            existingReceipt = await window.api.getBankReceiptByTransactionId(existingTransaction.id)
+          }
+          if (existingReceipt) {
+            // Set local state or pass to modal (e.g., via props or context)
+            setPurchaseBill((prev) => ({
+              ...prev,
+              sendTo: existingReceipt.sendTo || ''
+              // Add other fields like chequeNumber if needed
+            }))
+            // If modal has internal state, you may need to expose a prop like initialSendTo
+          }
+        } catch (err) {
+          console.error('Failed to fetch existing receipt:', err)
         }
-      })
-      console.log('Computed newTaxes:', newTaxes) // Debug
-      setPurchaseBill((prev) => ({
-        ...prev,
-        freightTaxAmount: newTaxes
-      }))
-    },
-    [purchaseBill.freightCharges, settings]
-  ) // Deps for stability
-
-  // In the JSX (Freight Tax div)
-  ;<div className="p-4 bg-white/60 rounded-xl border border-gray-100">
-    <label className="block text-sm font-semibold mb-2 text-gray-700">Freight Tax</label>
-    {settings.length === 0 ? (
-      <p className="text-sm text-gray-500 italic">No taxes available. Create in Settings.</p>
-    ) : (
-      <CheckPicker
-        data={settings.map((t) => ({
-          label: `${t.taxName} (${t.taxValue}%)`,
-          value: t.id,
-          rate: t.taxValue,
-          name: t.taxName
-        }))}
-        value={purchaseBill.freightTaxAmount?.map((t) => t.id) || []}
-        open={freightTaxOpen} // ✅ Controlled open state
-        onOpen={() => setFreightTaxOpen(true)} // Keep open on click
-        onClose={() => setFreightTaxOpen(false)} // Close only on explicit close
-        placeholder="Select Freight Taxes"
-        virtualized={false} // ✅ Disable: Fixes selection bugs on small lists
-        preventOverflow={false} // ✅ Allow free positioning, avoids clipping
-        container={() => document.getElementById('purchase-bill-container')}
-        menuMaxHeight={200}
-        menuStyle={{ zIndex: 99999, position: 'absolute' }}
-        className="w-full max-w-xs [&_.rs-picker-toggle]:rounded-lg [&_.rs-picker-toggle]:border-gray-300/50 [&_.rs-picker-toggle]:bg-white/50 hover:[&_.rs-picker-toggle]:bg-white/70"
-        onChange={handleFreightTaxChange} // Use stable callback
-        cleanable={true} // Allow clear
-      />
-    )}
-  </div>
+      }
+      fetchExistingReceipt()
+    }
+  }, [isUpdateExpense, existingTransaction, showPaymentModal])
 
   return (
     <AnimatePresence>
@@ -951,7 +1131,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
         )}
         <div
           id="purchase-bill-container"
-          className="w-full h-full flex items-center justify-center"
+          className="w-full h-full flex items-center justify-center relative"
         >
           <motion.div
             layout={false}
@@ -964,7 +1144,9 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
                 <div className="flex gap-2">
                   <div className="flex items-center gap-3">
                     <div>
-                      <p className="text-2xl font-bold text-gray-900">Create Purchase Bill</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {isUpdateExpense ? 'Update Purchase Bill' : 'Create Purchase Bill'}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 bg-white/40 text-indigo-700 font-medium p-2 text-sm rounded-full px-3 ring-1 ring-indigo-200">
@@ -1046,64 +1228,8 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
                       className="w-full rounded-lg border border-gray-300 bg-white/50 shadow-sm focus:ring-2 focus:ring-indigo-200 focus:outline-none h-10 px-3"
                     />
                   </div>
-                  {/* <div className="relative">
-                    <label className="block text-sm font-semibold mb-2 text-gray-700 flex items-center gap-2">
-                      <Package size={16} className="text-green-500" />
-                      Quick Add Product
-                    </label>
-                    <SelectPicker
-                      data={products.map((p) => ({
-                        label: p.name,
-                        value: p.id,
-                        qty: p.quantity || 0
-                      }))}
-                      value={null}
-                      container={() => document.getElementById('purchase-bill-container')}
-                      menuStyle={{ zIndex: 99999, position: 'absolute', borderRadius: '12px' }}
-                      virtualized={true}
-                      onChange={(value) => {
-                        if (!value) return
-                        setPurchaseBill((prev) => ({
-                          ...prev,
-                          products: [
-                            ...prev.products,
-                            {
-                              productId: value,
-                              quantity: 1,
-                              taxAmount: [],
-                              price: products.find((p) => p.id === value)?.price || 0,
-                              description: ''
-                            }
-                          ]
-                        }))
-                      }}
-                      menuMaxHeight={250}
-                      placeholder="Pick a product to add"
-                      style={{ width: '100%' }}
-                      className="!rounded-xl 0 [&_.rs-picker-toggle]:border-white/50 [&_.rs-picker-toggle]:bg-white/50 [&_.rs-picker-toggle]:shadow-sm hover:[&_.rs-picker-toggle]:bg-white/70"
-                      renderMenuItem={(label, item) => (
-                        <div className="flex justify-between w-full items-center px-3 py-2">
-                          <span className="truncate max-w-[500px] font-medium">{label}</span>
-                          <span
-                            className={`text-xs font-semibold px-2 py-1 rounded-full ${item.qty > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
-                          >
-                            {item.qty}
-                          </span>
-                        </div>
-                      )}
-                      renderExtraFooter={() => (
-                        <div className="px-4 py-2 border-t border-gray-200 bg-gray-50">
-                          <p
-                            className="text-green-600 text-sm font-semibold cursor-pointer hover:text-green-700 transition-colors flex items-center gap-1"
-                            onClick={() => setProductModal(true)}
-                          >
-                            <Plus size={14} /> Create New Product
-                          </p>
-                        </div>
-                      )}
-                    />
-                  </div> */}
                 </div>
+
                 {/* Product list */}
                 <motion.div className="bg-white rounded-2xl shadow-md border border-gray-200 transition-all duration-300 hover:shadow-lg overflow-auto customScrollbar">
                   <table className="w-full table-fixed border-collapse rounded-2xl">
@@ -1278,35 +1404,35 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
                           name: t.taxName
                         }))}
                         value={purchaseBill.freightTaxAmount?.map((t) => t.id) || []}
+                        placement="top"
                         placeholder="Select Freight Taxes"
                         virtualized={false}
-                        placement="top"
                         preventOverflow={false}
                         container={() => document.getElementById('purchase-bill-container')}
                         menuMaxHeight={200}
                         menuStyle={{ zIndex: 99999, position: 'absolute' }}
                         className="w-full max-w-xs [&_.rs-picker-toggle]:rounded-lg [&_.rs-picker-toggle]:border-gray-300/50 [&_.rs-picker-toggle]:bg-white/50 hover:[&_.rs-picker-toggle]:bg-white/70"
-                        cleanable
-                        onChange={(values) => {
-                          if (!values || values.length === 0) {
+                        onChange={(selectedIds) => {
+                          if (!selectedIds || selectedIds.length === 0) {
                             setPurchaseBill((prev) => ({ ...prev, freightTaxAmount: [] }))
                             return
                           }
 
-                          const selectedItems = settings.filter((s) => values.includes(s.id))
+                          const selectedTaxes = settings.filter((t) => selectedIds.includes(t.id))
 
-                          const newTaxes = selectedItems.map((item) => ({
-                            id: item.id,
-                            name: item.taxName,
-                            rate: item.taxValue,
-                            value: ((purchaseBill.freightCharges || 0) * item.taxValue) / 100
+                          const updatedFreightTaxes = selectedTaxes.map((t) => ({
+                            id: t.id,
+                            name: t.taxName,
+                            rate: t.taxValue,
+                            value: ((purchaseBill.freightCharges || 0) * t.taxValue) / 100
                           }))
 
                           setPurchaseBill((prev) => ({
                             ...prev,
-                            freightTaxAmount: newTaxes
+                            freightTaxAmount: updatedFreightTaxes
                           }))
                         }}
+                        cleanable={true} // Allow clear
                       />
                     </div>
                   </motion.div>
@@ -1441,17 +1567,34 @@ const PurchaseBill = ({ setShowPurchaseBillModal }) => {
                   )}
                   <div className="border-t border-white/30 space-y-3">
                     {/* Next Button */}
-                    <button
-                      type="button"
-                      onClick={handleNext}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-4
+                    {isUpdateExpense ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!validateForm()) return
+                          setShowPaymentModal(true) // Show modal, prefilled below
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-4
       bg-gradient-to-r from-indigo-500 via-purple-600 to-indigo-700
       text-white rounded-2xl font-bold shadow-lg hover:shadow-xl
       transition-all duration-300 transform hover:scale-[1.03] active:scale-[0.98] cursor-pointer"
-                    >
-                      Next: Payment Method
-                      <ArrowRight size={18} />
-                    </button>
+                      >
+                        Next: Review Payment
+                        <ArrowRight size={18} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleNext}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-4
+      bg-gradient-to-r from-indigo-500 via-purple-600 to-indigo-700
+      text-white rounded-2xl font-bold shadow-lg hover:shadow-xl
+      transition-all duration-300 transform hover:scale-[1.03] active:scale-[0.98] cursor-pointer"
+                      >
+                        Next: Payment Method
+                        <ArrowRight size={18} />
+                      </button>
+                    )}
                     {/* PDF Download Button */}
                     <div className="flex flex-col sm:flex-row gap-3">
                       <button

@@ -134,10 +134,13 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
       // const response = await window.api.getAllTransactions()
       const bankReceipts = await window.api.getRecentBankReceipts()
       const cashReceipts = await window.api.getRecentCashReceipts()
+      const transactions = await window.api.getAllTransactions()
+      console.log('transaction', transactions)
       // const filteredResponse = response.filter((transaction) => transaction.clientId === id)
       const filteredBankReceipts = bankReceipts.filter((receipt) => receipt.clientId === id)
       const filteredCashReceipts = cashReceipts.filter((receipt) => receipt.clientId === id)
-      const combinedHistory = [...filteredBankReceipts, ...filteredCashReceipts]
+      const filteredTransactions = transactions.filter((receipt) => receipt.clientId === id)
+      const combinedHistory = [...filteredTransactions]
       setClientHistory(combinedHistory)
     } catch (error) {
       toast.error('Failed to fetch client details: ' + error.message)
@@ -369,6 +372,7 @@ const ClientList = () => {
     { key: 'date', label: 'Date', width: 'w-[100px]', icon: Calendar1 },
     { key: 'product', label: 'Product', width: 'w-[150px]', icon: Package },
     { key: 'quantity', label: 'Quantity', width: 'w-[150px]', icon: Box },
+    { key: 'amount', label: 'Amount', width: 'w-[50px]', icon: TrendingUp },
     { key: 'status', label: 'Status', width: 'w-[50px]', icon: TrendingUp }
   ]
   const ACCOUNT_TYPE_OPTIONS = [
@@ -765,7 +769,7 @@ const ClientList = () => {
         overflow={overflow}
         open={open}
         onClose={() => setOpen(false)}
-        size="md"
+        size="lg"
         className="modern-history-modal"
       >
         <Modal.Header className="py-2">
@@ -805,9 +809,21 @@ const ClientList = () => {
                     <div className="flex items-center gap-2">
                       <IndianRupee size={24} className="text-orange-600" />
                       <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-                        {console.log(clientHistory)}
+                        {console.log(
+                          clientHistory.filter(
+                            (f) =>
+                              f.transactionType === 'purchase' &&
+                              f.statusOfTransaction === 'pending'
+                          )
+                        )}
                         {toThousands(
-                          clientHistory.reduce((total, t) => total + t.pendingFromOurs, 0)
+                          clientHistory
+                            .filter(
+                              (f) =>
+                                f.transactionType === 'purchase' &&
+                                f.statusOfTransaction === 'pending'
+                            )
+                            .reduce((total, t) => total + t.purchaseAmount, 0)
                         )}
                       </h2>
                     </div>
@@ -870,6 +886,23 @@ const ClientList = () => {
                             {/* Quantity */}
                             <td className="px-6 py-3 font-medium text-gray-800">
                               {t.quantity || '-'}
+                            </td>
+                            <td className="px-6 py-3 font-medium text-gray-800">
+                              {t.isMultiProduct === 1 ? (
+                                <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
+                                  {
+                                    t[0]?.multipleProducts?.map((p) => (
+                                      <span key={p.id}>
+                                        {p.name} x {p.quantity}
+                                      </span>
+                                    ))
+                                  }
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
+                                  ₹{toThousands(t.totalAmount) || '-'}
+                                </span>
+                              )}
                             </td>
                             {/* Status */}
                             <td className="px-6 py-3 flex items-center gap-2 relative">

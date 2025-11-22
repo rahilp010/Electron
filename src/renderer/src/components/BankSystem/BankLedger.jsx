@@ -67,6 +67,7 @@ const getInitials = (name) => {
     .map((n) => n[0])
     .join('')
     .toUpperCase()
+    .slice(0, 2)
 }
 
 // Memoized Transaction Row Component
@@ -287,6 +288,8 @@ const BankLedger = ({ client, onClose }) => {
   // FILTER ONLY REAL RECEIPTS — NO OPENING ROW
   const filteredData = useMemo(() => {
     const allReceipts = [...recentBankReceipts, ...recentCashReceipts]
+
+    console.log('allReceipts', allReceipts)
 
     // const receipts = allReceipts.filter((r) => r.statusOfTransaction === 'pending')
     if (!selectedClient?.id) return []
@@ -726,8 +729,8 @@ const BankLedger = ({ client, onClose }) => {
                       className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200
                         ${
                           selectedClient?.id === account?.id
-                            ? 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600 backdrop-blur-sm'
-                            : 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600'
+                            ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300'
+                            : 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300'
                         }`}
                     >
                       {getInitials(account?.accountName)}
@@ -781,7 +784,7 @@ const BankLedger = ({ client, onClose }) => {
               <p className="text-3xl font-light">Account Ledger</p>
             </div>
             {selectedClient && (
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-full shadow-lg">
+              <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-full flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300 px-4 py-2 ">
                 <span className="font-semibold text-sm">{selectedClient?.accountName}</span>
               </div>
             )}

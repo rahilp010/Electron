@@ -54,9 +54,14 @@ const AccountList = () => {
       console.log(recentReceipts)
 
       const matchingReceipts = recentReceipts.filter((r) => {
-        if (r.transactionAccount && r.transactionAccount === acc.id) return true
+        const txnAcc = r.transactionAccount ? String(r.transactionAccount).trim() : ''
+        const accId = String(acc.id).trim()
 
-        if (r.sendTo && r.sendTo.toLowerCase() === acc.accountName.toLowerCase()) return true
+        if (txnAcc && txnAcc === accId) return true
+
+        if (r.sendTo && r.sendTo.toLowerCase().trim() === acc.accountName.toLowerCase().trim())
+          return true
+
         return false
       })
 
@@ -126,8 +131,10 @@ const AccountList = () => {
     return new Intl.NumberFormat('en-IN').format(Number(value))
   }
 
+  console.log('🧾 recentReceipts:', recentReceipts)
+
   return (
-    <div className="h-screen w-full overflow-hidden select-none bg-gray-50">
+    <div className="max-h-screen w-full select-none bg-gray-50 customScrollbar overflow-auto">
       <Navbar />
       {/* Header Section */}
       <div className="flex justify-between items-center mt-6 px-7">
@@ -167,7 +174,7 @@ const AccountList = () => {
       </div>
 
       {/* Table Section */}
-      <div className="mt-8 mx-5 bg-white border border-gray-200 rounded-2xl shadow-lg overflow-hidden h-[calc(100vh-200px)]">
+      <div className="mt-8 mx-5 bg-white border border-gray-200 rounded-2xl shadow-lg customScrollbar overflow-auto h-[calc(100vh-200px)]">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0">

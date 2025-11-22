@@ -36,6 +36,12 @@ contextBridge.exposeInMainWorld('api', {
   createCashReceipt: (cashReceipt) => ipcRenderer.invoke('createCashReceipt', cashReceipt),
   updateCashReceipt: (cashReceipt) => ipcRenderer.invoke('updateCashReceipt', cashReceipt),
   deleteCashReceipt: (id) => ipcRenderer.invoke('deleteCashReceipt', id),
+  deleteCashReceiptByTransaction: (transactionId) =>
+    ipcRenderer.invoke('deleteCashReceiptByTransaction', transactionId),
+  deleteBankReceiptByTransaction: (transactionId) =>
+    ipcRenderer.invoke('deleteBankReceiptByTransaction', transactionId),
+  getCashReceiptByTransactionId: (transactionId) =>
+    ipcRenderer.invoke('getCashReceiptByTransactionId', transactionId),
 
   // Excel Import
   importExcel: (filePath, tableName) => ipcRenderer.invoke('importExcel', filePath, tableName),

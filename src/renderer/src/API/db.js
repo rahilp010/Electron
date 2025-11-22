@@ -14,6 +14,12 @@ const db = new Database(dbPath)
 // Enable foreign key constraints
 db.pragma('foreign_keys = ON')
 
+// db.prepare(
+//   `
+//  ALTER TABLE cashReceipts ADD COLUMN billNo TEXT;
+// `
+// ).run()
+
 // db.prepare('DROP TABLE products;').run()
 // db.prepare('DROP TABLE clients;').run()
 // db.prepare('DROP TABLE transactions;').run()
@@ -68,6 +74,8 @@ db.prepare(
     sellAmount REAL NOT NULL,
     purchaseAmount REAL NOT NULL,
     totalAmount REAL,
+    multipleProducts TEXT,
+    isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1)),
     paymentMethod TEXT NOT NULL DEFAULT 'bank' CHECK (paymentMethod IN ('cash', 'bank')),
     statusOfTransaction TEXT NOT NULL DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
     paymentType TEXT DEFAULT 'full' CHECK (paymentType IN ('full', 'partial')),
@@ -110,6 +118,7 @@ db.prepare(
   pendingFromOurs REAL DEFAULT 0,
   paidAmount REAL DEFAULT 0,
   quantity REAL,
+  billNo TEXT,
   pageName TEXT DEFAULT 'Bank Receipt',
   sendTo TEXT,
   chequeNumber TEXT,
@@ -136,6 +145,7 @@ db.prepare(
     date DATETIME NOT NULL,
     amount REAL NOT NULL,
     description TEXT,
+    billNo TEXT,
     taxAmount TEXT,
     statusOfTransaction TEXT DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
     dueDate DATETIME,

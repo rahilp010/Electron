@@ -61,8 +61,7 @@ const SalesRow = ({ index, row, products, settings, onChange, onRemove, toThousa
     ...settings.map((s) => ({
       label: `${s.taxName} (${s.taxValue}%)`,
       value: `custom-${s.id}`
-    })),
-    { label: 'Freight Charges', value: 'frightChanged' }
+    }))
   ]
 
   return (
@@ -74,7 +73,7 @@ const SalesRow = ({ index, row, products, settings, onChange, onRemove, toThousa
     >
       <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
         <SelectPicker
-          data={products.map((p) => ({ label: p.name, value: p.id, qty: p.stockQuantity || 0 }))}
+          data={products.map((p) => ({ label: p.name, value: p.id, qty: p.quantity || 0 }))}
           value={row.productId}
           placeholder="Select Product"
           virtualized={true}
@@ -134,7 +133,7 @@ const SalesRow = ({ index, row, products, settings, onChange, onRemove, toThousa
       </td>
       <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">
         <Input
-          value={row.description}
+          value={row.description || ''}
           onChange={(val) => onChange(index, 'description', val)}
           placeholder="Description"
           style={{ width: '100%' }}
@@ -160,11 +159,9 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
   const settings = useSelector((state) => state.electron.settings.data || [])
-
   const [clientModal, setClientModal] = useState(false)
   const [productModal, setProductModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
-
   const [salesBill, setSalesBill] = useState({
     clientId: '',
     billNumber: '',
@@ -175,9 +172,10 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
     frightCharges: 0,
     paidAmount: 0,
     freightTaxAmount: [],
-    products: [{ productId: '', quantity: 1, taxAmount: [], price: 0 }]
+    products: [{ productId: '', quantity: 1, taxAmount: [], price: 0, description: '' }]
   })
 
+  const [nextBillId, setNextBillId] = useState(null)
   useEffect(() => {
     if (!existingTransaction || !isUpdateExpense) return
 
@@ -206,8 +204,6 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       ]
     }))
   }, [existingTransaction, isUpdateExpense])
-
-  const [nextBillId, setNextBillId] = useState(null)
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -575,7 +571,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
  </html>
  `
     return html
-  }, [salesBill, products, clients, billSubTotal, billFreight, grandTotal, toThousands, nextBillId])
+  }, [salesBill, products, clients, billSubTotal, billFreight, grandTotal, nextBillId])
 
   const handleSubmit = async (paymentData) => {
     try {
@@ -688,6 +684,8 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           transactionType: 'sales',
           pendingAmount: pendingAmount,
           paidAmount: itemPaid,
+          freightCharges: billFreight,
+          freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
           totalAmount: sellAmount,
           taxAmount: row.taxes.map((t) => ({ ...t })) || [],
           dueDate: new Date().setMonth(new Date().getMonth() + 1),
@@ -715,7 +713,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
             transactionAccount: paymentData?.transactionAccount || ''
           }
           if (salesBill.paymentMethod === 'bank') {
-            await window.api
+            const response = await window.api
               .createBankReceipt({
                 ...baseReceipt,
                 bank: 'IDBI',
@@ -725,8 +723,9 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
               .catch((e) => {
                 console.error('createBankReceipt failed', e)
               })
+            dispatch(setBankReceipt(response))
           } else {
-            await window.api
+            const response = await window.api
               .createCashReceipt({
                 ...baseReceipt,
                 cash: 'Cash',
@@ -736,6 +735,8 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
               .catch((e) => {
                 console.error('createCashReceipt failed', e)
               })
+
+            dispatch(setCashReceipt(response))
           }
         }
       }
@@ -777,6 +778,145 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
     } catch (err) {
       console.error('Error saving sales bill', err)
       toast.error('Error saving sales bill: ' + (err.message || err))
+    }
+  }
+
+  const handleUpdate = async (paymentData) => {
+    try {
+      if (!existingTransaction) {
+        toast.error('No transaction found to update.')
+        return
+      }
+
+      // Single-row model (your updateExpense mode uses only one row)
+      const row = salesBill.products[0]
+      if (!row || !row.productId) {
+        toast.error('Select a product')
+        return
+      }
+
+      const price = Number(row.price || 0)
+      const qty = Number(row.quantity || 0)
+      const base = price * qty
+      const taxes = (row.taxAmount || []).map((t) => ({
+        ...t,
+        value: t.percentage && t.percentage > 0 ? (base * t.percentage) / 100 : Number(t.value || 0)
+      }))
+
+      const taxTotal = taxes.reduce((a, t) => a + (t.value || 0), 0)
+      let total = base + taxTotal
+
+      // Freight apply if needed
+      if (salesBill.frightCharges > 0) {
+        total += Number(salesBill.frightCharges || 0)
+      }
+
+      // Payment logic
+      let paidAmount = 0
+      let pendingAmount = total
+      if (salesBill.paymentType === 'full') {
+        paidAmount = total
+        pendingAmount = 0
+      } else if (salesBill.paymentType === 'partial') {
+        paidAmount = Number(salesBill.paidAmount || 0)
+        pendingAmount = Math.max(0, total - paidAmount)
+      }
+
+      // ---------------------------------------------
+      // 1️⃣ UPDATE TRANSACTION BASED ON ID
+      // ---------------------------------------------
+      const updatedTxData = {
+        id: existingTransaction.id,
+        clientId: salesBill.clientId,
+        productId: row.productId,
+        quantity: qty,
+        sellAmount: price,
+        purchaseAmount: total,
+        billNo: existingTransaction.billNo,
+        paymentType: salesBill.paymentType,
+        paymentMethod: salesBill.paymentMethod,
+        statusOfTransaction: salesBill.statusOfTransaction,
+        pageName: 'Sales',
+        transactionType: 'sales',
+        pendingAmount,
+        paidAmount,
+        totalAmount: total,
+        taxAmount: taxes,
+        dueDate: existingTransaction.dueDate,
+        date: salesBill.billDate || new Date().toISOString().slice(0, 19).replace('T', ' ')
+      }
+
+      await window.api.updateTransaction(updatedTxData)
+
+      // ---------------------------------------------
+      // 2️⃣ UPDATE RECEIPTS FOR THIS transactionId
+      // ---------------------------------------------
+      // Remove EXISTING receipts for this transaction only
+
+      try {
+        // Remove EXISTING receipts for this transaction only
+        let deleteResult = null
+        if (existingTransaction.paymentMethod === 'cash') {
+          deleteResult = await window.api.deleteCashReceiptByTransaction(existingTransaction.id)
+        } else if (existingTransaction.paymentMethod === 'bank') {
+          deleteResult = await window.api.deleteBankReceiptByTransaction(existingTransaction.id)
+        }
+
+        if (!deleteResult?.success) {
+          console.warn('Receipt deletion warning:', deleteResult?.message)
+        } else {
+          console.log('Receipt deleted successfully:', deleteResult)
+        }
+      } catch (deleteErr) {
+        console.error('Receipt deletion failed:', deleteErr)
+        toast.warn('Failed to clean up old receipt; proceeding with update.')
+      }
+
+      // Recreate receipt only if paidAmount > 0
+      if (paidAmount > 0) {
+        const receiptBase = {
+          transactionId: existingTransaction.id,
+          type: 'Receipt',
+          date: salesBill.billDate,
+          statusOfTransaction: salesBill.statusOfTransaction,
+          cash: 'cash',
+          bank: 'IDBI',
+          clientId: salesBill.clientId,
+          paymentType: salesBill.paymentType,
+          party: clients.find((c) => c.id === salesBill.clientId)?.clientName || 'Unknown',
+          amount: paidAmount,
+          description: `Sales of ${
+            products.find((p) => p.id === row.productId)?.name || ''
+          }`,
+          productId: row.productId,
+          taxAmount: taxes,
+          pageName: 'Sales',
+          pendingAmount,
+          paidAmount,
+          sendTo: paymentData?.sendTo || '',
+          chequeNumber: paymentData?.chequeNumber || '',
+          transactionAccount: paymentData?.transactionAccount || '',
+          billNo: existingTransaction.billNo
+        }
+
+        if (salesBill.paymentMethod === 'bank') {
+          await window.api.createBankReceipt(receiptBase)
+        } else {
+          await window.api.createCashReceipt(receiptBase)
+        }
+      }
+
+      // ---------------------------------------------
+      // 3️⃣ REFRESH UI
+      // ---------------------------------------------
+      const list = await window.api.getAllTransactions()
+      dispatch(setTransactions(list))
+
+      toast.success('Sales bill updated successfully')
+      setShowSalesBillModal(false)
+    } catch (err) {
+      console.error('Update error:', err)
+      toast.error('Failed to update')
     }
   }
 
@@ -852,42 +992,6 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         createdAt: new Date().toISOString()
       }
 
-      // 1) Update source account balance (add amount for sales)
-      // if (sourceAccount) {
-      //   try {
-      //     // ensure numeric balance
-      //     const prevBal = Number(sourceAccount.balance || 0)
-      //     const newBal = Math.round((prevBal + amount) * 100) / 100
-      //     const updatedAccount = { ...sourceAccount, balance: newBal }
-
-      //     // call update API
-      //     if (typeof window.api.updateAccount === 'function') {
-      //       await window.api.updateAccount(updatedAccount)
-      //     } else if (typeof accountApi.updateAccount === 'function') {
-      //       await accountApi.updateAccount(updatedAccount)
-      //     } else {
-      //       console.warn('No updateAccount method found on window.api or accountApi')
-      //     }
-
-      //     // optimistic UI update (dispatch redux if you prefer)
-      //     dispatch(
-      //       setAccount
-      //         ? setAccount((prev) => {
-      //             return prev
-      //           })
-      //         : { type: 'NOOP' }
-      //     )
-      //   } catch (err) {
-      //     console.error('Failed to update source account balance', err)
-      //     // continue but warn user
-      //     toast.warn('Failed to update source account balance (check console).')
-      //   }
-      // } else {
-      //   // If no account object available (maybe external cash), you can still create ledger tx with label
-      //   console.warn('Source account not found, ledger will be created with name only.')
-      // }
-
-      // 2) Create ledger transaction record
       try {
         if (typeof window.api.createLedgerTransaction === 'function') {
           await window.api.createLedgerTransaction(ledgerTx)
@@ -903,10 +1007,14 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
 
       // 3) Continue with existing sales submission which will create receipts & transactions for each row.
       // Pass paymentData so handleSubmit uses sendTo/amount etc.
-      await handleSubmit(paymentData)
+
+      if (isUpdateExpense) {
+        await handleUpdate(paymentData) // Now passes paymentData with sendTo
+      } else {
+        await handleSubmit(paymentData)
+      }
 
       setShowPaymentModal(false)
-      toast.success(`Payment of ₹${amount.toLocaleString('en-IN')} recorded.`)
     } catch (error) {
       console.error('Payment processing failed:', error)
       toast.error('Payment processing failed')
@@ -953,6 +1061,34 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
     visible: { opacity: 1, transition: { duration: 0.15, ease: 'easeOut' } },
     exit: { opacity: 0, transition: { duration: 0.1 } }
   }
+
+  useEffect(() => {
+    if (isUpdateExpense && existingTransaction && showPaymentModal) {
+      // Fetch existing receipt to get sendTo, etc.
+      const fetchExistingReceipt = async () => {
+        try {
+          let existingReceipt
+          if (existingTransaction.paymentMethod === 'cash') {
+            existingReceipt = await window.api.getCashReceiptByTransactionId(existingTransaction.id)
+          } else {
+            existingReceipt = await window.api.getBankReceiptByTransactionId(existingTransaction.id)
+          }
+          if (existingReceipt) {
+            // Set local state or pass to modal (e.g., via props or context)
+            setSalesBill((prev) => ({
+              ...prev,
+              sendTo: existingReceipt.sendTo || ''
+              // Add other fields like chequeNumber if needed
+            }))
+            // If modal has internal state, you may need to expose a prop like initialSendTo
+          }
+        } catch (err) {
+          console.error('Failed to fetch existing receipt:', err)
+        }
+      }
+      fetchExistingReceipt()
+    }
+  }, [isUpdateExpense, existingTransaction, showPaymentModal])
 
   return (
     <>
@@ -1004,7 +1140,9 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
                   <div className="flex gap-2">
                     <div className="flex items-center gap-3">
                       <div>
-                        <p className="text-2xl font-bold text-gray-900">Create Sales Bill</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {isUpdateExpense ? 'Update Sales Bill' : 'Create Sales Bill'}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 bg-white/40 text-indigo-700 font-medium p-2 text-sm rounded-full px-3 ring-1 ring-indigo-200">
@@ -1287,7 +1425,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
                               id: t.id,
                               name: t.taxName,
                               rate: t.taxValue,
-                              value: ((salesBill.frightCharges || 0) * t.taxValue) / 100
+                              value: ((salesBill.freightCharges || 0) * t.taxValue) / 100
                             }))
 
                             setSalesBill((prev) => ({
@@ -1437,17 +1575,34 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
 
                     <div className="border-t border-white/30 space-y-3">
                       {/* Next Button */}
-                      <button
-                        type="button"
-                        onClick={handleNext}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-4 
+                      {isUpdateExpense ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!validateForm()) return
+                            setShowPaymentModal(true) // Show modal, prefilled below
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-6 py-4 
       bg-gradient-to-r from-indigo-500 via-purple-600 to-indigo-700 
       text-white rounded-2xl font-bold shadow-lg hover:shadow-xl 
       transition-all duration-300 transform hover:scale-[1.03] active:scale-[0.98] cursor-pointer"
-                      >
-                        Next: Payment Method
-                        <ArrowRight size={18} />
-                      </button>
+                        >
+                          Next: Review Payment
+                          <ArrowRight size={18} />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleNext}
+                          className="w-full flex items-center justify-center gap-2 px-6 py-4 
+      bg-gradient-to-r from-indigo-500 via-purple-600 to-indigo-700 
+      text-white rounded-2xl font-bold shadow-lg hover:shadow-xl 
+      transition-all duration-300 transform hover:scale-[1.03] active:scale-[0.98] cursor-pointer"
+                        >
+                          Next: Payment Method
+                          <ArrowRight size={18} />
+                        </button>
+                      )}
 
                       {/* PDF Download Button */}
                       <div className="flex flex-col sm:flex-row gap-3">

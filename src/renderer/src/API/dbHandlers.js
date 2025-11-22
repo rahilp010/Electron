@@ -161,7 +161,7 @@ ipcMain.handle('updateProduct', (event, product) => {
     .prepare(
       `
       UPDATE products
-      SET name = ?, price = ?, quantity = ?, clientId = ?, assetsType = ?, addParts = ?, parts = ?, pageName = ?,
+      SET name = ?, price = ?, quantity = ?, clientId = ?, assetsType = ?, addParts = ?, parts = ?, pageName = ?
       WHERE id = ?
     `
     )
@@ -477,9 +477,9 @@ ipcMain.handle('createTransaction', (event, tx, bankReceipt = {}, cashReceipt = 
         clientId, productId, quantity, sellAmount, purchaseAmount, 
         paymentMethod, statusOfTransaction, paymentType, 
         pendingAmount, paidAmount, transactionType, dueDate, 
-        taxAmount, totalAmount, pageName, date, billNo, freightCharges, freightTaxAmount
+        taxAmount, totalAmount, pageName, date, billNo, freightCharges, freightTaxAmount, multipleProducts, isMultiProduct
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const result = stmt.run(
@@ -501,7 +501,9 @@ ipcMain.handle('createTransaction', (event, tx, bankReceipt = {}, cashReceipt = 
       tx.date || new Date().toISOString().slice(0, 19).replace('T', ' '),
       tx.billNo || null,
       tx.freightCharges || 0,
-      JSON.stringify(tx.freightTaxAmount || [])
+      JSON.stringify(tx.freightTaxAmount || []),
+      JSON.stringify(tx.multipleProducts || []),
+      tx.isMultiProduct || 0
     )
 
     const transactionId = result.lastInsertRowid
@@ -566,7 +568,7 @@ ipcMain.handle('updateTransaction', (event, updatedTx) => {
          SET clientId=?, productId=?, quantity=?, sellAmount=?, purchaseAmount=?,
              paymentMethod=?, statusOfTransaction=?, paymentType=?, 
              pendingAmount=?, paidAmount=?, transactionType=?, dueDate=?, 
-             taxAmount=?, totalAmount=?, pageName=?, date=?, billNo=?, freightCharges=?, freightTaxAmount=?, updatedAt=CURRENT_TIMESTAMP
+             taxAmount=?, totalAmount=?, pageName=?, date=?, billNo=?, freightCharges=?, freightTaxAmount=?, multipleProducts=?, isMultiProduct=?, updatedAt=CURRENT_TIMESTAMP
          WHERE id=?`
       ).run(
         updatedTx.clientId,
@@ -588,6 +590,8 @@ ipcMain.handle('updateTransaction', (event, updatedTx) => {
         updatedTx.billNo,
         updatedTx.freightCharges,
         JSON.stringify(updatedTx.freightTaxAmount || []),
+        JSON.stringify(updatedTx.multipleProducts || []),
+        updatedTx.isMultiProduct,
         updatedTx.id
       )
 
@@ -704,6 +708,7 @@ ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
     paymentType,
     pageName,
     sendTo,
+    billNo,
     createdAt,
     updatedAt
   } = bankReceipt
@@ -717,8 +722,8 @@ ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
         `
     INSERT INTO bankReceipts (
       clientId, productId, transactionId, type, bank, date, amount,
-      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName, sendTo, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?)
+      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName, sendTo,billNo, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?)
   `
       )
       .run(
@@ -739,6 +744,7 @@ ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
         paymentType,
         pageName,
         sendTo,
+        billNo,
         createdAt,
         updatedAt
       )
@@ -768,7 +774,8 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
     paymentType,
     quantity,
     pageName,
-    sendTo
+    sendTo,
+    billNo
   } = bankReceipt
 
   const formattedDate =
@@ -784,7 +791,7 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
       // 2️⃣ Update existing
       db.prepare(
         `UPDATE bankReceipts
-         SET type = ?, bank = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?,pageName = ?, sendTo = ?, updatedAt = CURRENT_TIMESTAMP
+         SET type = ?, bank = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?,pageName = ?, sendTo = ?, billNo = ?, updatedAt = CURRENT_TIMESTAMP
          WHERE transactionId = ?`
       ).run(
         type,
@@ -801,6 +808,7 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
         quantity,
         pageName,
         sendTo,
+        billNo,
         transactionId
       )
 
@@ -810,8 +818,8 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
       // 4️⃣ Insert new record if not exists
       const result = db
         .prepare(
-          `INSERT INTO bankReceipts (transactionId, type, bank, date, amount, description, statusOfTransaction, dueDate,pendingAmount,pendingFromOurs,paidAmount,paymentType,quantity,pageName, sendTo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO bankReceipts (transactionId, type, bank, date, amount, description, statusOfTransaction, dueDate,pendingAmount,pendingFromOurs,paidAmount,paymentType,quantity,pageName, sendTo, billNo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           transactionId,
@@ -828,7 +836,8 @@ ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
           paymentType,
           quantity,
           pageName,
-          sendTo
+          sendTo,
+          billNo
         )
 
       // 5️⃣ Return newly created record
@@ -877,6 +886,7 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
     sendTo,
     chequeNumber,
     transactionAccount,
+    billNo,
     createdAt,
     updatedAt
   } = cashReceipt
@@ -890,8 +900,8 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
         `
        INSERT INTO cashReceipts (
       clientId, productId, transactionId, type, cash, date, amount,
-      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName,sendTo,chequeNumber,transactionAccount,createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?) `
+      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName,sendTo,chequeNumber,transactionAccount,billNo, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?) `
       )
       .run(
         clientId,
@@ -913,6 +923,7 @@ ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
         sendTo,
         chequeNumber,
         transactionAccount,
+        billNo,
         createdAt,
         updatedAt
       )
@@ -943,7 +954,8 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
     pageName,
     sendTo,
     chequeNumber,
-    transactionAccount
+    transactionAccount,
+    billNo
   } = cashReceipt
 
   const formattedDate =
@@ -959,7 +971,7 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
       // 2️⃣ Update existing
       db.prepare(
         `UPDATE cashReceipts
-         SET type = ?, cash = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?, pageName = ?,sendTo = ?,chequeNumber = ?,transactionAccount = ?, updatedAt = CURRENT_TIMESTAMP
+         SET type = ?, cash = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?, pageName = ?,sendTo = ?,chequeNumber = ?,transactionAccount = ?,billNo = ?, updatedAt = CURRENT_TIMESTAMP
          WHERE transactionId = ?`
       ).run(
         type,
@@ -978,6 +990,7 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
         sendTo,
         chequeNumber,
         transactionAccount,
+        billNo,
         transactionId
       )
 
@@ -1007,7 +1020,8 @@ ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
           pageName,
           sendTo,
           chequeNumber,
-          transactionAccount
+          transactionAccount,
+          billNo
         )
 
       // 5️⃣ Return newly created record
@@ -1027,6 +1041,49 @@ ipcMain.handle('deleteCashReceipt', async (event, cashReceiptId) => {
   } catch (err) {
     console.error('deleteCashReceipt error:', err)
     return { success: false, message: err.message || 'Failed to delete cash receipt' }
+  }
+})
+
+ipcMain.handle('deleteCashReceiptByTransaction', async (event, transactionId) => {
+  try {
+    // Delete ALL receipts for this transaction (handles multi-row edge cases)
+    const result = db.prepare('DELETE FROM cashReceipts WHERE transactionId = ?').run(transactionId)
+    if (result.changes === 0) {
+      return { success: false, message: 'No cash receipts found for this transaction' }
+    }
+    console.log(`Deleted ${result.changes} cash receipt(s) for transaction ${transactionId}`)
+    return { success: true, data: { changes: result.changes, transactionId } }
+  } catch (err) {
+    console.error('deleteCashReceiptByTransaction error:', { transactionId, err })
+    return { success: false, message: err.message || 'Failed to delete cash receipt' }
+  }
+})
+
+ipcMain.handle('getCashReceiptByTransactionId', async (event, transactionId) => {
+  try {
+    const receipt = db
+      .prepare('SELECT * FROM cashReceipts WHERE transactionId = ? LIMIT 1')
+      .get(transactionId)
+    return receipt
+      ? { success: true, data: receipt }
+      : { success: false, message: 'Receipt not found' }
+  } catch (err) {
+    console.error('getCashReceiptByTransactionId error:', err)
+    return { success: false, message: err.message }
+  }
+})
+
+ipcMain.handle('deleteBankReceiptByTransaction', async (event, transactionId) => {
+  try {
+    const result = db.prepare('DELETE FROM bankReceipts WHERE transactionId = ?').run(transactionId)
+    if (result.changes === 0) {
+      return { success: false, message: 'No bank receipts found for this transaction' }
+    }
+    console.log(`Deleted ${result.changes} bank receipt(s) for transaction ${transactionId}`)
+    return { success: true, data: { changes: result.changes, transactionId } }
+  } catch (err) {
+    console.error('deleteBankReceiptByTransaction error:', { transactionId, err })
+    return { success: false, message: err.message || 'Failed to delete bank receipt' }
   }
 })
 
@@ -1260,25 +1317,104 @@ ipcMain.handle('getLedgerTransactions', () => {
 })
 
 // Transfer Amount API
-ipcMain.handle(
-  'transferAmount',
-  (
-    event,
-    { fromAccount, toAccount, amount, description = 'Funds Transfer', paymentMethod = 'bank' }
-  ) => {
-    if (!fromAccount || !toAccount || !amount) throw new Error('Invalid transfer data')
-    const date = new Date().toISOString()
-    createLedgerEntry({
-      date,
-      description,
-      debitAccount: toAccount,
-      creditAccount: fromAccount,
-      amount,
-      paymentMethod
-    })
-    return { success: true, message: `₹${amount}  ${fromAccount} → ${toAccount}` }
+ipcMain.handle('transferAmount', (event, payload) => {
+  const { fromAccount, toAccount, amount, description } = payload
+
+  if (!fromAccount || !toAccount || !amount) {
+    return { success: false, message: 'Invalid transfer parameters' }
   }
-)
+
+  const fromAcc = db.prepare('SELECT * FROM accounts WHERE id = ?').get(fromAccount)
+  const toAcc = db.prepare('SELECT * FROM accounts WHERE id = ?').get(toAccount)
+
+  if (!fromAcc || !toAcc) {
+    return { success: false, message: 'Account not found' }
+  }
+
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+
+  const tx = db.transaction(() => {
+    /* ===============================
+       ALWAYS INSERT INTO bankReceipts
+       =============================== */
+
+    db.prepare(
+      `
+      INSERT INTO bankReceipts (
+        clientId, productId, transactionId, type, bank, date, amount,
+        description, statusOfTransaction, dueDate, pendingAmount,
+        pendingFromOurs, paidAmount, quantity, paymentType, pageName,
+        sendTo, chequeNumber, transactionAccount, createdAt, updatedAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    ).run(
+      fromAccount,
+      null,
+      null,
+      'Payment',
+      fromAcc.accountName,
+      now,
+      amount,
+      description || `Transfer to ${toAcc.accountName}`,
+      'completed',
+      null,
+      0,
+      0,
+      amount,
+      0,
+      'full',
+      'Transfer',
+      toAcc.accountName,
+      null,
+      String(fromAccount),
+      now,
+      now
+    )
+
+    db.prepare(
+      `
+      INSERT INTO bankReceipts (
+        clientId, productId, transactionId, type, bank, date, amount,
+        description, statusOfTransaction, dueDate, pendingAmount,
+        pendingFromOurs, paidAmount, quantity, paymentType, pageName,
+        sendTo, chequeNumber, transactionAccount, createdAt, updatedAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    ).run(
+      toAccount,
+      null,
+      null,
+      'Receipt',
+      toAcc.accountName,
+      now,
+      amount,
+      description || `Received from ${fromAcc.accountName}`,
+      'completed',
+      null,
+      0,
+      0,
+      amount,
+      0,
+      'full',
+      'Transfer',
+      toAcc.accountName,
+      null,
+      String(toAccount),
+      now,
+      now
+    )
+  })
+
+  try {
+    tx()
+    return { success: true, message: 'Transfer successful' }
+  } catch (err) {
+    console.error('❌ Transfer Error:', err)
+    return { success: false, message: err.message }
+  }
+})
 
 // Create Account
 ipcMain.handle('createAccount', async (event, accountData) => {

@@ -63,11 +63,14 @@ const getAmount = (type, amount) => {
 
 const getInitials = (name) => {
   if (!name) return '??'
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
+  return (
+    name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || ''
+  )
 }
 
 // Memoized Transaction Row Component
@@ -103,12 +106,17 @@ const TransactionRow = memo(({ receipt, index, balance, clientName, selectedType
         </div>
       </td>
 
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {getInitials(clientName)}
+      <td>
+        <div className="flex items-center gap-3">
+          <div className="relative group">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
+              {getInitials(clientName)}
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
           </div>
-          <span className="font-medium text-gray-800 tracking-wide">{clientName}</span>
+          <span className="font-medium text-gray-700 transition-colors duration-200 group-hover:text-indigo-600">
+            {clientName.toUpperCase()}
+          </span>
         </div>
       </td>
 
@@ -239,6 +247,7 @@ const PendingCollectionReport = ({ client, onClose }) => {
       (r) => r.type === 'Receipt' && r.statusOfTransaction === 'pending'
     )
 
+    console.log('🔥 RECEIPTS:', receipts)
     if (selectedClient?.id) {
       return receipts.filter(
         (r) =>
@@ -718,15 +727,8 @@ const PendingCollectionReport = ({ client, onClose }) => {
                   role="button"
                   aria-label={`Select client ${client.clientName}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200
-                        ${
-                          selectedClient?.id === client.id
-                            ? 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600 backdrop-blur-sm'
-                            : 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600'
-                        }`}
-                    >
+                  <div className="flex items-center gap-3 px-6">
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
                       {getInitials(client.clientName)}
                     </div>
                     <div className="flex-1 min-w-0">
