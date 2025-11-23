@@ -365,20 +365,25 @@ function calculateTotalWithTax(tx) {
 
   console.log('base', base)
 
-  // Sum product tax
-  const taxTotal = taxArray.reduce((sum, t) => sum + Number(t.value || 0), 0)
+  // Sum product tax (with guard)
+  const taxTotal = Array.isArray(taxArray)
+    ? taxArray.reduce((sum, t) => sum + Number(t.value || 0), 0)
+    : 0
 
   // Freight charges
   const freight = Number(tx.freightCharges || 0)
 
-  // Freight taxes
-  const freightTaxTotal = freightTaxArray.reduce((sum, t) => sum + Number(t.value || 0), 0)
+  // Freight taxes (with guard)
+  const freightTaxTotal = Array.isArray(freightTaxArray)
+    ? freightTaxArray.reduce((sum, t) => sum + Number(t.value || 0), 0)
+    : 0
 
   // FINAL TOTAL including ALL extras
+  // Note: Added taxTotal to purchase case for consistency (purchases should include taxes)
   if (tx.transactionType === 'sales') {
     return base + taxTotal + freight + freightTaxTotal
   } else {
-    return base + freight + freightTaxTotal
+    return base + taxTotal + freight + freightTaxTotal // Fixed: Include taxTotal for purchases
   }
 }
 

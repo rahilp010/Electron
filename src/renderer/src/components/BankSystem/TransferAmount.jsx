@@ -1,12 +1,7 @@
 /* eslint-disable prettier/prettier */
-import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
-  ArrowRight,
-  Clock,
   CheckCircle,
-  TrendingUp,
-  Wallet,
-  ArrowDownUp,
   ChevronRight,
   ChevronLeft
 } from 'lucide-react'
@@ -232,11 +227,11 @@ const TransferAmount = () => {
   }
 
   // derived lists for selects (exclude disabled accounts)
-  const accountOptions = useMemo(
-    () =>
-      accounts.map((a) => ({ label: a.accountName, value: a.id, balance: a.computedBalance || 0 })),
-    [accounts]
-  )
+  // const accountOptions = useMemo(
+  //   () =>
+  //     accounts.map((a) => ({ label: a.accountName, value: a.id, balance: a.computedBalance || 0 })),
+  //   [accounts]
+  // )
 
   return (
     <div className="max-h-screen select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-scroll customScrollbar">

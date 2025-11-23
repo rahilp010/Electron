@@ -16,7 +16,7 @@ db.pragma('foreign_keys = ON')
 
 // db.prepare(
 //   `
-//  ALTER TABLE cashReceipts ADD COLUMN billNo TEXT;
+//  ALTER TABLE transactions ADD COLUMN  isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1));
 // `
 // ).run()
 
