@@ -41,4 +41,16 @@ const accountApi = {
   getAccountById: (id) => window.api.getAccountById(id)
 }
 
-export { productApi, clientApi, transactionApi, bankReceiptApi, cashReceiptApi, accountApi }
+const transferAmountApi = {
+  transferAmount: (data) => window.api.transferAmount(data)
+}
+
+export {
+  productApi,
+  clientApi,
+  transactionApi,
+  bankReceiptApi,
+  cashReceiptApi,
+  accountApi,
+  transferAmountApi
+}

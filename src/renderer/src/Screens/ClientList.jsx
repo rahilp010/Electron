@@ -376,8 +376,8 @@ const ClientList = () => {
     { key: 'status', label: 'Status', width: 'w-[50px]', icon: TrendingUp }
   ]
   const ACCOUNT_TYPE_OPTIONS = [
-    { label: 'Creditors', value: 'Creditors' },
-    { label: 'Debtors', value: 'Debtors' }
+    { label: 'Creditor', value: 'Creditor' },
+    { label: 'Debtor', value: 'Debtor' }
   ]
   // Memoized filtered data
   const filteredData = useMemo(() => {
@@ -890,13 +890,11 @@ const ClientList = () => {
                             <td className="px-6 py-3 font-medium text-gray-800">
                               {t.isMultiProduct === 1 ? (
                                 <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
-                                  {
-                                    t[0]?.multipleProducts?.map((p) => (
-                                      <span key={p.id}>
-                                        {p.name} x {p.quantity}
-                                      </span>
-                                    ))
-                                  }
+                                  {t[0]?.multipleProducts?.map((p) => (
+                                    <span key={p.id}>
+                                      {p.name} x {p.quantity}
+                                    </span>
+                                  ))}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">

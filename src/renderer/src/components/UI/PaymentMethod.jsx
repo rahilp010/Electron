@@ -1,7 +1,7 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable react/prop-types */
 import React, { useState, useEffect, useCallback } from 'react'
-import { Modal, Button, SelectPicker, Input } from 'rsuite'
+import { Modal, Button, Input } from 'rsuite'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, Loader2, Banknote, FileText, Clock, Building2, ChevronRight } from 'lucide-react'
 import { accountApi } from '../../API/Api'
@@ -121,7 +121,12 @@ const PaymentMethod = ({ overflow, open, setOpen, onConfirm, grandTotal }) => {
   }
 
   const handleConfirm = () => {
-    const selectedBank = bankAccounts.find((acc) => acc.id === googlePayAccount)?.accountName || ''
+    debugger
+
+    console.log(bankAccounts.find((acc) => acc.id === Number(googlePayAccount)))
+
+    const selectedBank =
+      bankAccounts.find((acc) => acc.id === Number(googlePayAccount))?.accountName || ''
 
     let sendTo = ''
     if (selectedMethod === 'googlepay') sendTo = selectedBank

@@ -242,28 +242,135 @@ ipcMain.handle('getAllClients', () => {
   return db.prepare('SELECT * FROM clients ORDER BY createdAt DESC').all()
 })
 
+// ipcMain.handle('createClient', (event, client) => {
+//   return db
+//     .prepare(
+//       `
+//     INSERT INTO clients (clientName, phoneNo,address, pendingAmount, paidAmount, pendingFromOurs, accountType, gstNo, pageName, isEmployee, salary, salaryHistory)
+//     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+//   `
+//     )
+//     .run(
+//       client.clientName,
+//       client.phoneNo,
+//       client.address,
+//       client.pendingAmount,
+//       client.paidAmount,
+//       client.pendingFromOurs,
+//       client.accountType,
+//       client.gstNo,
+//       client.pageName,
+//       client.isEmployee,
+//       client.salary,
+//       client.salaryHistory
+//     )
+// })
+
 ipcMain.handle('createClient', (event, client) => {
-  return db
-    .prepare(
+  try {
+    const {
+      clientName,
+      phoneNo,
+      gstNo,
+      address,
+      accountType,
+      openingBalance = 0,
+      pageName,
+      isEmployee,
+      salary,
+      salaryHistory,
+      pendingAmount = 0,
+      paidAmount = 0,
+      pendingFromOurs = 0
+    } = client
+
+    // 1️⃣ Insert Client
+    const clientResult = db
+      .prepare(
+        `
+        INSERT INTO clients 
+        (clientName, phoneNo, gstNo, address, accountType, pageName, isEmployee, salary, salaryHistory, pendingAmount, paidAmount, pendingFromOurs)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
-    INSERT INTO clients (clientName, phoneNo,address, pendingAmount, paidAmount, pendingFromOurs, accountType, gstNo, pageName, isEmployee, salary, salaryHistory)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      )
+      .run(
+        clientName,
+        phoneNo,
+        gstNo,
+        address,
+        accountType,
+        pageName,
+        isEmployee ? 1 : 0,
+        salary || 0,
+        salaryHistory || [],
+        pendingAmount,
+        paidAmount,
+        pendingFromOurs
+      )
+
+    const clientId = clientResult.lastInsertRowid
+
+    // 2️⃣ Generate Account Number (Example Logic)
+    const accountNumber = `ACC-${Date.now()}`
+
+    // 3️⃣ Insert Account
+    const accountResult = db
+      .prepare(
+        `
+    INSERT INTO accounts
+    (clientId, accountName, openingBalance, closingBalance, accountNumber, accountType, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `
+      )
+      .run(
+        clientId,
+        clientName,
+        openingBalance,
+        openingBalance,
+        accountNumber,
+        accountType,
+        'active'
+      )
+
+    const accountId = accountResult.lastInsertRowid
+
+    // 4️⃣ Insert Ledger Entry (Opening Balance)
+    db.prepare(
+      `
+      INSERT INTO ledger
+      (accountId, clientId, entryType, amount, balanceAfter, referenceType, narration)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `
+    ).run(
+      accountId,
+      clientId,
+      openingBalance >= 0 ? 'debit' : 'credit',
+      Math.abs(openingBalance),
+      openingBalance,
+      'Opening',
+      'Opening Balance'
     )
-    .run(
-      client.clientName,
-      client.phoneNo,
-      client.address,
-      client.pendingAmount,
-      client.paidAmount,
-      client.pendingFromOurs,
-      client.accountType,
-      client.gstNo,
-      client.pageName,
-      client.isEmployee,
-      client.salary,
-      client.salaryHistory
-    )
+
+    // 5️⃣ Update Client with Account Info
+    db.prepare(
+      `
+      UPDATE clients
+      SET accountId = ?, accountNumber = ?
+      WHERE id = ?
+    `
+    ).run(accountId, accountNumber, clientId)
+
+    return {
+      success: true,
+      message: 'Client created successfully',
+      clientId,
+      accountId,
+      accountNumber
+    }
+  } catch (error) {
+    console.error('Error creating client:', error)
+    return { success: false, message: 'Failed to create client' }
+  }
 })
 
 ipcMain.handle('updateClient', (event, client) => {
@@ -332,58 +439,37 @@ function adjustProductStock(productId, qty, type, rollback = false) {
 }
 
 function calculateTotalWithTax(tx) {
-  let taxArray = []
-  let freightTaxArray = []
+  const taxArray = safeParse(tx.taxAmount)
 
-  // Parse main tax
-  try {
-    if (typeof tx.taxAmount === 'string') {
-      taxArray = JSON.parse(tx.taxAmount)
-    } else if (Array.isArray(tx.taxAmount)) {
-      taxArray = tx.taxAmount
-    }
-  } catch {
-    taxArray = []
-  }
+  console.log(taxArray)
 
-  // Parse freight tax
-  try {
-    if (typeof tx.freightTaxAmount === 'string') {
-      freightTaxArray = JSON.parse(tx.freightTaxAmount)
-    } else if (Array.isArray(tx.freightTaxAmount)) {
-      freightTaxArray = tx.freightTaxAmount
-    }
-  } catch {
-    freightTaxArray = []
-  }
+  // REMOVE freight from tax array if inserted incorrectly
+  const productTaxArray = taxArray.filter((t) => t.code !== 'freightCharges')
+  console.log('P:', productTaxArray)
 
-  // Calculate base amount
+  const taxTotal = productTaxArray.reduce((a, t) => a + Number(t.value || 0), 0)
+
+  const freight = Number(tx.freightCharges || 0)
+
+  // const freightTaxArray = safeParse(tx.freightTaxAmount)
+
+  // const freightTaxTotal = freightTaxArray?.reduce((a, t) => a + Number(t.value || 0), 0)
+
   const base =
     tx.transactionType === 'sales'
       ? Number(tx.sellAmount || 0) * Number(tx.quantity || 0)
       : Number(tx.purchaseAmount || 0)
 
-  console.log('base', base)
+  return base + taxTotal + freight
+}
 
-  // Sum product tax (with guard)
-  const taxTotal = Array.isArray(taxArray)
-    ? taxArray.reduce((sum, t) => sum + Number(t.value || 0), 0)
-    : 0
-
-  // Freight charges
-  const freight = Number(tx.freightCharges || 0)
-
-  // Freight taxes (with guard)
-  const freightTaxTotal = Array.isArray(freightTaxArray)
-    ? freightTaxArray.reduce((sum, t) => sum + Number(t.value || 0), 0)
-    : 0
-
-  // FINAL TOTAL including ALL extras
-  // Note: Added taxTotal to purchase case for consistency (purchases should include taxes)
-  if (tx.transactionType === 'sales') {
-    return base + taxTotal + freight + freightTaxTotal
-  } else {
-    return base + taxTotal + freight + freightTaxTotal // Fixed: Include taxTotal for purchases
+function safeParse(v) {
+  if (!v) return []
+  if (Array.isArray(v)) return v
+  try {
+    return JSON.parse(v)
+  } catch {
+    return []
   }
 }
 
@@ -393,8 +479,6 @@ function updateClientBalances(clientId, tx, mode = 'apply') {
 
   // Always calculate total with tax
   const total = calculateTotalWithTax(tx)
-
-  console.log('💰 FINAL CALCULATED TOTAL (with tax) =', total)
 
   if (tx.transactionType === 'sales') {
     if (tx.paymentType === 'partial') {
@@ -482,9 +566,9 @@ ipcMain.handle('createTransaction', (event, tx, bankReceipt = {}, cashReceipt = 
         clientId, productId, quantity, sellAmount, purchaseAmount, 
         paymentMethod, statusOfTransaction, paymentType, 
         pendingAmount, paidAmount, transactionType, dueDate, 
-        taxAmount, totalAmount, pageName, date, billNo, freightCharges, freightTaxAmount, multipleProducts, isMultiProduct
+        taxAmount, totalAmount, pageName, date, billNo, freightCharges, freightTaxAmount, multipleProducts, isMultiProduct, sendTo, chequeNumber, transactionAccount, pendingFromOurs, type, description
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ? , ?, ?, ?)
     `)
 
     const result = stmt.run(
@@ -508,7 +592,13 @@ ipcMain.handle('createTransaction', (event, tx, bankReceipt = {}, cashReceipt = 
       tx.freightCharges || 0,
       JSON.stringify(tx.freightTaxAmount || []),
       JSON.stringify(tx.multipleProducts || []),
-      tx.isMultiProduct || 0
+      tx.isMultiProduct || 0,
+      tx.sendTo,
+      tx.chequeNumber,
+      tx.transactionAccount,
+      tx.pendingFromOurs,
+      tx.type,
+      tx.description
     )
 
     const transactionId = result.lastInsertRowid
@@ -573,7 +663,7 @@ ipcMain.handle('updateTransaction', (event, updatedTx) => {
          SET clientId=?, productId=?, quantity=?, sellAmount=?, purchaseAmount=?,
              paymentMethod=?, statusOfTransaction=?, paymentType=?, 
              pendingAmount=?, paidAmount=?, transactionType=?, dueDate=?, 
-             taxAmount=?, totalAmount=?, pageName=?, date=?, billNo=?, freightCharges=?, freightTaxAmount=?, multipleProducts=?, isMultiProduct=?, updatedAt=CURRENT_TIMESTAMP
+             taxAmount=?, totalAmount=?, pageName=?, date=?, billNo=?, freightCharges=?, freightTaxAmount=?, multipleProducts=?, isMultiProduct=?, sendTo=?, chequeNumber=?, transactionAccount=?, pendingFromOurs=?, type=?, description=?, updatedAt=CURRENT_TIMESTAMP
          WHERE id=?`
       ).run(
         updatedTx.clientId,
@@ -597,6 +687,12 @@ ipcMain.handle('updateTransaction', (event, updatedTx) => {
         JSON.stringify(updatedTx.freightTaxAmount || []),
         JSON.stringify(updatedTx.multipleProducts || []),
         updatedTx.isMultiProduct,
+        updatedTx.sendTo,
+        updatedTx.chequeNumber,
+        updatedTx.transactionAccount,
+        updatedTx.pendingFromOurs,
+        updatedTx.type,
+        updatedTx.description,
         updatedTx.id
       )
 
@@ -1078,6 +1174,20 @@ ipcMain.handle('getCashReceiptByTransactionId', async (event, transactionId) => 
   }
 })
 
+ipcMain.handle('getBankReceiptByTransactionId', async (event, transactionId) => {
+  try {
+    const receipt = db
+      .prepare('SELECT * FROM bankReceipts WHERE transactionId = ? LIMIT 1')
+      .get(transactionId)
+    return receipt
+      ? { success: true, data: receipt }
+      : { success: false, message: 'Receipt not found' }
+  } catch (err) {
+    console.error('getBankReceiptByTransactionId error:', err)
+    return { success: false, message: err.message }
+  }
+})
+
 ipcMain.handle('deleteBankReceiptByTransaction', async (event, transactionId) => {
   try {
     const result = db.prepare('DELETE FROM bankReceipts WHERE transactionId = ?').run(transactionId)
@@ -1321,152 +1431,56 @@ ipcMain.handle('getLedgerTransactions', () => {
   return rows
 })
 
-// Transfer Amount API
-ipcMain.handle('transferAmount', (event, payload) => {
-  const { fromAccount, toAccount, amount, description } = payload
-
-  if (!fromAccount || !toAccount || !amount) {
-    return { success: false, message: 'Invalid transfer parameters' }
-  }
-
-  const fromAcc = db.prepare('SELECT * FROM accounts WHERE id = ?').get(fromAccount)
-  const toAcc = db.prepare('SELECT * FROM accounts WHERE id = ?').get(toAccount)
-
-  if (!fromAcc || !toAcc) {
-    return { success: false, message: 'Account not found' }
-  }
-
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
-
-  const tx = db.transaction(() => {
-    /* ===============================
-       ALWAYS INSERT INTO bankReceipts
-       =============================== */
-
-    db.prepare(
-      `
-      INSERT INTO bankReceipts (
-        clientId, productId, transactionId, type, bank, date, amount,
-        description, statusOfTransaction, dueDate, pendingAmount,
-        pendingFromOurs, paidAmount, quantity, paymentType, pageName,
-        sendTo, chequeNumber, transactionAccount, createdAt, updatedAt
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `
-    ).run(
-      fromAccount,
-      null,
-      null,
-      'Payment',
-      fromAcc.accountName,
-      now,
-      amount,
-      description || `Transfer to ${toAcc.accountName}`,
-      'completed',
-      null,
-      0,
-      0,
-      amount,
-      0,
-      'full',
-      'Transfer',
-      toAcc.accountName,
-      null,
-      String(fromAccount),
-      now,
-      now
-    )
-
-    db.prepare(
-      `
-      INSERT INTO bankReceipts (
-        clientId, productId, transactionId, type, bank, date, amount,
-        description, statusOfTransaction, dueDate, pendingAmount,
-        pendingFromOurs, paidAmount, quantity, paymentType, pageName,
-        sendTo, chequeNumber, transactionAccount, createdAt, updatedAt
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `
-    ).run(
-      toAccount,
-      null,
-      null,
-      'Receipt',
-      toAcc.accountName,
-      now,
-      amount,
-      description || `Received from ${fromAcc.accountName}`,
-      'completed',
-      null,
-      0,
-      0,
-      amount,
-      0,
-      'full',
-      'Transfer',
-      toAcc.accountName,
-      null,
-      String(toAccount),
-      now,
-      now
-    )
-  })
-
-  try {
-    tx()
-    return { success: true, message: 'Transfer successful' }
-  } catch (err) {
-    console.error('❌ Transfer Error:', err)
-    return { success: false, message: err.message }
-  }
-})
-
 // Create Account
-ipcMain.handle('createAccount', async (event, accountData) => {
-  console.log('🔥 RECEIVED FROM FRONTEND:', accountData)
-
+ipcMain.handle('createAccount', (event, accountData) => {
   try {
     const {
       accountName,
+      accountType = 'Bank',
+      clientId = null,
       openingBalance = 0,
-      closingBalance = openingBalance,
-      balance = openingBalance,
       status = 'active'
     } = accountData
 
-    if (!accountName.trim()) {
+    if (!accountName?.trim()) {
       return { success: false, message: 'Account name is required' }
     }
 
     const existing = db
       .prepare('SELECT id FROM accounts WHERE accountName = ?')
       .get(accountName.trim())
+
     if (existing) {
       return { success: false, message: 'Account name already exists' }
     }
 
     const stmt = db.prepare(`
-      INSERT INTO accounts (accountName, balance, status, openingBalance, closingBalance, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT INTO accounts
+      (clientId, accountName, accountType, openingBalance, closingBalance, status, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `)
 
-    const info = stmt.run(accountName.trim(), balance, status, openingBalance, closingBalance)
-
-    const insertedId = info.lastInsertRowid
-    const timestamp = new Date().toISOString()
+    const info = stmt.run(
+      clientId,
+      accountName.trim(),
+      accountType,
+      openingBalance,
+      openingBalance, // closingBalance starts same
+      status
+    )
 
     return {
       success: true,
       message: `Account "${accountName}" created successfully`,
       data: {
-        id: insertedId,
+        id: info.lastInsertRowid,
         accountName: accountName.trim(),
-        balance,
-        status,
+        accountType,
         openingBalance,
-        closingBalance,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        closingBalance: openingBalance,
+        status,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         pageName: 'Account'
       }
     }
@@ -1477,63 +1491,73 @@ ipcMain.handle('createAccount', async (event, accountData) => {
 })
 
 // Update Account
-ipcMain.handle('updateAccount', async (event, { id, ...updates }) => {
+ipcMain.handle('updateAccount', (event, { id, ...updates }) => {
   try {
     if (!id) {
       return { success: false, message: 'Account ID is required' }
     }
 
-    // Validate updates
-    const { accountName, balance, status } = updates
-    if (accountName && !accountName.trim()) {
-      return { success: false, message: 'Account name cannot be empty' }
-    }
-    if (typeof balance === 'number' && balance < 0) {
-      return { success: false, message: 'Balance cannot be negative' }
-    }
-
-    // Check duplicate name if changing name
-    if (accountName) {
-      const existing = db
-        .prepare('SELECT id FROM accounts WHERE accountName = ? AND id != ?')
-        .get(accountName.trim(), id)
-      if (existing) {
-        return { success: false, message: 'Account name already exists' }
-      }
-    }
-
-    // Fetch current to update closingBalance etc.
     const current = db.prepare('SELECT * FROM accounts WHERE id = ?').get(id)
     if (!current) {
       return { success: false, message: 'Account not found' }
     }
 
-    const newBalance = balance !== undefined ? balance : current.balance
-    const newClosingBalance = newBalance // Simplify: closing = current balance after update
+    const { accountName, accountType, status, openingBalance } = updates
 
-    const stmt = db.prepare(`
-      UPDATE accounts 
-      SET accountName = ?, balance = ?, status = ?, closingBalance = ?, updatedAt = CURRENT_TIMESTAMP
+    if (accountName && !accountName.trim()) {
+      return { success: false, message: 'Account name cannot be empty' }
+    }
+
+    if (accountName) {
+      const existing = db
+        .prepare('SELECT id FROM accounts WHERE accountName = ? AND id != ?')
+        .get(accountName.trim(), id)
+
+      if (existing) {
+        return { success: false, message: 'Account name already exists' }
+      }
+    }
+
+    // If openingBalance changes, adjust closingBalance accordingly
+    let newClosingBalance = current.closingBalance
+    if (openingBalance !== undefined) {
+      const difference = openingBalance - current.openingBalance
+      newClosingBalance = current.closingBalance + difference
+    }
+
+    db.prepare(
+      `
+      UPDATE accounts
+      SET accountName = ?,
+          accountType = ?,
+          openingBalance = ?,
+          closingBalance = ?,
+          status = ?,
+          updatedAt = CURRENT_TIMESTAMP
       WHERE id = ?
-    `)
-    stmt.run(
+    `
+    ).run(
       accountName?.trim() || current.accountName,
-      newBalance,
-      status || current.status,
+      accountType || current.accountType,
+      openingBalance !== undefined ? openingBalance : current.openingBalance,
       newClosingBalance,
+      status || current.status,
       id
     )
 
-    const updatedAccount = {
-      ...current,
-      ...(accountName && { accountName: accountName.trim() }),
-      ...(balance !== undefined && { balance: newBalance }),
-      ...(status && { status }),
-      closingBalance: newClosingBalance,
-      updatedAt: new Date().toISOString()
+    return {
+      success: true,
+      message: 'Account updated successfully',
+      data: {
+        ...current,
+        accountName: accountName?.trim() || current.accountName,
+        accountType: accountType || current.accountType,
+        openingBalance: openingBalance !== undefined ? openingBalance : current.openingBalance,
+        closingBalance: newClosingBalance,
+        status: status || current.status,
+        updatedAt: new Date().toISOString()
+      }
     }
-
-    return { success: true, message: 'Account updated successfully', data: updatedAccount }
   } catch (error) {
     console.error('Update account error:', error)
     return { success: false, message: error.message }
@@ -1773,6 +1797,98 @@ ipcMain.handle('getAuthorization', async () => {
 //   await logoutWhatsApp()
 //   return { success: true }
 // })
+
+//transferAmount
+
+ipcMain.handle('transferAmount', (event, data) => {
+  const { fromAccountId, toAccountId, amount, narration = 'Account Transfer' } = data
+
+  if (!fromAccountId || !toAccountId || !amount || amount <= 0) {
+    return { success: false, error: 'Invalid transfer data' }
+  }
+
+  if (fromAccountId === toAccountId) {
+    return { success: false, error: 'Same account transfer not allowed' }
+  }
+
+  try {
+    const transfer = db.transaction(() => {
+      // 1️⃣ Fetch Accounts
+      const fromAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(fromAccountId)
+
+      const toAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(toAccountId)
+
+      if (!fromAccount || !toAccount) {
+        throw new Error('Account not found')
+      }
+
+      if (fromAccount.closingBalance < amount) {
+        throw new Error('Insufficient balance')
+      }
+
+      // 2️⃣ Debit From Account
+      const newFromBalance = fromAccount.closingBalance - amount
+
+      db.prepare(
+        `
+        UPDATE accounts 
+        SET closingBalance = ? 
+        WHERE id = ?
+      `
+      ).run(newFromBalance, fromAccountId)
+
+      db.prepare(
+        `
+        INSERT INTO ledger
+        (accountId, clientId, entryType, amount, balanceAfter, referenceType, narration)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `
+      ).run(
+        fromAccountId,
+        fromAccount.clientId,
+        'debit',
+        amount,
+        newFromBalance,
+        'Transfer',
+        `To ${toAccount.accountName}`
+      )
+
+      // 3️⃣ Credit To Account
+      const newToBalance = toAccount.closingBalance + amount
+
+      db.prepare(
+        `
+        UPDATE accounts 
+        SET closingBalance = ? 
+        WHERE id = ?
+      `
+      ).run(newToBalance, toAccountId)
+
+      db.prepare(
+        `
+        INSERT INTO ledger
+        (accountId, clientId, entryType, amount, balanceAfter, referenceType, narration)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `
+      ).run(
+        toAccountId,
+        toAccount.clientId,
+        'credit',
+        amount,
+        newToBalance,
+        'Transfer',
+        `From ${fromAccount.accountName}`
+      )
+
+      return { success: true }
+    })
+
+    return transfer()
+  } catch (error) {
+    console.error('❌ Transfer failed:', error)
+    return { success: false, error: error.message }
+  }
+})
 
 db.exec(`
     CREATE INDEX IF NOT EXISTS idx_transactions_clientId ON transactions(clientId);

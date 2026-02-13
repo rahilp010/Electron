@@ -343,15 +343,13 @@ const usePurchaseOperations = () => {
   const fetchAllTransactions = useCallback(async () => {
     try {
       const response = await transactionApi.getAllTransactions()
+      console.log('Transaction response', response)
       dispatch(setTransactions(response))
     } catch (error) {
       console.error('Error fetching transactions:', error)
       toast.error('Failed to fetch transactions')
     }
   }, [dispatch])
-
-  const transactions = useSelector((state) => state.electron.transaction.data || [])
-  const bankReceiptData = useSelector((state) => state.electron.bankReceipt.data || [])
 
   const handleDeleteTransaction = useCallback(
     async (id) => {

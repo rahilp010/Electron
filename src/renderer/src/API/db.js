@@ -14,11 +14,14 @@ const db = new Database(dbPath)
 // Enable foreign key constraints
 db.pragma('foreign_keys = ON')
 
-// db.prepare(
-//   `
-//  ALTER TABLE transactions ADD COLUMN  isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1));
-// `
-// ).run()
+// const columns = [
+//   'multipleProducts TEXT',
+//   'isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1))'
+// ]
+
+// columns.forEach((col) => {
+//   db.prepare(`ALTER TABLE transactions ADD COLUMN ${col}`).run()
+// })
 
 // db.prepare('DROP TABLE products;').run()
 // db.prepare('DROP TABLE clients;').run()
@@ -27,34 +30,62 @@ db.pragma('foreign_keys = ON')
 // db.prepare('DROP TABLE cashReceipts;').run()
 // db.prepare('DROP TABLE accounts;').run()
 // Execute SQL statements one by one
+
 db.prepare(
   `CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    clientId INTEGER DEFAULT 0,
-    name TEXT NOT NULL,
-    price REAL NOT NULL,
-    quantity INTEGER DEFAULT 0,
+    clientId INTEGER DEFAULT NULL,
+    productName TEXT NOT NULL,
+    productPrice REAL NOT NULL,
+    productQuantity INTEGER DEFAULT 0,
     addParts INTEGER DEFAULT 0 CHECK (addParts IN (0,1)),
     parts TEXT DEFAULT '[]',
-    taxAmount REAL,
-    pageName TEXT DEFAULT 'Product',
     assetsType TEXT DEFAULT 'Raw Material' CHECK (assetsType IN ('Raw Material', 'Finished Goods', 'Assets')),
+    saleHSN TEXT,
+    purchaseHSN TEXT,
+    taxRate REAL DEFAULT 0,
+    taxAmount REAL DEFAULT 0,
+    totalAmountWithTax REAL DEFAULT 0,
+    totalAmountWithoutTax REAL DEFAULT 0,
+    pageName TEXT DEFAULT 'Product',
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )`
 ).run()
 
 db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    clientId INTEGER DEFAULT NULL,
+    accountName TEXT NOT NULL,
+    accountType TEXT NOT NULL 
+      CHECK (accountType IN ('Creditor', 'Debtor', 'Bank', 'Cash', 'Employee')),
+    openingBalance REAL DEFAULT 0,
+    closingBalance REAL DEFAULT 0,
+    accountNumber TEXT,
+    status TEXT DEFAULT 'active' 
+      CHECK (status IN ('active', 'inactive')),
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE
+  )
+`
+).run()
+
+db.prepare(
   `CREATE TABLE IF NOT EXISTS clients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    accountId INTEGER,
     clientName TEXT NOT NULL,
     phoneNo TEXT,
     gstNo TEXT,
     address TEXT,
+    accountType TEXT CHECK (accountType IN ('Creditor', 'Debtor')),
+    accountNumber TEXT,
     pendingAmount REAL DEFAULT 0,
     paidAmount REAL DEFAULT 0,
     pendingFromOurs REAL DEFAULT 0,
-    accountType TEXT CHECK (accountType IN ('Creditors', 'Debtors')),
     pageName TEXT DEFAULT 'Client',
     isEmployee INTEGER DEFAULT 0 CHECK (isEmployee IN (0,1)),
     salary REAL DEFAULT 0,
@@ -79,16 +110,22 @@ db.prepare(
     paymentMethod TEXT NOT NULL DEFAULT 'bank' CHECK (paymentMethod IN ('cash', 'bank')),
     statusOfTransaction TEXT NOT NULL DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
     paymentType TEXT DEFAULT 'full' CHECK (paymentType IN ('full', 'partial')),
-    pendingAmount REAL NOT NULL DEFAULT 0,
-    paidAmount REAL NOT NULL DEFAULT 0,
+    pendingAmount REAL DEFAULT 0,
+    paidAmount REAL DEFAULT 0,
+    pendingFromOurs REAL DEFAULT 0,
     taxAmount TEXT,
     freightCharges REAL,
     freightTaxAmount TEXT,
     billNo TEXT,
     bank TEXT,
     cash TEXT,
+    type TEXT CHECK (type IN ('Receipt', 'Payment', 'Salary')),
     dueDate DATETIME,
+    description TEXT,
     transactionType TEXT CHECK (transactionType IN ('purchase', 'sales')),
+    sendTo TEXT,
+    chequeNumber TEXT,
+    transactionAccount TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     pageName TEXT DEFAULT 'Transaction',
@@ -171,29 +208,18 @@ db.prepare(
   `
   CREATE TABLE IF NOT EXISTS ledger (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    accountId INTEGER NOT NULL,
+    clientId INTEGER NOT NULL,
     date TEXT DEFAULT CURRENT_TIMESTAMP,
-    description TEXT,
-    debitAccount TEXT,
-    creditAccount TEXT,
+    entryType TEXT CHECK (entryType IN ('debit', 'credit')),
     amount REAL,
-    paymentMethod TEXT,
+    balanceAfter REAL,
+    referenceType TEXT CHECK (referenceType IN ('Opening', 'Purchase', 'Sales', 'Payment', 'Adjustment', 'Transfer', 'Salary')),
     referenceId INTEGER,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`
-).run()
-
-db.prepare(
-  `
-  CREATE TABLE IF NOT EXISTS accounts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    accountName TEXT NOT NULL,
-    balance REAL NOT NULL,
-    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
-    openingBalance REAL,
-    closingBalance REAL,
+    narration TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    FOREIGN KEY (accountId) REFERENCES accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE
   )
 `
 ).run()
@@ -236,7 +262,7 @@ db.prepare(`CREATE INDEX IF NOT EXISTS idx_bankReceipts_date ON bankReceipts(dat
 
 // Products
 db.prepare(`CREATE INDEX IF NOT EXISTS idx_products_clientId ON products(clientId)`).run()
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)`).run()
+db.prepare(`CREATE INDEX IF NOT EXISTS idx_products_name ON products(productName)`).run()
 
 // Clients
 db.prepare(`CREATE INDEX IF NOT EXISTS idx_clients_clientName ON clients(clientName)`).run()

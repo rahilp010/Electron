@@ -17,8 +17,8 @@ const ClientModal = ({
   const dispatch = useDispatch()
 
   const accountTypeOptions = [
-    { value: 'Creditors', label: 'Creditors' },
-    { value: 'Debtors', label: 'Debtors' }
+    { value: 'Creditor', label: 'Creditor' },
+    { value: 'Debtor', label: 'Debtor' }
   ]
 
   const fetchClients = async () => {

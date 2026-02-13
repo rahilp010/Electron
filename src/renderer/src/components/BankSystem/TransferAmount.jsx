@@ -1,21 +1,16 @@
 /* eslint-disable prettier/prettier */
-import { useEffect, useState, useCallback, useRef } from 'react'
-import {
-  CheckCircle,
-  ChevronRight,
-  ChevronLeft
-} from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { CheckCircle, ArrowRightLeft, History, Wallet, Send } from 'lucide-react'
 import Navbar from '../UI/Navbar'
 import { useDispatch } from 'react-redux'
 import { setAccount } from '../../app/features/electronSlice'
 import { toast } from 'react-toastify'
-import { Input, InputNumber } from 'rsuite'
+import { Input, InputNumber, SelectPicker } from 'rsuite'
 
 const TransferAmount = () => {
   const dispatch = useDispatch()
   const [accounts, setAccounts] = useState([])
-  const [recentReceipts, setRecentReceipts] = useState([]) // bank + cash receipts for balance calc
-  const [transactions, setTransactions] = useState([]) // local history for immediate feedback
+  const [transactions, setTransactions] = useState([])
 
   const [selectedFrom, setSelectedFrom] = useState(null)
   const [selectedTo, setSelectedTo] = useState(null)
@@ -24,36 +19,28 @@ const TransferAmount = () => {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [activeView, setActiveView] = useState('transfer')
-  const carouselFromRef = useRef(null)
-  const carouselToRef = useRef(null)
 
   // FORMATTER
   const toINR = (v) =>
     new Intl.NumberFormat('en-IN', {
-      style: 'decimal'
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0
     }).format(Number(v || 0))
 
-  // Fetch accounts and recent receipts (bank + cash) then compute balances
+  // Fetch accounts logic
   const loadAccountsAndReceipts = useCallback(async () => {
     try {
-      // fetch accounts
       const accs = (await window.api.getAllAccounts()) || []
-      // fetch receipts that we'll use to compute dynamic balances
       const bankReceipts = (await window.api.getRecentBankReceipts()) || []
       const cashReceipts = (await window.api.getRecentCashReceipts()) || []
 
       const receipts = [...bankReceipts, ...cashReceipts].map((r) => ({
         ...r,
-        // unify date field if some use createdAt
         date: r.date || r.createdAt || new Date().toISOString()
       }))
 
-      // compute balance per account similar to AccountList.jsx logic:
-      // find receipts that reference this account; accumulate credit/debit
       const enriched = accs.map((acc) => {
-        // receipts referencing this account:
-        // - r.transactionAccount === acc.id (explicit)
-        // - OR r.sendTo (string) === acc.accountName (case-insensitive)
         const matching = receipts.filter((r) => {
           if (r.transactionAccount && String(r.transactionAccount) === String(acc.id)) return true
           if (r.sendTo && String(r.sendTo).toLowerCase() === String(acc.accountName).toLowerCase())
@@ -71,23 +58,12 @@ const TransferAmount = () => {
         const base = Number(acc.closingBalance || acc.openingBalance || 0)
         const computed = base + credits - debits
 
-        return {
-          ...acc,
-          _matchingReceipts: matching,
-          computedBalance: computed
-        }
+        return { ...acc, computedBalance: computed }
       })
 
-      // sort so latest created first (similar to AccountList)
-      enriched.sort((a, b) => {
-        const dateA = new Date(a?.createdAt || a?.date || 0)
-        const dateB = new Date(b?.createdAt || b?.date || 0)
-        return dateB - dateA
-      })
+      enriched.sort((a, b) => new Date(b?.createdAt) - new Date(a?.createdAt))
 
       setAccounts(enriched)
-      setRecentReceipts(receipts)
-      // update accounts in redux too (so other pages get updated)
       dispatch(setAccount(enriched))
     } catch (err) {
       console.error('loadAccountsAndReceipts error', err)
@@ -99,114 +75,104 @@ const TransferAmount = () => {
     loadAccountsAndReceipts()
   }, [loadAccountsAndReceipts])
 
-  // helper to get account object by id
   const getAccountById = (id) => accounts.find((a) => String(a.id) === String(id))
 
-  // perform transfer
+  // SWAP FUNCTION
+  const handleSwap = () => {
+    if (!selectedFrom && !selectedTo) return
+    const temp = selectedFrom
+    setSelectedFrom(selectedTo)
+    setSelectedTo(temp)
+  }
+
   const handleTransfer = async () => {
     setError('')
     setSuccess(false)
 
     if (!selectedFrom || !selectedTo) {
-      setError('Please select both From and To accounts')
+      setError('Please select both accounts')
       return
     }
-
     if (String(selectedFrom) === String(selectedTo)) {
-      setError('Cannot transfer to the same account')
+      setError('Source and Destination cannot be the same')
       return
     }
 
     const amt = Number(amount)
+    const fromAcc = getAccountById(selectedFrom)
+
     if (!amt || amt <= 0) {
       setError('Enter a valid amount')
       return
     }
-
-    const fromAcc = getAccountById(selectedFrom)
-    if (!fromAcc) {
-      setError('From account not found')
-      return
-    }
-
     if (amt > Number(fromAcc.computedBalance || 0)) {
-      setError('Insufficient balance in selected From account')
+      setError(`Insufficient balance in ${fromAcc.accountName}`)
       return
     }
 
-    // call backend transfer API - using the same param names used in PaymentMethod.jsx
     try {
       const payload = {
-        fromAccount: selectedFrom,
-        toAccount: selectedTo,
+        fromAccountId: selectedFrom,
+        toAccountId: selectedTo,
         amount: amt,
-        description: description || `Transfer from ${fromAcc.accountName}`
+        narration: description || `Transfer to ${getAccountById(selectedTo)?.accountName}`
       }
 
       const res = await window.api.transferAmount(payload)
 
-      console.log('🔥 TRANSFER RESPONSE:', res)
-
-      // Expecting API to return something like { success: true, data: {...} } or created transaction
-      if (res && (res.success === true || res.status === 'success' || res.id || res.data)) {
-        // update local accounts balances immediately for responsiveness (optimistic)
+      if (res?.success) {
+        // Optimistic UI Update
         setAccounts((prev) =>
           prev.map((acc) => {
-            if (String(acc.id) === String(selectedFrom)) {
-              return { ...acc, computedBalance: Number(acc.computedBalance || 0) - amt }
-            }
-            if (String(acc.id) === String(selectedTo)) {
-              return { ...acc, computedBalance: Number(acc.computedBalance || 0) + amt }
-            }
+            if (String(acc.id) === String(selectedFrom))
+              return { ...acc, computedBalance: acc.computedBalance - amt }
+            if (String(acc.id) === String(selectedTo))
+              return { ...acc, computedBalance: acc.computedBalance + amt }
             return acc
           })
         )
 
-        // push to local transactions history: prefer using returned object if present
-        const tx = res?.data ||
-          res || {
-            id: `tx-${Date.now()}`,
-            fromAccountId: selectedFrom,
-            toAccountId: selectedTo,
-            amount: amt,
-            description: payload.description,
-            date: new Date().toISOString(),
-            status: 'completed'
-          }
+        const tx = {
+          id: `tx-${Date.now()}`,
+          fromAccountId: selectedFrom,
+          toAccountId: selectedTo,
+          amount: amt,
+          description: payload.narration,
+          date: new Date().toISOString(),
+          status: 'completed'
+        }
 
         setTransactions((prev) => [tx, ...prev])
-
-        // refresh receipts/accounts from API to reflect actual persisted state
         await loadAccountsAndReceipts()
 
-        toast.success(res?.message || 'Transfer successful')
+        toast.success('Transfer Successful')
         setSuccess(true)
         setAmount('')
         setDescription('')
-        setSelectedFrom(null)
-        setSelectedTo(null)
-        setTimeout(() => setSuccess(false), 2200)
+        // Optional: Reset selection or keep for next transfer
+        setTimeout(() => setSuccess(false), 3000)
       } else {
-        // API responded with failure
-        console.error('transferAmount failed response', res)
         toast.error(res?.message || 'Transfer failed')
-        setError(res?.message || 'Transfer failed')
+        setError(res?.message)
       }
     } catch (err) {
-      console.error('transferAmount error', err)
-      setError(err.message || 'Transfer failed')
-      toast.error('Transfer failed: ' + (err.message || 'Unknown error'))
+      setError(err.message)
+      toast.error('Error: ' + err.message)
     }
   }
 
-  // simple format for history dates
+  // Generate RSuite compatible options
+  const accountOptions = accounts.map((acc) => ({
+    label: acc.accountName,
+    value: acc.id,
+    balance: acc.computedBalance
+  }))
+
   const formatDate = (iso) => {
     try {
-      const d = new Date(iso)
-      return d.toLocaleString('en-IN', {
+      return new Date(iso).toLocaleString('en-IN', {
         day: '2-digit',
         month: 'short',
-        year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
       })
@@ -215,261 +181,250 @@ const TransferAmount = () => {
     }
   }
 
-  // carousel scroll helpers (same behavior as your existing file)
-  const scrollCarousel = (direction, carouselRef) => {
-    const carousel = carouselRef?.current
-    if (!carousel) return
-    const scrollAmount = 280
-    carousel.scrollBy({
-      left: direction === 'left' ? -scrollAmount : scrollAmount,
-      behavior: 'smooth'
-    })
-  }
+  // --- SUB-COMPONENTS ---
 
-  // derived lists for selects (exclude disabled accounts)
-  // const accountOptions = useMemo(
-  //   () =>
-  //     accounts.map((a) => ({ label: a.accountName, value: a.id, balance: a.computedBalance || 0 })),
-  //   [accounts]
-  // )
+  // The Card Component that shows the selected account details
+  const AccountCard = ({ type, selectedId, onSelect, placeholder }) => {
+    const acc = getAccountById(selectedId)
+    const isDebit = type === 'from'
 
-  return (
-    <div className="max-h-screen select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-scroll customScrollbar">
-      <div className="w-full sticky top-0 z-10">
-        <Navbar />
-      </div>
+    return (
+      <div className="flex flex-col gap-3 w-full">
+        <label className="text-xs font-bold uppercase tracking-wider text-gray-500 ml-1">
+          {isDebit ? 'Debit From' : 'Credit To'}
+        </label>
 
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="flex justify-between mt-5 pb-2 items-center">
-          <p className="text-3xl font-light">Transfer Amount</p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setActiveView('transfer')}
-              className={`text-black flex items-center gap-1 border border-gray-300 px-3 py-1 rounded-sm ${activeView === 'transfer' ? 'bg-black text-white' : ''}`}
-            >
-              Transfer Money
-            </button>
-            <button
-              onClick={() => setActiveView('history')}
-              className={`text-black flex items-center gap-1 border border-gray-300 px-3 py-1 rounded-sm ${activeView === 'history' ? 'bg-black text-white' : ''}`}
-            >
-              Transaction History
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          {/* Account cards */}
-          <div className="bg-white rounded-3xl p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {accounts.length === 0 ? (
-                <div className="text-sm text-gray-500 col-span-3">No accounts found.</div>
-              ) : (
-                accounts.map((acc) => (
-                  <div
-                    key={acc.id}
-                    className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white"
-                  >
-                    <p className="text-sm opacity-90 mb-1">{acc.accountName}</p>
-                    <p className="text-2xl font-bold">₹ {toINR(acc.computedBalance)}</p>
-                    <p className="text-xs opacity-75 mt-2">
-                      {acc.accountType || acc.type || 'Account'}
-                    </p>
-                  </div>
-                ))
-              )}
+        {/* Account Selector */}
+        <SelectPicker
+          data={accountOptions}
+          value={selectedId}
+          onChange={onSelect}
+          searchable
+          placeholder={placeholder}
+          className="w-full"
+          renderMenuItem={(label, item) => (
+            <div className="flex justify-between w-full gap-4">
+              <span>{label}</span>
+              <span className="text-gray-400 text-xs">₹{item.balance}</span>
             </div>
-          </div>
+          )}
+        />
 
-          {/* Transfer card */}
-          {activeView === 'transfer' && (
-            <div className="bg-white rounded-3xl shadow-xl p-8">
-              {success && (
-                <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-2xl flex items-center gap-3">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
-                  <div>
-                    <p className="font-semibold text-green-900">Transfer Successful!</p>
-                    <p className="text-sm text-green-700">Your funds have been transferred.</p>
-                  </div>
-                </div>
-              )}
-
-              {error && (
-                <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-2xl">
-                  <p className="text-red-700 font-medium">{error}</p>
-                </div>
-              )}
-
-              <h3 className="text-xl font-bold text-gray-900 mb-6">Select Accounts</h3>
-
-              <div className="grid md:grid-cols-2 gap-8 relative">
-                {/* FROM */}
+        {/* Visual Card */}
+        <div
+          className={`
+          relative overflow-hidden rounded-2xl p-6 h-40 transition-all duration-300 shadow-lg border border-opacity-20
+          ${!acc ? 'bg-gray-50 border-gray-300 flex items-center justify-center' : ''}
+          ${acc && isDebit ? 'bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-slate-200' : ''}
+          ${acc && !isDebit ? 'bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-slate-200' : ''}
+        `}
+        >
+          {!acc ? (
+            <div className="text-gray-500 flex flex-col items-center gap-2">
+              <Wallet className="w-8 h-8 opacity-20" />
+              <span className="text-sm font-medium">Select Account</span>
+            </div>
+          ) : (
+            <div className="flex flex-col justify-between h-full relative z-10">
+              <div className="flex justify-between items-start">
                 <div>
-                  <label className="text-sm font-medium text-gray-600 mb-3 block">
-                    From Account
-                  </label>
-                  <div className="flex items-center gap-2 mb-3">
-                    <button
-                      onClick={() => scrollCarousel('left', carouselFromRef)}
-                      className="p-2 bg-white rounded-full shadow"
-                      title="Scroll left"
-                    >
-                      <ChevronLeft className="w-5 h-5 text-gray-700" />
-                    </button>
-                    <div
-                      id="from-carousel"
-                      ref={carouselFromRef}
-                      className="flex gap-3 overflow-x-auto py-1 px-2 rounded-lg"
-                      style={{ scrollBehavior: 'smooth' }}
-                    >
-                      {accounts.map((acc) => (
-                        <button
-                          key={acc.id}
-                          onClick={() => setSelectedFrom(acc.id)}
-                          className={`min-w-[200px] p-3 rounded-xl shadow-sm text-left ${selectedFrom === acc.id ? 'ring-2 ring-indigo-300' : 'border border-gray-100'}`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <div className="text-sm text-gray-700 font-medium">
-                                {acc.accountName}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                ₹ {toINR(acc.computedBalance)}
-                              </div>
-                            </div>
-                            <div className="text-xs text-gray-400">
-                              {acc.accountType || acc.type || ''}
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => scrollCarousel('right', carouselFromRef)}
-                      className="p-2 bg-white rounded-full shadow"
-                      title="Scroll right"
-                    >
-                      <ChevronRight className="w-5 h-5 text-gray-700" />
-                    </button>
-                  </div>
+                  <p className="text-sm opacity-70 mb-1">{acc.accountType || 'Savings'}</p>
+                  <p className="font-semibold text-lg tracking-wide">{acc.accountName}</p>
                 </div>
-
-                {/* TO */}
-                <div>
-                  <label className="text-sm font-medium text-gray-600 mb-3 block">To Account</label>
-                  <div className="flex items-center gap-2 mb-3">
-                    <button
-                      onClick={() => scrollCarousel('left', carouselToRef)}
-                      className="p-2 bg-white rounded-full shadow"
-                    >
-                      <ChevronLeft className="w-5 h-5 text-gray-700" />
-                    </button>
-                    <div
-                      id="to-carousel"
-                      ref={carouselToRef}
-                      className="flex gap-3 overflow-x-auto py-1 px-2 rounded-lg"
-                    >
-                      {accounts.map((acc) => (
-                        <button
-                          key={acc.id}
-                          onClick={() => setSelectedTo(acc.id)}
-                          className={`min-w-[200px] p-3 rounded-xl shadow-sm text-left ${selectedTo === acc.id ? 'ring-2 ring-indigo-300' : 'border border-gray-100'}`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <div className="text-sm text-gray-700 font-medium">
-                                {acc.accountName}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                ₹ {toINR(acc.computedBalance)}
-                              </div>
-                            </div>
-                            <div className="text-xs text-gray-400">
-                              {acc.accountType || acc.type || ''}
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => scrollCarousel('right', carouselToRef)}
-                      className="p-2 bg-white rounded-full shadow"
-                    >
-                      <ChevronRight className="w-5 h-5 text-gray-700" />
-                    </button>
+                {isDebit ? (
+                  <div className="p-2 bg-white/10 rounded-lg">
+                    <Send className="w-5 h-5 rotate-180" />
                   </div>
-                </div>
+                ) : (
+                  <div className="p-2 bg-white/10 rounded-lg">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                )}
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 items-end">
-                <div>
-                  <label className="text-sm text-gray-600">Amount</label>
-                  <InputNumber
-                    prefix="₹"
-                    value={amount}
-                    onChange={(val) => setAmount(val)}
-                    className="w-full"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Description</label>
-                  <Input
-                    value={description}
-                    onChange={(v) => setDescription(v)}
-                    placeholder="Optional description"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleTransfer}
-                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-                  >
-                    Transfer
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedFrom(null)
-                      setSelectedTo(null)
-                      setAmount('')
-                      setDescription('')
-                      setError('')
-                    }}
-                    className="px-4 py-2 border rounded-lg"
-                  >
-                    Clear
-                  </button>
-                </div>
+              <div>
+                <p className="text-xs opacity-60">Available Balance</p>
+                <p className="text-2xl font-bold tracking-tight">{toINR(acc.computedBalance)}</p>
               </div>
             </div>
           )}
+          {/* Decorator Circles */}
+          {acc && (
+            <>
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+              <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
 
-          {/* History view */}
-          {activeView === 'history' && (
-            <div className="bg-white rounded-3xl p-6">
-              <h3 className="text-lg font-semibold mb-4">Recent Transfers</h3>
-              <div className="space-y-3">
-                {/* first show local transactions */}
+  return (
+    <div className="h-screen w-full bg-gray-50/50 flex flex-col font-poppins select-none">
+      <div className="w-full sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-100">
+        <Navbar />
+      </div>
+
+      <div className="flex-1 overflow-y-auto customScrollbar p-4 md:p-8">
+        <div className="max-w-5xl mx-auto">
+          {/* Header & Toggle */}
+          <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">Transfer Amount</h1>
+              <p className="text-sm text-gray-500">Move money between your internal accounts</p>
+            </div>
+
+            <div className="flex bg-gray-200/50 p-1 rounded-xl">
+              <button
+                onClick={() => setActiveView('transfer')}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeView === 'transfer'
+                    ? 'bg-white shadow-sm text-indigo-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <ArrowRightLeft className="w-4 h-4" /> Transfer
+              </button>
+              <button
+                onClick={() => setActiveView('history')}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeView === 'history'
+                    ? 'bg-white shadow-sm text-indigo-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <History className="w-4 h-4" /> History
+              </button>
+            </div>
+          </div>
+
+          {activeView === 'transfer' ? (
+            <div className="bg-white rounded-3xl shadow-2xl shadow-slate-200 p-6 md:p-10 relative">
+              {/* --- Transfer Layout --- */}
+              <div className="flex flex-col md:grid md:grid-cols-[1fr_auto_1fr] gap-6 items-center">
+                {/* From Section */}
+                <AccountCard
+                  type="from"
+                  selectedId={selectedFrom}
+                  onSelect={setSelectedFrom}
+                  placeholder="Select Sender..."
+                />
+
+                {/* Swap Button (Center) */}
+                <div className="relative pt-8 md:pt-0 top-8">
+                  <div className="absolute inset-0 flex items-center justify-center md:hidden">
+                    <div className="h-full w-px bg-gray-200"></div>
+                  </div>
+                  <button
+                    onClick={handleSwap}
+                    className="relative z-10 p-3 bg-white border border-gray-700 shadow-md rounded-full text-gray-500 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-lg transition-all active:scale-95 group"
+                    title="Swap Accounts"
+                  >
+                    <ArrowRightLeft className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" />
+                  </button>
+                </div>
+
+                {/* To Section */}
+                <AccountCard
+                  type="to"
+                  selectedId={selectedTo}
+                  onSelect={setSelectedTo}
+                  placeholder="Select Receiver..."
+                />
+              </div>
+
+              {/* Input Section */}
+              <div className="mt-10 max-w-lg mx-auto space-y-6">
+                {/* Amount Input */}
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-600 block text-center">
+                    Amount to Transfer
+                  </label>
+                  <div className="relative">
+                    <InputNumber
+                      value={amount}
+                      onChange={setAmount}
+                      placeholder="0.00"
+                      size="lg"
+                      prefix="₹"
+                      className="!w-full !text-center !text-3xl !font-bold !py-2 !h-auto focus-within:!border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Description Input */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-gray-500 block ml-1">
+                    Description (Optional)
+                  </label>
+                  <Input
+                    value={description}
+                    onChange={setDescription}
+                    placeholder="e.g. Monthly Savings"
+                    className="!bg-gray-50 focus:!bg-white"
+                  />
+                </div>
+
+                {/* Feedback Messages */}
+                {error && (
+                  <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center border border-red-100 animate-pulse">
+                    {error}
+                  </div>
+                )}
+
+                {success && (
+                  <div className="p-3 bg-green-50 text-green-600 text-sm rounded-lg text-center border border-green-100 flex items-center justify-center gap-2">
+                    <CheckCircle className="w-4 h-4" /> Transfer Successful!
+                  </div>
+                )}
+
+                {/* Action Button */}
+                <button
+                  onClick={handleTransfer}
+                  disabled={!selectedFrom || !selectedTo || !amount}
+                  className="w-full py-4 bg-slate-900 text-white rounded-xl font-medium text-lg hover:bg-slate-800 shadow-lg shadow-slate-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  Confirm Transfer
+                </button>
+              </div>
+            </div>
+          ) : (
+            // --- History View ---
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-6 border-b border-gray-100">
+                <h3 className="font-semibold text-gray-800">Transaction History</h3>
+              </div>
+              <div className="divide-y divide-gray-100">
                 {transactions.length === 0 ? (
-                  <div className="text-sm text-gray-500">No transfers yet.</div>
+                  <div className="p-10 text-center text-gray-400 flex flex-col items-center">
+                    <History className="w-10 h-10 mb-3 opacity-20" />
+                    <p>No recent transfers in this session.</p>
+                  </div>
                 ) : (
-                  transactions.map((t, idx) => {
-                    const fromAcc = getAccountById(t.fromAccountId) || {}
-                    const toAcc = getAccountById(t.toAccountId) || {}
+                  transactions.map((t, i) => {
+                    const from = getAccountById(t.fromAccountId)?.accountName || 'Unknown'
+                    const to = getAccountById(t.toAccountId)?.accountName || 'Unknown'
                     return (
                       <div
-                        key={t.id || idx}
-                        className="flex justify-between items-center border rounded-lg p-3"
+                        key={i}
+                        className="p-5 flex items-center justify-between hover:bg-gray-50 transition-colors"
                       >
-                        <div>
-                          <div className="font-medium">
-                            {fromAcc.accountName || t.fromAccount || '—'} →{' '}
-                            {toAcc.accountName || t.toAccount || '—'}
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
+                            <ArrowRightLeft className="w-5 h-5" />
                           </div>
-                          <div className="text-xs text-gray-500">{t.description || ''}</div>
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {from} <span className="text-gray-400 mx-1">→</span> {to}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {t.description || 'Fund Transfer'}
+                            </p>
+                          </div>
                         </div>
                         <div className="text-right">
-                          <div className="font-semibold">₹ {toINR(t.amount)}</div>
-                          <div className="text-xs text-gray-400">{formatDate(t.date)}</div>
+                          <p className="font-bold text-gray-900">{toINR(t.amount)}</p>
+                          <p className="text-xs text-gray-400">{formatDate(t.date)}</p>
                         </div>
                       </div>
                     )

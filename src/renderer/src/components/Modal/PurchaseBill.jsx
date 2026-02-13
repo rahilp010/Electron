@@ -305,29 +305,18 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
       }
       if (field === 'taxAmount') {
         const selectedCodes = value || []
-        row.taxAmount = selectedCodes
-          .map((code) => {
-            if (code === 'freightCharges') {
-              return {
-                code: 'freightCharges',
-                name: 'Freight Charges',
-                percentage: 0,
-                value: Number(prev.freightCharges || 0) / selectedCodes.length || 0
-              }
-            }
-            const st = settings.find((s) => `custom-${s.id}` === code)
-            if (st) {
-              const base = (row.price || 0) * (row.quantity || 0)
-              return {
-                code,
-                name: st.taxName,
-                percentage: st.taxValue,
-                value: (base * st.taxValue) / 100
-              }
-            }
-            return null
-          })
-          .filter(Boolean)
+
+        row.taxAmount = selectedCodes.map((code) => {
+          const st = settings.find((s) => `custom-${s.id}` === code)
+          const base = (row.price || 0) * (row.quantity || 0)
+
+          return {
+            code,
+            name: st.taxName,
+            percentage: st.taxValue,
+            value: (base * st.taxValue) / 100 // ✔ calculate here ONCE
+          }
+        })
       }
       updatedRows[index] = row
       return { ...prev, products: updatedRows }
@@ -358,23 +347,27 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
       const tax = Array.isArray(p.taxAmount)
         ? p.taxAmount.reduce((a, t) => a + (t.value || 0), 0)
         : 0
-      const freight = Number(purchaseBill.freightCharges || 0)
-      const total = base + tax + freight
-      return { base, tax, freight, total }
+      const total = base + tax
+      return { base, tax, total }
     })
-  }, [purchaseBill.products, purchaseBill.freightCharges])
+  }, [purchaseBill.products])
+
   const billSubTotal = useMemo(() => {
     return productRowTotals.reduce((s, r) => s + r.base, 0)
   }, [productRowTotals])
+
   const billTaxTotal = useMemo(() => {
     return productRowTotals.reduce((s, r) => s + r.tax, 0)
   }, [productRowTotals])
+
   const billFreight = useMemo(() => {
     return Number(purchaseBill.freightCharges || 0)
   }, [purchaseBill.freightCharges])
+
   const billFreightTax = useMemo(() => {
     return (purchaseBill.freightTaxAmount || []).reduce((s, t) => s + (t?.value || 0), 0)
   }, [purchaseBill.freightTaxAmount])
+  
   const grandTotal = useMemo(() => {
     const productTotals = productRowTotals.reduce((s, r) => s + r.total, 0)
     const total = productTotals + billFreight + billFreightTax
@@ -850,10 +843,10 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         let targetTx = relatedTransactions[i]
 
         const updatedTxData = {
-          id: targetTx?.id || existingTransaction.id, // fallback to first
+          id: targetTx?.id || existingTransaction.id,
           clientId: purchaseBill.clientId,
           productId: row.productId,
-          multipleProducts: rowsDetailed, // ← Save full list again
+          multipleProducts: rowsDetailed,
           quantity: row.quantity,
           sellAmount: row.price,
           purchaseAmount: itemTotal,

@@ -24,10 +24,11 @@ import {
   setProducts,
   deleteCashReceipt,
   updateClient,
-  updateTransaction
+  updateTransaction,
+  setTransactions
 } from '../app/features/electronSlice'
 import { useDispatch, useSelector } from 'react-redux'
-import { clientApi, productApi } from '../API/Api'
+import { clientApi, productApi, transactionApi } from '../API/Api'
 import { toast } from 'react-toastify'
 import Navbar from '../components/UI/Navbar'
 import { DatePicker, Input, SelectPicker, Tooltip, Whisper } from 'rsuite'
@@ -643,11 +644,10 @@ const Cash = () => {
 
       {showLoader && <Loader />}
 
-      <form
+      {/* <form
         onSubmit={handleSubmitCashReceipt}
         className="bg-white rounded-2xl shadow-xl mx-7 mb-8 overflow-hidden border border-gray-200"
       >
-        {/* Form Header */}
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
             <CreditCard size={20} />
@@ -655,7 +655,6 @@ const Cash = () => {
           </h3>
         </div>
 
-        {/* Type and Bank Selection */}
         <div className="p-6">
           <div className="flex items-center gap-5 mb-6">
             <div className="flex-1">
@@ -749,9 +748,7 @@ const Cash = () => {
             </div>
           </div>
 
-          {/* Form Fields Grid */}
           <div className="grid grid-cols-4 gap-6 mb-5">
-            {/* Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Transaction Date
@@ -772,7 +769,6 @@ const Cash = () => {
               )}
             </div>
 
-            {/* Party */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Party / Account
@@ -794,7 +790,6 @@ const Cash = () => {
               )}
             </div>
 
-            {/* Amount */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
               <Input
@@ -813,7 +808,6 @@ const Cash = () => {
               )}
             </div>
 
-            {/* Due Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Due Date (Optional)
@@ -828,7 +822,6 @@ const Cash = () => {
               />
             </div>
 
-            {/* Description */}
             <div className="col-span-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
               <Input
@@ -842,7 +835,6 @@ const Cash = () => {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex justify-end gap-3">
             <button
               type="button"
@@ -874,9 +866,8 @@ const Cash = () => {
             </button>
           </div>
         </div>
-      </form>
+      </form> */}
 
-      {/* Receipts Table */}
       <div className="bg-white rounded-2xl shadow-xl mx-7 mb-10 overflow-hidden border border-gray-200">
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">

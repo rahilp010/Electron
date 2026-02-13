@@ -43,25 +43,16 @@ const CreateAccountModal = ({
       return {
         id: existingAccount.id || '',
         accountName: existingAccount.accountName || '',
-        balance: existingAccount.balance || 0,
-        status: existingAccount.status || 'active',
         openingBalance: existingAccount.openingBalance || 0,
-        closingBalance: existingAccount.closingBalance || 0,
-        createdAt: existingAccount.createdAt || new Date(),
-        updatedAt: existingAccount.updatedAt || new Date(),
-        pageName: 'Account'
+        status: existingAccount.status || 'active'
       }
     }
+
     return {
       id: '',
       accountName: '',
-      balance: 0,
-      status: 'active',
       openingBalance: 0,
-      closingBalance: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      pageName: 'Account'
+      status: 'active'
     }
   }, [isUpdateAccount, existingAccount])
 
@@ -137,42 +128,34 @@ const CreateAccountModal = ({
         }
 
         const formattedAccountData = {
-          ...accountData,
           id: accountData.id || undefined,
-          balance: Number(accountData.openingBalance) || 0,
-          openingBalance: accountData.openingBalance || 0,
-          closingBalance: isUpdateAccount
-            ? Number(accountData.closingBalance)
-            : Number(accountData.openingBalance),
-          accountName: accountData.accountName.trim()
+          accountName: accountData.accountName.trim(),
+          openingBalance: Number(accountData.openingBalance) || 0,
+          status: accountData.status
         }
 
         let result
         let successMessage
 
         if (isUpdateAccount && accountData.id) {
-          result = await window.api.updateAccount({
+          const result = await window.api.updateAccount({
             id: accountData.id,
             ...formattedAccountData
           })
-          if (result && result.success !== false) {
-            dispatch(updateAccount(result.data || result))
-            successMessage = 'Account updated successfully'
-          } else {
-            throw new Error(result?.message || 'Update failed')
-          }
+
+          if (!result?.success) throw new Error(result?.message || 'Update failed')
+
+          dispatch(updateAccount(result.data))
+          toast.success('Account updated successfully')
         } else {
-          result = await window.api.createAccount(formattedAccountData)
-          if (result && result.success !== false) {
-            const createdAccount = result.data || result
-            dispatch(createAccount(createdAccount))
-            successMessage = 'Account created successfully'
-          } else {
-            throw new Error(result?.message || 'Creation failed')
-          }
+          const result = await window.api.createAccount(formattedAccountData)
+
+          if (!result?.success) throw new Error(result?.message || 'Creation failed')
+
+          dispatch(createAccount(result.data))
+          toast.success('Account created successfully')
         }
 
-        toast.success(successMessage)
         setShowModal(false)
       } catch (error) {
         console.error('Account submission error:', error)
@@ -226,7 +209,7 @@ const CreateAccountModal = ({
                 className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
-            <div>
+            {/* <div>
               <label htmlFor="balance" className="block text-sm mb-1 text-gray-600">
                 Current Balance
               </label>
@@ -240,7 +223,7 @@ const CreateAccountModal = ({
                 className="w-full"
                 min={0}
               />
-            </div>
+            </div> */}
             <div>
               <label htmlFor="openingBalance" className="block text-sm mb-1 text-gray-600">
                 Opening Balance
@@ -257,7 +240,7 @@ const CreateAccountModal = ({
               />
             </div>
 
-            <div>
+            {/* <div>
               <label htmlFor="closingBalance" className="block text-sm mb-1 text-gray-600">
                 Closing Balance
               </label>
@@ -271,7 +254,7 @@ const CreateAccountModal = ({
                 className="w-full"
                 min={0}
               />
-            </div>
+            </div> */}
           </div>
           <div className="flex items-center justify-between">
             <Toggle

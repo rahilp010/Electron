@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Cash receipt methods
   getRecentCashReceipts: () => ipcRenderer.invoke('getRecentCashReceipts'),
+  getRecentCashReceiptsByTransactionId: (transactionId) =>
+    ipcRenderer.invoke('getRecentCashReceiptsByTransactionId', transactionId),
   createCashReceipt: (cashReceipt) => ipcRenderer.invoke('createCashReceipt', cashReceipt),
   updateCashReceipt: (cashReceipt) => ipcRenderer.invoke('updateCashReceipt', cashReceipt),
   deleteCashReceipt: (id) => ipcRenderer.invoke('deleteCashReceipt', id),

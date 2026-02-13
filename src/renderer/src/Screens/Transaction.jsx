@@ -174,7 +174,7 @@ const TransactionRow = memo(
   }) => {
     const clientName = getClientName(transaction?.clientId, clients)
     const productName = getProductName(transaction?.productId, products)
-    const totalAmount = (transaction?.sellAmount || 0) * (transaction?.quantity || 0)
+    // const totalAmount = (transaction?.sellAmount || 0) * (transaction?.quantity || 0)
 
     const renderPendingAmount = () => {
       if (
@@ -222,7 +222,7 @@ const TransactionRow = memo(
     return (
       <tr className={`text-sm text-center ${isSubRow ? 'bg-indigo-100' : ''}`}>
         <td className={`px-4 py-3 text-center `}>
-          {new Date(transaction?.date ).toLocaleDateString('en-IN', {
+          {new Date(transaction?.date).toLocaleDateString('en-IN', {
             day: '2-digit',
             month: 'short',
             year: 'numeric'
@@ -251,7 +251,7 @@ const TransactionRow = memo(
         </td>
         <td className={`px-4 py-3 font-semibold `}>
           <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
-            ₹ {toThousands(Number(totalAmount).toFixed(0))}
+            ₹ {toThousands(Number(transaction?.totalAmount).toFixed(0))}
           </div>
         </td>
         <td className={`px-4 py-3 `}>{renderPendingAmount()}</td>
@@ -344,6 +344,7 @@ const useTransactionOperations = () => {
   const fetchAllTransactions = useCallback(async () => {
     try {
       const response = await window.api.getAllTransactions()
+      console.log(response)
       dispatch(setTransactions(response))
     } catch (error) {
       console.error('Error fetching transactions:', error)
@@ -509,9 +510,9 @@ const generatePrintHTML = (
   const getCellValue = (row, headerKey) => {
     switch (headerKey) {
       case 'billNo':
-        return row.billNo || ''
+        return row.billNo || '-'
       case 'date':
-        return new Date(row.createdAt).toLocaleDateString()
+        return new Date(row.createdAt).toLocaleDateString('en-IN')
       case 'clientName':
         return getClientName(row.clientId, clients)
       case 'productName':
@@ -519,212 +520,209 @@ const generatePrintHTML = (
       case 'quantity':
         return row.quantity || 0
       case 'totalAmount':
-        return `₹ ${toThousands(Number((row.sellAmount || 0) * (row.quantity || 0)).toFixed(0))}`
+        const total = (row.sellAmount || 0) * (row.quantity || 0)
+        return `₹${toThousands(Number(total).toFixed(0))}`
       case 'pendingAmount':
         if (row.statusOfTransaction === 'pending' && row.paymentType === 'partial') {
-          return `₹ ${toThousands(Number(row.pendingAmount).toFixed(0))}`
+          return `₹${toThousands(Number(row.pendingAmount).toFixed(0))}`
         }
-        return row.statusOfTransaction === 'completed' ? '-' : 'Pending'
+        return row.statusOfTransaction === 'completed' ? 'Settled' : 'Pending'
       default:
         return ''
     }
   }
 
-  const tableHeaders = headers.map((h) => `<th class="border px-4 py-2">${h.label}</th>`).join('')
+  // Determine if a column is numeric to align it right
+  const isNumeric = (key) => ['quantity', 'totalAmount', 'pendingAmount', 'balance'].includes(key)
+
+  const tableHeaders = headers
+    .map((h) => `<th class="${isNumeric(h.key) ? 'text-right' : 'text-left'}">${h.label}</th>`)
+    .join('')
+
   const tableRows = data
     .map((row) => {
       const cells = headers
-        .map((h) => `<td class="border px-4 py-2 text-center">${getCellValue(row, h.key)}</td>`)
+        .map((h) => {
+          const alignClass = isNumeric(h.key) ? 'text-right' : 'text-left'
+          return `<td class="${alignClass}">${getCellValue(row, h.key)}</td>`
+        })
         .join('')
       return `<tr>${cells}</tr>`
     })
     .join('')
 
-  let ledgerSpecificContent = ''
-  if (reportType === 'ledger') {
-    // Example for ledger: Add balance columns or specific ledger logic
-    // Customize based on your ledger data structure
-    ledgerSpecificContent = `
-      <tr>
-        <td colspan="${headers.length}" class="border px-4 py-2 font-bold text-right">Running Balance</td>
-      </tr>
-      ${data
-        .map((row, index) => {
-          // Assume ledger data has 'balance' field; adjust as needed
-          const balance = row.balance || 0
-          return `<tr><td colspan="${headers.length - 1}" class="border px-4 py-2"></td><td class="border px-4 py-2 text-right">₹ ${toThousands(balance)}</td></tr>`
-        })
-        .join('')}
-    `
-  }
-
   return `
-    <!DOCTYPE html>
-<html>
-  <head>
-   <link rel="icon" type="image/png" href="../../../../resources/icon.png" />
-    <title>${title} Report</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>${title} | Report</title>
     <style>
-      body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        margin: 20px;
-        color: #1e293b;
-        background: #fff;
-      }
-
-      /* ===== HEADER BAR ===== */
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 25px;
-        padding-bottom: 15px;
-        border-bottom: 2px solid #e5e7eb;
-      }
-
-      .header-left {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .header-left h1 {
-        font-size: 28px;
-        font-weight: 600;
-        margin: 0;
-        color: #111827;
-      }
-
-      .generated-label {
-        font-size: 12px;
-        color: #64748b;
-        background: #f1f5f9;
-        border: 1px solid #e5e7eb;
-        padding: 2px 8px;
-        border-radius: 6px;
-        margin-bottom: 6px;
-      }
-
-      .header-right {
-        font-size: 14px;
-        color: #374151;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 5px;
-      }
-
-      .record-count {
-        font-weight: bold;
-        background: #f3f4f6;
-        border: 1px solid #e2e8f0;
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-size: 13px;
-        color: #1e40af;
-      }
-
-      /* ===== TABLE ===== */
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-        font-size: 14px;
-      }
-
-      thead th {
-        background: #e5e7eb;
-        color: #111827;
-        padding: 12px 14px;
-        border: 1px solid #e2e8f0;
-        font-weight: 600;
-        text-transform: capitalize;
-        font-size: 15px;
-        text-align: left;
-      }
-
-      tbody td {
-        padding: 10px 14px;
-        border: 1px solid #e2e8f0;
-        font-size: 14px;
-        color: #374151;
-      }
-
-      tbody tr:nth-child(even) {
-        background: #f9fafb;
-      }
-
-      tbody tr:hover {
-        background: #f1f5f9;
-      }
-
-      .totals-row {
-        font-weight: bold;
-        background: #f3f4f6;
-      }
-
-      /* ===== FOOTER ===== */
-      .footer {
-        margin-top: 25px;
-        text-align: center;
-        font-size: 12px;
-        color: #64748b;
-        border-top: 1px solid #e2e8f0;
-        padding-top: 10px;
-      }
-
-      .footer strong {
-        font-size: 15px;
-        color: #1e40af;
-      }
-
-      @media print {
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
+        
         body {
-          margin: 0.8cm;
+            font-family: 'Inter', -apple-system, sans-serif;
+            margin: 0;
+            padding: 10px;
+            color: #1e293b;
+            line-height: 1.5;
+            background: #fff;
         }
-        .footer {
-          position: fixed;
-          bottom: 10px;
-          width: 100%;
-        }
-      }
-    </style>
-  </head>
-  <body onload="window.print(); setTimeout(() => { window.close(); }, 1000);">
 
-    <!-- ===== HEADER SECTION ===== -->
-    <div class="header">
-      <div class="header-left">
-        <h1>${title}</h1>
-      </div>
-      <div class="header-right">
-      <div class="record-count">Total Records: ${data.length}</div>
-      <div>Generated on: ${new Date().toLocaleString()}</div>
-      </div>
+        /* ===== PREMIUM HEADER ===== */
+        .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 40px;
+            border-bottom: 3px solid #4f46e5;
+            padding-bottom: 20px;
+        }
+
+        .title-section h1 {
+            font-size: 32px;
+            font-weight: 800;
+            margin: 0;
+            color: #0f172a;
+            letter-spacing: -0.025em;
+            text-transform: uppercase;
+        }
+
+        .title-section p {
+            margin: 5px 0 0 0;
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .meta-section {
+            text-align: right;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* ===== TABLE STYLING ===== */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        thead th {
+            background-color: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 14px 16px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        tbody td {
+            padding: 14px 16px;
+            font-size: 13px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #fafbfd;
+        }
+
+        .text-right { text-align: right; }
+        .text-left { text-align: left; }
+
+        /* ===== TOTALS / LEDGER SECTION ===== */
+        .ledger-row td {
+            background: #f8fafc;
+            font-weight: 700;
+            color: #1e293b;
+            border-top: 2px solid #e2e8f0;
+        }
+
+        /* ===== FOOTER ===== */
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #f1f5f9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: #94a3b8;
+        }
+
+        .footer-brand {
+            font-weight: 700;
+            color: #4f46e5;
+            font-size: 13px;
+        }
+
+        @media print {
+            body { padding: 20px; }
+            .no-print { display: none; }
+            thead { display: table-header-group; }
+            @page { size: A4; margin: 1cm; }
+        }
+    </style>
+</head>
+<body onload="window.print();">
+
+    <div class="report-header">
+        <div class="title-section">
+            <span class="badge">Official Report</span>
+            <h1>${title}</h1>
+            <p>Generated on ${new Date().toLocaleDateString('en-IN', { dateStyle: 'full' })}</p>
+        </div>
+        <div class="meta-section">
+            <div style="font-size: 24px; font-weight: 700; color: #4f46e5;">${data.length}</div>
+            <div style="font-size: 12px; color: #64748b; text-transform: uppercase;">Total Records</div>
+        </div>
     </div>
 
-    <!-- ===== TABLE ===== -->
     <table>
-      <thead>
-        <tr>
-          ${tableHeaders}
-        </tr>
-      </thead>
-      <tbody>
-        ${tableRows}
-        ${ledgerSpecificContent}
-      </tbody>
+        <thead>
+            <tr>${tableHeaders}</tr>
+        </thead>
+        <tbody>
+            ${tableRows}
+            ${
+              reportType === 'ledger'
+                ? `
+                <tr class="ledger-row">
+                    <td colspan="${headers.length - 1}" class="text-right">Grand Total / Balance</td>
+                    <td class="text-right">₹${toThousands(data.reduce((acc, curr) => acc + (curr.balance || 0), 0))}</td>
+                </tr>
+            `
+                : ''
+            }
+        </tbody>
     </table>
 
-    <!-- ===== FOOTER ===== -->
     <div class="footer">
-      <p>This is a computer-generated report. No signature is required.</p>
-      <p><strong>Powered by Electron</strong></p>
+        <div>
+            This document is electronically generated and verified. <br>
+            Reference ID: #REP-${Math.floor(1000 + Math.random() * 9000)}
+        </div>
+        <div class="footer-brand">
+            ELECTRON SYSTEMS
+        </div>
     </div>
-  </body>
+
+</body>
 </html>
-
-
   `
 }
 
@@ -1061,7 +1059,7 @@ const Transaction = () => {
   }, [filteredTransactions, clients, products])
 
   const TABLE_HEADERS_PRINT = [
-    { key: 'billNo', label: 'Bill No', width: 'w-[100px]' },
+    { key: 'billNo', label: 'Bill No', width: 'w-[150px]' },
     { key: 'date', label: 'Date', width: 'w-[100px]' },
     { key: 'clientName', label: 'Client Name', width: 'w-[250px]' },
     { key: 'productName', label: 'Product Name', width: 'w-[230px]' },

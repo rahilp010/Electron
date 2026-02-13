@@ -50,39 +50,11 @@ const AccountList = () => {
     if (searchQuery) {
       data = data.filter((acc) => acc.accountName.toLowerCase().includes(searchQuery.toLowerCase()))
     }
-    data = data.map((acc) => {
-      console.log(recentReceipts)
 
-      const matchingReceipts = recentReceipts.filter((r) => {
-        const txnAcc = r.transactionAccount ? String(r.transactionAccount).trim() : ''
-        const accId = String(acc.id).trim()
-
-        if (txnAcc && txnAcc === accId) return true
-
-        if (r.sendTo && r.sendTo.toLowerCase().trim() === acc.accountName.toLowerCase().trim())
-          return true
-
-        return false
-      })
-
-      let credits = 0
-      let debits = 0
-
-      matchingReceipts.forEach((r) => {
-        if (r.type === 'Receipt') credits += r.amount || 0
-        else if (r.type === 'Payment') debits += r.amount || 0
-      })
-
-      const previousBalance = acc.closingBalance || acc.openingBalance || 0
-
-      const computedBalance = previousBalance + credits - debits
-
-      return {
-        ...acc,
-        balance: computedBalance,
-        closingBalance: computedBalance
-      }
-    })
+    data = data.map((acc) => ({
+      ...acc,
+      balance: acc.closingBalance ?? acc.openingBalance ?? 0
+    }))
 
     data.sort((a, b) => {
       const dateA = new Date(a?.createdAt || a?.date || 0)

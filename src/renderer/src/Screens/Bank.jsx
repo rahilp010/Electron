@@ -23,11 +23,12 @@ import {
   deleteBankReceipt,
   setClients,
   setProducts,
+  setTransactions,
   updateClient,
   updateTransaction
 } from '../app/features/electronSlice'
 import { useDispatch, useSelector } from 'react-redux'
-import { clientApi, productApi } from '../API/Api'
+import { clientApi, productApi, transactionApi } from '../API/Api'
 import { toast } from 'react-toastify'
 import Navbar from '../components/UI/Navbar'
 import { DatePicker, Input, SelectPicker, Tooltip, Whisper } from 'rsuite'
@@ -252,7 +253,6 @@ const Bank = () => {
 
   const accountBalance = async () => {
     const response = await window.api.getAllAccounts()
-    console.log(response)
   }
 
   accountBalance()
@@ -304,6 +304,17 @@ const Bank = () => {
     } catch (error) {
       console.error('Error fetching clients:', error)
       toast.error('Failed to fetch clients')
+    }
+  }, [dispatch])
+
+  const fetchAllTransaction = useCallback(async () => {
+    try {
+      const response = await transactionApi.getAllTransactions()
+      dispatch(setTransactions(response))
+      console.log(response.filter((m)=> m.paymentMethod === 'bank'))
+    } catch (error) {
+      console.error('Error fetching transactions:', error)
+      toast.error('Failed to fetch transactions')
     }
   }, [dispatch])
 
@@ -626,7 +637,8 @@ const Bank = () => {
     fetchAllProducts()
     fetchAllClients()
     fetchRecentReceipts()
-  }, [fetchAllProducts, fetchAllClients, fetchRecentReceipts])
+    fetchAllTransaction()
+  }, [fetchAllProducts, fetchAllClients, fetchRecentReceipts, fetchAllTransaction])
 
   return (
     <div className="select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-auto customScrollbar">
