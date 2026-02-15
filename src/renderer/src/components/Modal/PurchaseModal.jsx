@@ -1,8 +1,8 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable no-case-declarations */
 /* eslint-disable react/prop-types */
 /* eslint-disable no-unused-vars */
+
 import React, { useCallback, useEffect, useState } from 'react'
 import {
   setClients,
@@ -21,7 +21,6 @@ import { toast } from 'react-toastify'
 import { SelectPicker, InputNumber, Toggle, Checkbox, Animation, CheckPicker } from 'rsuite'
 import ClientModal from './ClientModal'
 import ProductModal from './ProductModal'
-import { useLocation } from 'react-router-dom'
 
 const PurchaseModal = ({
   setShowModal,
@@ -30,95 +29,80 @@ const PurchaseModal = ({
   type = 'transaction'
 }) => {
   const dispatch = useDispatch()
-  const location = useLocation()
 
   const [nextBillId, setNextBillId] = useState(null)
+  const [productModal, setProductModal] = useState(false)
+  const [clientModal, setClientModal] = useState(false)
+  const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false)
+
+  /* ---------------- FETCHERS ---------------- */
 
   const fetchProducts = async () => {
-    const response = await window.api.getAllProducts()
-    dispatch(setProducts(response))
+    const res = await window.api.getAllProducts()
+    dispatch(setProducts(res))
   }
 
   const fetchClients = async () => {
-    const response = await window.api.getAllClients()
-    dispatch(setClients(response))
+    const res = await window.api.getAllClients()
+    dispatch(setClients(res))
   }
 
-  const fetchTransaction = async () => {
-    const response = await window.api.getAllTransactions()
-    dispatch(setTransactions(response))
+  const fetchTransactions = async () => {
+    const res = await window.api.getAllTransactions()
+    dispatch(setTransactions(res))
   }
 
   const fetchBankReceipt = async () => {
-    const response = await window.api.getRecentBankReceipts()
-    dispatch(setBankReceipt(response))
+    const res = await window.api.getRecentBankReceipts()
+    dispatch(setBankReceipt(res))
   }
 
   const fetchCashReceipt = async () => {
-    const response = await window.api.getRecentCashReceipts()
-    dispatch(setCashReceipt(response))
+    const res = await window.api.getRecentCashReceipts()
+    dispatch(setCashReceipt(res))
   }
 
   const fetchSettings = async () => {
-    const response = await window.api.getSettings()
-    dispatch(setSettings(response))
+    const res = await window.api.getSettings()
+    dispatch(setSettings(res))
   }
 
   const fetchNextTransactionId = async () => {
-    const allTransactions = await window.api.getAllTransactions()
-    if (allTransactions?.length) {
-      const lastTransaction = allTransactions[allTransactions.length - 1]
-      setNextBillId(lastTransaction.id + 1)
+    const all = await window.api.getAllTransactions()
+    if (all?.length) {
+      const last = all[all.length - 1]
+      setNextBillId(last.id + 1)
     } else {
       setNextBillId(1)
     }
   }
 
+  /* ---------------- STATE ---------------- */
+
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
   const settings = useSelector((state) => state.electron.settings.data || [])
-  const safeTransaction = existingTransaction || {}
-
-  const [productModal, setProductModal] = useState(false)
-  const [clientModal, setClientModal] = useState(false)
-  const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false)
 
   const getInitialTransaction = () => {
     if (isUpdateExpense && existingTransaction) {
       return {
-        id: existingTransaction.id || '',
-        clientId: existingTransaction.clientId || '',
-        productId: existingTransaction.productId || '',
-        quantity: Number(existingTransaction.quantity) || 0,
-        sellAmount: Number(existingTransaction.sellAmount) || 0,
-        purchaseAmount: Number(existingTransaction.purchaseAmount) || 0,
-        statusOfTransaction: existingTransaction.statusOfTransaction || 'pending',
-        paymentMethod: existingTransaction.paymentMethod || 'bank',
-        paymentType: existingTransaction.paymentType || 'full',
-        pendingAmount: Number(existingTransaction.pendingAmount) || 0,
-        paidAmount: Number(existingTransaction.paidAmount) || 0,
-        transactionType: existingTransaction.transactionType || '',
-        taxAmount: existingTransaction?.taxAmount || [],
-        dueDate: existingTransaction.dueDate || '',
-        pageName: 'Purchase'
+        ...existingTransaction
       }
     }
+
     return {
       id: '',
       clientId: '',
       productId: '',
       quantity: 0,
       sellAmount: 0,
-      purchaseAmount: 0,
-      statusOfTransaction: 'pending',
       paymentMethod: 'bank',
+      statusOfTransaction: 'pending',
       paymentType: 'full',
-      pendingAmount: 0,
       paidAmount: 0,
-      transactionType: '',
+      pendingAmount: 0,
       taxAmount: [],
-      dueDate: '',
-      totalAmount: 0,
+      frightCharges: 0,
       pageName: 'Purchase'
     }
   }
@@ -128,8 +112,9 @@ const PurchaseModal = ({
   useEffect(() => {
     fetchProducts()
     fetchClients()
+    fetchTransactions()
     fetchBankReceipt()
-    fetchTransaction()
+    fetchCashReceipt()
     fetchSettings()
     fetchNextTransactionId()
   }, [])
@@ -138,61 +123,50 @@ const PurchaseModal = ({
     if (isUpdateExpense && existingTransaction?.id) {
       setTransaction(getInitialTransaction())
     }
-  }, [isUpdateExpense, existingTransaction?.id])
+  }, [existingTransaction?.id])
+
+  /* ---------------- CALCULATIONS ---------------- */
 
   const selectedProduct = products.find((p) => p.id === transaction.productId)
 
-  const purchasePrice = selectedProduct?.price || 0
-  const subtotal = purchasePrice * transaction.quantity
+  const unitPrice = Number(transaction.sellAmount || 0)
+  const qty = Number(transaction.quantity || 0)
 
-  const calculateTaxBreakdown = () => {
-    let breakdown = {}
+  const subtotal = unitPrice * qty
+
+  const calculateTax = () => {
     let totalTax = 0
 
-    if (Array.isArray(transaction?.taxAmount)) {
-      transaction?.taxAmount.forEach((tax) => {
-        breakdown[tax?.name] = tax?.value
-        totalTax += tax?.value
+    if (Array.isArray(transaction.taxAmount)) {
+      transaction.taxAmount.forEach((t) => {
+        totalTax += Number(t.value || 0)
       })
     }
 
-    return { breakdown, totalTax }
+    return totalTax
   }
 
-  const { breakdown: taxBreakdown, totalTax } = calculateTaxBreakdown()
-  const totalAmount = transaction.sellAmount * transaction.quantity
-  const grandTotal = totalAmount + totalTax
+  const totalTax = calculateTax()
+  const grandTotal = subtotal + totalTax
 
   useEffect(() => {
     if (transaction.paymentType === 'full') {
       setTransaction((prev) => ({
         ...prev,
-        pendingAmount: 0,
-        paidAmount: grandTotal
+        paidAmount: grandTotal,
+        pendingAmount: 0
       }))
     }
-    // For partial, keep user-input paid fixed, adjust pending
-    else if (transaction.paymentType === 'partial') {
+
+    if (transaction.paymentType === 'partial') {
       setTransaction((prev) => ({
         ...prev,
-        pendingAmount: Math.max(0, grandTotal - prev.paidAmount)
+        pendingAmount: Math.max(0, grandTotal - Number(prev.paidAmount || 0))
       }))
     }
-  }, [subtotal, totalTax, transaction.paymentType])
+  }, [grandTotal, transaction.paymentType])
 
-  const getProductName = (productId) => {
-    const product = products.find((p) => p.id === productId)
-    return product ? product.name : 'Unknown Product'
-  }
-
-  const getClientName = (clientId, clients) => {
-    if (!clientId) return 'Unknown Client'
-
-    // Handle both direct ID and nested object structure
-    const id = typeof clientId === 'object' ? clientId.id : clientId
-    const client = clients.find((c) => String(c?.id) === String(id))
-    return client ? client.clientName : 'Unknown Client'
-  }
+  /* ---------------- HANDLERS ---------------- */
 
   const handleSubmitTransaction = useCallback(
     async (e) => {
@@ -202,29 +176,24 @@ const PurchaseModal = ({
       setIsSubmittingTransaction(true)
 
       try {
-        // Validation
         if (!transaction.clientId || !transaction.productId) {
           toast.error('Please select client and product')
           return
-        } else if (!transaction.quantity || transaction.quantity <= 0) {
-          toast.error('Please enter a valid quantity')
+        }
+
+        if (!qty || qty <= 0) {
+          toast.error('Invalid quantity')
           return
-        } else if (transaction.paymentType === 'full') {
-          transaction.pendingAmount = 0
-          transaction.paidAmount = 0
-        } else if (
-          transaction.statusOfTransaction === 'pending' &&
-          transaction.paymentType !== 'partial'
-        ) {
-          transaction.pendingAmount = transaction.purchaseAmount
-          transaction.paidAmount = 0
-        } else if (transaction.statusOfTransaction === 'completed') {
-          transaction.paymentType = 'full'
-          transaction.paidAmount = grandTotal
-          transaction.pendingAmount = 0
-        } else if (transaction.paymentType === 'partial') {
-          if (grandTotal > transaction.pendingAmount + transaction.paidAmount) {
-            toast.error('Partial amount should be less than total amount')
+        }
+
+        if (!unitPrice || unitPrice <= 0) {
+          toast.error('Invalid purchase price')
+          return
+        }
+
+        if (transaction.paymentType === 'partial') {
+          if (transaction.paidAmount > grandTotal) {
+            toast.error('Paid amount cannot exceed total')
             return
           }
         }
@@ -233,267 +202,86 @@ const PurchaseModal = ({
           id: transaction.id,
           clientId: transaction.clientId,
           productId: transaction.productId,
-          quantity: Number(transaction.quantity),
-          sellAmount: Number(transaction.sellAmount),
-          purchaseAmount: Number(grandTotal),
-          statusOfTransaction: transaction.statusOfTransaction || 'pending',
-          paymentMethod: transaction.paymentMethod || 'bank',
-          paymentType: transaction.paymentType || 'full',
-          pendingAmount: Number(transaction.pendingAmount) || 0,
-          paidAmount: Number(transaction.paidAmount) || 0,
-          transactionType: location.pathname === '/sales' ? 'sales' : 'purchase',
-          taxAmount: transaction?.taxAmount || [],
-          dueDate: new Date()?.setMonth(new Date().getMonth() + 1),
+          date: new Date().toISOString(),
+
+          quantity: qty,
+          purchaseAmount: unitPrice,
+
+          paymentMethod: transaction.paymentMethod,
+          statusOfTransaction: transaction.statusOfTransaction,
+          paymentType: transaction.paymentType,
+
+          paidAmount: Number(transaction.paidAmount || 0),
+          pendingAmount: Number(transaction.pendingAmount || 0),
+          pendingFromOurs: Number(transaction.pendingAmount || 0),
+
+          taxRate: 0,
+          taxAmount: totalTax,
+          freightCharges: transaction.frightCharges || 0,
+          freightTaxAmount: 0,
+
+          totalAmountWithoutTax: subtotal,
+          totalAmountWithTax: grandTotal,
+
+          billNo: transaction.billNo || '',
+          dueDate: transaction.dueDate || null,
+          description: transaction.description || '',
+
+          methodType: 'Payment',
           pageName: 'Purchase'
         }
 
         if (!isUpdateExpense) {
-          const createdTransaction = await window.api.createTransaction(transactionData)
-          dispatch(setTransactions(createdTransaction))
-          toast.success('Transaction added successfully')
-
-          const baseReceipt = {
-            transactionId: createdTransaction.id,
-            type: 'Payment',
-            date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-            statusOfTransaction: createdTransaction.statusOfTransaction,
-            clientId: createdTransaction.clientId,
-            clientName: getClientName(createdTransaction.clientId, clients),
-            paymentType: createdTransaction.paymentType,
-            party:
-              clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
-            amount: grandTotal,
-            description: `Purchase ${getProductName(transaction.productId)}`,
-            taxAmount: transaction?.taxAmount || [],
-            dueDate: new Date().setMonth(new Date().getMonth() + 1),
-            productId: createdTransaction.productId || '',
-            pendingAmount: Number(transactionData.pendingAmount) || 0,
-            paidAmount: Number(transactionData.paidAmount) || 0,
-            pendingFromOurs: Number(grandTotal) || 0,
-            quantity: Number(transactionData.quantity) || 0,
-            createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
-            pageName: 'Purchase'
-          }
-
-          if (transaction.paymentMethod === 'bank') {
-            const createdBankReceipt = await window.api.createBankReceipt({
-              ...baseReceipt,
-              bank: transaction.bank || 'IDBI'
-            })
-            dispatch(setBankReceipt(createdBankReceipt))
-          } else if (transaction.paymentMethod === 'cash') {
-            const createdCashReceipt = await window.api.createCashReceipt({
-              ...baseReceipt,
-              cash: transaction.cash || 'Cash'
-            })
-            dispatch(setCashReceipt(createdCashReceipt))
-          }
+          const created = await window.api.createPurchase(transactionData)
+          dispatch(setTransactions(created))
+          toast.success('Purchase created successfully')
         } else {
-          const updatedTransaction = await window.api.updateTransaction({
-            id: safeTransaction.id,
+          const updated = await window.api.updatePurchase({
+            id: transaction.id,
             ...transactionData
           })
-          dispatch(updateTransaction(updatedTransaction))
-          toast.success('Transaction updated successfully')
 
-          const baseReceipt = {
-            transactionId: updatedTransaction.data.id,
-            type: 'Payment',
-            date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-            statusOfTransaction: updatedTransaction.data.statusOfTransaction,
-            clientId: updatedTransaction.data.clientId,
-            paymentType: updatedTransaction.data.paymentType,
-            party:
-              clients.find((c) => c.id === transaction.clientId)?.clientName || 'Unknown Client',
-            amount: grandTotal,
-            description: `Purchase ${getProductName(transaction.productId)}`,
-            taxAmount: transaction?.taxAmount || [],
-            dueDate: new Date().setMonth(new Date().getMonth() + 1),
-            productId: updatedTransaction.data.productId || '',
-            pendingAmount: Number(transactionData.pendingAmount) || 0,
-            paidAmount: Number(transactionData.paidAmount) || 0,
-            pendingFromOurs: Number(transactionData.pendingFromOurs) || 0,
-            quantity: Number(transactionData.quantity) || 0
-          }
-
-          if (transaction.paymentMethod === 'bank') {
-            const updatedBankReceipt = await window.api.updateBankReceipt({
-              ...baseReceipt,
-              amount: grandTotal,
-              bank: transaction.bank || 'IDBI'
-            })
-            dispatch(updateBankReceipt(updatedBankReceipt))
-          } else if (transaction.paymentMethod === 'cash') {
-            const updatedCashReceipt = await window.api.updateCashReceipt({
-              ...baseReceipt,
-              amount: grandTotal,
-              cash: transaction.cash || 'Cash'
-            })
-            dispatch(updateCashReceipt(updatedCashReceipt))
-          }
+          dispatch(updateTransaction(updated.data || updated))
+          toast.success('Purchase updated successfully')
         }
-        await fetchTransaction() // Refresh data
+
+        await fetchTransactions()
         setShowModal(false)
       } catch (error) {
-        toast.error('An error occurred while processing your request', error)
+        toast.error('Error processing purchase')
       } finally {
         setIsSubmittingTransaction(false)
       }
     },
-    [dispatch, isUpdateExpense, safeTransaction, transaction, setShowModal]
+    [transaction, qty, unitPrice, grandTotal]
   )
 
-  const handleOnChangeEvent = (value, fieldName) => {
-    switch (fieldName) {
-      case 'quantity':
-        const newSubtotal = purchasePrice * value
-        const updatedTaxForQuantity = transaction?.taxAmount.map((tax) => {
-          settings.map((setting) => {})
-        })
-        setTransaction((prev) => ({ ...prev, quantity: value, taxAmount: updatedTaxForQuantity }))
-        break
-
-      case 'sellingPrice':
-        setTransaction((prev) => ({ ...prev, sellAmount: Number(value) }))
-        break
-
-      case 'clientId':
-        setTransaction((prev) => ({ ...prev, clientId: value }))
-        break
-
-      case 'productId':
-        setTransaction((prev) => ({
-          ...prev,
-          productId: value,
-          // Reset quantity when product changes to avoid stock issues
-          quantity: 0,
-          taxAmount: []
-        }))
-        break
-
-      case 'statusOfTransaction':
-        setTransaction((prev) => ({ ...prev, statusOfTransaction: value }))
-        break
-
-      case 'paymentType':
-        setTransaction((prev) => ({ ...prev, paymentType: value }))
-        break
-
-      case 'paymentMethod':
-        setTransaction((prev) => ({ ...prev, paymentMethod: value }))
-        break
-
-      case 'taxAmount':
-        const selectedTaxCodes = value || []
-        let taxObjects = []
-
-        taxObjects = selectedTaxCodes
-          .map((taxCode) => {
-            // Check if it's a custom tax from settings
-            const customTax = settings.find((s) => `custom-${s.id}` === taxCode)
-
-            if (customTax) {
-              return {
-                code: `custom-${customTax.id}`,
-                name: customTax.taxName,
-                value: (subtotal * customTax.taxValue) / 100,
-                percentage: customTax.taxValue
-              }
-            }
-
-            if (taxCode === 'frightChanged') {
-              return {
-                code: 'frightChanged',
-                name: 'Freight Charges',
-                value: Number(transaction.frightCharges),
-                percentage: 0
-              }
-            }
-          })
-          .filter(Boolean)
-
-        setTransaction((prev) => ({ ...prev, taxAmount: taxObjects }))
-        break
-
-      case 'pendingAmount':
-        setTransaction((prev) => ({
-          ...prev,
-          pendingAmount: Number(value)
-        }))
-        break
-
-      case 'paidAmount':
-        const currentGrandForPaid = subtotal + totalTax
-        setTransaction((prev) => ({
-          ...prev,
-          paidAmount: Number(value || 0),
-          pendingAmount: Math.max(0, currentGrandForPaid - Number(value || 0))
-        }))
-        break
-
-      case 'frightCharges':
-        setTransaction((prev) => ({
-          ...prev,
-          taxAmount: prev.taxAmount.map((t) =>
-            t.code === 'frightChanged' ? { ...t, value: Number(value || 0) } : t
-          )
-        }))
-        break
-
-      default:
-        toast.error('Invalid Field Name')
-        break
-    }
+  const handleOnChangeEvent = (value, field) => {
+    setTransaction((prev) => ({
+      ...prev,
+      [field]: value
+    }))
   }
 
-  const handleFrightChange = (value) => {
-    handleOnChangeEvent(value, 'frightCharges')
-  }
+  const toThousands = (val) => new Intl.NumberFormat('en-IN').format(Number(val || 0))
 
-  const toThousands = (value) => {
-    if (!value) return value
-    return new Intl.NumberFormat('en-IN').format(value)
-  }
+  const taxOptions = settings.map((s) => ({
+    label: `${s.taxName} (${s.taxValue}%)`,
+    value: `custom-${s.id}`
+  }))
 
-  // Prepare tax options from settings
-  const taxOptions = [
-    ...settings.map((setting) => ({
-      label: `${setting.taxName} (${setting.taxValue}%)`,
-      value: `custom-${setting.id}`
-    })),
-    { label: 'Freight Charges', value: 'frightChanged' }
-  ]
+  const formatTransactionId = (id) => (id ? `PB${String(id).slice(-3).toUpperCase()}` : 'PB---')
 
-  const formatTransactionId = (id) => {
-    return id ? `PB${String(id).slice(-3).toUpperCase()}` : 'PB---'
-  }
+  /* ---------------- UI ---------------- */
 
   return (
-    <div
-      className="fixed z-50 inset-0 flex items-center justify-center transition-all duration-300 bg-black/50"
-      role="dialog"
-      aria-modal="true"
-    >
-      {productModal && (
-        <ProductModal
-          isUpdateExpense={isUpdateExpense}
-          setShowModal={() => setProductModal(false)}
-          type="product"
-        />
-      )}
-      {clientModal && (
-        <ClientModal
-          isUpdateExpense={isUpdateExpense}
-          setShowModal={() => setClientModal(false)}
-          type="client"
-        />
-      )}
-      {type === 'transaction' ? (
+    <div className="fixed z-50 inset-0 flex items-center justify-center bg-black/50">
+      {type === 'transaction' && (
         <form onSubmit={handleSubmitTransaction}>
           <div className="bg-white p-6 rounded-lg shadow-2xl w-full min-w-4xl relative">
-            <p className="text-lg font-semibold flex items-center gap-3">
+            <p className="text-lg font-semibold">
               {isUpdateExpense ? 'Update Purchase' : 'Add Purchase'}
-              <span className="bg-amber-300 p-1 text-sm rounded-full text-white px-4">
+              <span className="ml-3 bg-amber-300 px-3 py-1 rounded-full text-white text-sm">
                 {isUpdateExpense
                   ? formatTransactionId(transaction.id)
                   : formatTransactionId(nextBillId)}
@@ -501,291 +289,73 @@ const PurchaseModal = ({
             </p>
 
             <CircleX
-              className="absolute top-4 right-4 cursor-pointer text-red-400 hover:text-red-600"
-              size={30}
+              className="absolute top-4 right-4 cursor-pointer text-red-500"
+              size={26}
               onClick={() => setShowModal(false)}
             />
 
-            <div className="grid grid-cols-2 gap-4 my-2">
-              <div>
-                <label htmlFor="client" className="block text-sm mb-1 text-gray-600">
-                  Client
-                </label>
-                <SelectPicker
-                  data={clients.map((client) => ({
-                    label: client.clientName,
-                    value: client.id
-                  }))}
-                  value={transaction.clientId}
-                  virtualized={true}
-                  onChange={(value) => handleOnChangeEvent(value, 'clientId')}
-                  placeholder="Select Client"
-                  style={{ width: '100%', zIndex: clientModal ? 1 : 999 }}
-                  menuStyle={{ zIndex: clientModal ? 1 : 999 }}
-                  menuMaxHeight={250}
-                  renderExtraFooter={() => (
-                    <div className="px-3 py-1 border-t border-gray-200">
-                      <p
-                        className="text-blue-600 text-sm tracking-wider cursor-pointer font-bold"
-                        onClick={() => setClientModal(true)}
-                      >
-                        + Create Client
-                      </p>
-                    </div>
-                  )}
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              {/* Client */}
+              <SelectPicker
+                data={clients.map((c) => ({
+                  label: c.clientName,
+                  value: c.id
+                }))}
+                value={transaction.clientId}
+                onChange={(v) => handleOnChangeEvent(v, 'clientId')}
+                placeholder="Select Client"
+                style={{ width: '100%' }}
+              />
 
-              <div>
-                <label htmlFor="product" className="block text-sm mb-1 text-gray-600">
-                  Products
-                </label>
-                <SelectPicker
-                  data={products.map((product) => ({
-                    label: `${product.name}`,
-                    value: product.id,
-                    qty: product.quantity
-                  }))}
-                  value={
-                    products.some((p) => p.id === transaction.productId)
-                      ? transaction.productId
-                      : null
-                  }
-                  onChange={(value) => handleOnChangeEvent(value, 'productId')}
-                  placeholder="Select Product"
-                  style={{
-                    width: '100%',
-                    zIndex: productModal ? 1 : 999
-                  }}
-                  menuStyle={{ zIndex: productModal ? 1 : 999 }}
-                  menuMaxHeight={250}
-                  virtualized
-                  renderMenuItem={(label, item) => (
-                    <div className="flex justify-between w-full items-center">
-                      <span className="truncate max-w-[500px]">{label}</span>
-                      <span
-                        className={`text-xs font-medium ${
-                          item.qty > 0 ? 'text-green-500' : 'text-red-400'
-                        }`}
-                      >
-                        Qty: {item.qty}
-                      </span>
-                    </div>
-                  )}
-                  renderValue={(value, item) => (
-                    <span className="truncate max-w-[250px]">{item?.label}</span>
-                  )}
-                  renderExtraFooter={() => (
-                    <div className="px-3 py-1 border-t border-gray-200">
-                      <p
-                        className="text-blue-600 text-sm font-bold cursor-pointer"
-                        onClick={() => setProductModal(true)}
-                      >
-                        + Create Product
-                      </p>
-                    </div>
-                  )}
-                />
-              </div>
+              {/* Product */}
+              <SelectPicker
+                data={products.map((p) => ({
+                  label: p.productName,
+                  value: p.id
+                }))}
+                value={transaction.productId}
+                onChange={(v) => handleOnChangeEvent(v, 'productId')}
+                placeholder="Select Product"
+                style={{ width: '100%' }}
+              />
 
-              <div className="grid grid-cols-3 col-span-2 gap-3">
-                <div>
-                  <label htmlFor="productPrice" className="block text-sm mb-1 text-gray-600">
-                    Product Price
-                  </label>
-                  <InputNumber
-                    prefix="₹"
-                    defaultValue={0}
-                    size="xs"
-                    formatter={toThousands}
-                    disabled
-                    value={selectedProduct?.price || 0}
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                </div>
+              <InputNumber
+                prefix="₹"
+                value={unitPrice}
+                onChange={(v) => handleOnChangeEvent(v, 'sellAmount')}
+                placeholder="Purchase Price"
+                formatter={toThousands}
+              />
 
-                <div>
-                  <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
-                    Quantity
-                  </label>
-                  <InputNumber
-                    defaultValue={0}
-                    size="xs"
-                    formatter={toThousands}
-                    value={Number(transaction.quantity)}
-                    onChange={(value) => handleOnChangeEvent(value, 'quantity')}
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                </div>
+              <InputNumber
+                value={qty}
+                onChange={(v) => handleOnChangeEvent(v, 'quantity')}
+                placeholder="Quantity"
+              />
 
-                <div>
-                  <label htmlFor="sellingPrice" className="block text-sm mb-1 text-gray-600">
-                    Purchase Price
-                  </label>
-                  <InputNumber
-                    prefix={<div className="">₹</div>}
-                    defaultValue={0}
-                    size="xs"
-                    value={transaction.sellAmount}
-                    onChange={(value) => handleOnChangeEvent(value, 'sellingPrice')}
-                    formatter={toThousands}
-                    min={0}
-                    name="sellingPrice"
-                    id="sellingPrice"
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <label htmlFor="tax" className="block text-sm mb-1 text-gray-600">
-                  Tax
-                </label>
-                <CheckPicker
-                  data={taxOptions}
-                  searchable={taxOptions.length > 6}
-                  size="md"
-                  placeholder="Select Tax"
-                  value={transaction?.taxAmount.map((t) => t?.code)}
-                  onChange={(value) => handleOnChangeEvent(value, 'taxAmount')}
-                  style={{ width: '100%', zIndex: clientModal ? 1 : 999 }}
-                  menuStyle={{ zIndex: clientModal ? 1 : 999 }}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="total" className="block text-sm mb-1 text-gray-600">
-                  Total
-                </label>
-                <InputNumber
-                  prefix={<div className="">₹</div>}
-                  defaultValue={0}
-                  disabled
-                  size="xs"
-                  value={grandTotal || 0}
-                  formatter={toThousands}
-                  name="total"
-                  id="total"
-                  className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-              </div>
-
-              <Animation.Collapse
-                in={transaction?.taxAmount.find((t) => t?.code === 'frightChanged')}
-              >
-                <div className="col-span-2">
-                  <label htmlFor="frightCharges" className="block text-sm mb-1 text-gray-600">
-                    Freight Charges
-                  </label>
-                  <InputNumber
-                    prefix={<div className="">₹</div>}
-                    defaultValue={0}
-                    size="xs"
-                    value={
-                      transaction.taxAmount.find((t) => t?.code === 'frightChanged')?.value || 0
-                    }
-                    onChange={(value) => handleFrightChange(value)}
-                    formatter={toThousands}
-                    min={0}
-                    name="frightCharges"
-                    id="frightCharges"
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  />
-                </div>
-              </Animation.Collapse>
-
-              <div className="text-xs grid-cols-2 grid items-center ">
-                <div>
-                  <label className="block text-sm mb-1 text-gray-600">Status</label>
-                  <Toggle
-                    size="lg"
-                    checkedChildren="Completed"
-                    unCheckedChildren="Pending"
-                    checked={transaction.statusOfTransaction === 'completed'}
-                    onChange={(checked) =>
-                      handleOnChangeEvent(checked ? 'completed' : 'pending', 'statusOfTransaction')
-                    }
-                  />
-                </div>
-                <Checkbox
-                  value="partial"
-                  checked={transaction.paymentType === 'partial'}
-                  onChange={(_, checked) =>
-                    handleOnChangeEvent(checked ? 'partial' : 'full', 'paymentType')
-                  }
-                  className="text-sm text-gray-600 -ml-5 mt-5"
-                >
-                  Partial Payment
-                </Checkbox>
-              </div>
-
-              <div>
-                <Checkbox
-                  value="cash"
-                  checked={transaction.paymentMethod === 'cash'}
-                  onChange={(_, checked) =>
-                    handleOnChangeEvent(checked ? 'cash' : 'bank', 'paymentMethod')
-                  }
-                  className="text-sm text-gray-600 -ml-5 mt-5"
-                >
-                  Cash Payment
-                </Checkbox>
-              </div>
-
-              <Animation.Collapse in={transaction.paymentType === 'partial'}>
-                <div className="col-span-2">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-200 rounded-lg border border-gray-200">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Paid Amount
-                      </label>
-                      <InputNumber
-                        prefix="₹"
-                        value={transaction.paidAmount}
-                        onChange={(val) => handleOnChangeEvent(val ?? 0, 'paidAmount')}
-                        formatter={toThousands}
-                        size="md"
-                        className="w-full"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Pending Amount
-                      </label>
-                      <InputNumber
-                        prefix="₹"
-                        value={transaction.pendingAmount}
-                        formatter={toThousands}
-                        disabled
-                        size="md"
-                        className="w-full bg-gray-100"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </Animation.Collapse>
+              <InputNumber prefix="₹" value={grandTotal} disabled formatter={toThousands} />
             </div>
 
-            <div className="flex items-center justify-end gap-2 mt-4">
+            <div className="flex justify-end mt-6 gap-2">
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="px-7 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-all duration-300"
+                className="px-6 py-2 bg-gray-500 text-white rounded"
               >
                 Cancel
               </button>
+
               <button
                 type="submit"
                 disabled={isSubmittingTransaction}
-                className="px-7 py-2 bg-[#566dff] hover:bg-[#566dff]/60 text-white rounded-lg transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-indigo-600 text-white rounded"
               >
                 {isSubmittingTransaction ? 'Processing...' : isUpdateExpense ? 'Update' : 'Add'}
               </button>
             </div>
           </div>
         </form>
-      ) : null}
+      )}
     </div>
   )
 }

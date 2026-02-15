@@ -62,7 +62,6 @@ const getInitials = (name) => {
 
 // Memoized AccountRow component
 const AccountRow = memo(({ client, onOpenLedger }) => {
-
   return (
     <tr className="transition-colors hover:bg-blue-50 cursor-pointer group">
       <td className="px-6 py-3 font-medium" onClick={() => onOpenLedger(client)}>
@@ -147,12 +146,24 @@ const useAccountOperations = () => {
     }
   }, [dispatch])
 
-  return { fetchAllClients, fetchAllTransactions }
+  const fetchClientLedger = useCallback(async () => {
+    try {
+      const response = await window.api.getClientLedger()
+      console.log('response', response)
+
+      // dispatch(setTransactions(response))
+    } catch (error) {
+      console.error('Error fetching ClientLedger:', error)
+      toast.error('Failed to fetch ClientLedger')
+    }
+  }, [dispatch])
+
+  return { fetchAllClients, fetchAllTransactions, fetchClientLedger }
 }
 
 // Main Component
 const LedgerReport = () => {
-  const { fetchAllClients, fetchAllTransactions } = useAccountOperations()
+  const { fetchAllClients, fetchAllTransactions, fetchClientLedger } = useAccountOperations()
 
   // State management
   const [showLoader, setShowLoader] = useState(false)
@@ -249,16 +260,17 @@ const LedgerReport = () => {
       0
     )
 
+    const filteredClientIds = filteredData.map((c) => c.id)
+
+    const totalPaidAmount = transactions
+      .filter((t) => filteredClientIds.includes(t.clientId))
+      .reduce((sum, t) => sum + (Number(t.paidAmount) || 0), 0)
+
     const accountsByType = filteredData.reduce((acc, client) => {
       const type = client.accountType || 'Other'
       acc[type] = (acc[type] || 0) + 1
       return acc
     }, {})
-
-    const totalPaidAmount = transactions
-      .filter((t) => t.clientName === clients.clientName)
-      .reduce((sum, t) => sum + (Number(t.totalAmount) || 0), 0)
-    console.log('totalPaidAmount', totalPaidAmount)
 
     return {
       totalAccounts,
@@ -266,7 +278,7 @@ const LedgerReport = () => {
       totalPaidAmount,
       accountsByType
     }
-  }, [filteredData, clients, transactions])
+  }, [filteredData, transactions])
 
   // Event handlers
   const handleSearchChange = useCallback((value) => {
@@ -330,6 +342,8 @@ const LedgerReport = () => {
     setShowLoader(true)
     try {
       await fetchAllClients()
+      await fetchAllTransactions()
+      await fetchClientLedger()
     } finally {
       setShowLoader(false)
     }

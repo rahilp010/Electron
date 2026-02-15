@@ -87,7 +87,7 @@ const getAssetsTypeStyle = (assetsType) => {
 
 // Memoized ProductRow component
 const ProductRow = memo(({ product, index, clients, onDelete, onEdit }) => {
-  const totalWorth = (product?.price || 0) * (product?.quantity || 0)
+  const totalWorth = (product?.productPrice || 0) * (product?.productQuantity || 0)
 
   return (
     <tr className={`text-sm text-center`}>
@@ -101,16 +101,16 @@ const ProductRow = memo(({ product, index, clients, onDelete, onEdit }) => {
       </td>
       <td className="px-4 py-3 tracking-wide">{getClientName(product?.clientId, clients)}</td>
       <td className="px-4 py-3 tracking-wide font-medium">
-        {String(product?.name || '').toUpperCase()}
+        {String(product?.productName || '').toUpperCase()}
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center justify-center bg-gradient-to-r from-slate-50 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full font-semibold text-sm shadow-sm hover:shadow-md hover:scale-[1.03] transition-all duration-300">
-          ₹ {toThousands(product?.price)}
+          ₹ {toThousands(product?.productPrice)}
         </div>
       </td>
       <td className="px-4 py-3">
         <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
-          {toThousands(product?.quantity) || 0}
+          {toThousands(product?.productQuantity) || 0}
         </span>
       </td>
       <td className="px-4 py-3 tracking-wide">
@@ -238,9 +238,9 @@ const Products = () => {
         !query ||
         [
           data?.id?.toString(),
-          data?.name?.toLowerCase(),
-          data?.price?.toString(),
-          data?.quantity?.toString(),
+          data?.productName?.toLowerCase(),
+          data?.productPrice?.toString(),
+          data?.productQuantity?.toString(),
           data?.assetsType?.toLowerCase(),
           getClientName(data?.clientId, clients)?.toLowerCase()
         ].some((field) => field?.includes(query))
@@ -256,7 +256,7 @@ const Products = () => {
       }
 
       // ✅ Low stock filter
-      const matchesLowStock = !showLowStockOnly || data.quantity < 5
+      const matchesLowStock = !showLowStockOnly || data.productQuantity < 5
 
       return matchesSearch && matchesProduct && matchesDate && matchesAssetsType && matchesLowStock
     })
@@ -328,7 +328,7 @@ const Products = () => {
   // Memoized statistics (based on full filtered data)
   const statistics = useMemo(() => {
     const totalAssetsValue = filteredData.reduce(
-      (acc, item) => acc + (item?.price || 0) * (item?.quantity || 0),
+      (acc, item) => acc + (item?.productPrice || 0) * (item?.productQuantity || 0),
       0
     )
     const totalQuantity = filteredData.length
@@ -382,14 +382,14 @@ const Products = () => {
         ID: formatProductId(product.id),
         Date: new Date(product.createdAt).toLocaleDateString(),
         Client: getClientName(product.clientId, clients),
-        'Product Name': product.name,
-        Price: product.price,
-        Quantity: product.quantity,
+        'Product Name': product.productName,
+        Price: product.productPrice,
+        Quantity: product.productQuantity,
         'Assets Type': product.assetsType,
         'Total Worth':
           product.assetsType === 'Finished Goods'
-            ? product.quantity
-            : (product.price || 0) * (product.quantity || 0)
+            ? product.productQuantity
+            : (product.productPrice || 0) * (product.productQuantity || 0)
       }))
 
       const ws = XLSX.utils.json_to_sheet(exportData)
@@ -419,7 +419,7 @@ const Products = () => {
       <div className="flex justify-between mt-5 pb-2 items-center">
         <p className="text-3xl font-light mx-7">Products</p>
         <div className="mx-7 flex gap-2">
-          {products.some((product) => product.quantity < 10) && (
+          {products.some((product) => product.productQuantity < 10) && (
             <button
               className={`relative flex items-center gap-2.5 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 ${
                 showLowStockOnly
@@ -528,7 +528,7 @@ const Products = () => {
                 />
                 <SelectPicker
                   data={products.map((product) => ({
-                    label: product?.name,
+                    label: product?.productName,
                     value: product?.id
                   }))}
                   onChange={setProductFilter}

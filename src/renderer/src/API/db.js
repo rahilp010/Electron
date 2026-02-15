@@ -29,6 +29,8 @@ db.pragma('foreign_keys = ON')
 // db.prepare('DROP TABLE bankReceipts;').run()
 // db.prepare('DROP TABLE cashReceipts;').run()
 // db.prepare('DROP TABLE accounts;').run()
+// db.prepare('DROP TABLE ledger;').run()
+// db.prepare('DROP TABLE purchases;').run()
 // Execute SQL statements one by one
 
 db.prepare(
@@ -136,6 +138,73 @@ db.prepare(
 
 db.prepare(
   `
+  CREATE TABLE IF NOT EXISTS purchase_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchaseId INTEGER NOT NULL,
+    method TEXT,
+    amount REAL,
+    chequeNo TEXT,
+    clientId INTEGER,
+    accountId INTEGER,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (purchaseId) REFERENCES purchases(id) ON DELETE CASCADE
+  )
+`
+).run()
+
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS purchases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    clientId INTEGER,
+    productId INTEGER,
+    date DATETIME,
+    quantity INTEGER CHECK (quantity >= 1),
+    purchaseAmount REAL CHECK (purchaseAmount >= 0),
+    multipleProducts TEXT DEFAULT '[]',
+    isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1)),
+    paymentMethod TEXT DEFAULT 'bank'
+      CHECK (paymentMethod IN ('cash','bank')),
+    statusOfTransaction TEXT DEFAULT 'pending'
+      CHECK (statusOfTransaction IN ('completed','pending','partial')),
+    paymentType TEXT DEFAULT 'full'
+      CHECK (paymentType IN ('full','partial')),
+
+    pendingAmount REAL DEFAULT 0 CHECK (pendingAmount >= 0),
+    paidAmount REAL DEFAULT 0 CHECK (paidAmount >= 0),
+    pendingFromOurs REAL DEFAULT 0 CHECK (pendingFromOurs >= 0),
+
+    taxRate REAL DEFAULT 0,
+    taxAmount REAL,
+    freightCharges REAL,
+    freightTaxAmount REAL,
+
+    totalAmountWithTax REAL,
+    totalAmountWithoutTax REAL,
+
+    billNo TEXT,
+
+    methodType TEXT DEFAULT 'Payment'
+      CHECK (methodType IN ('Receipt','Payment','Salary')),
+
+    dueDate DATETIME,
+    description TEXT,
+    payments TEXT DEFAULT '[]',
+
+    pageName TEXT DEFAULT 'Purchase',
+
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE SET NULL,
+    FOREIGN KEY (productId) REFERENCES products(id) ON DELETE SET NULL
+  )
+`
+).run()
+
+db.prepare(
+  `
   CREATE TABLE IF NOT EXISTS bankReceipts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   clientId INTEGER,
@@ -209,7 +278,7 @@ db.prepare(
   CREATE TABLE IF NOT EXISTS ledger (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     accountId INTEGER NOT NULL,
-    clientId INTEGER NOT NULL,
+    clientId INTEGER,
     date TEXT DEFAULT CURRENT_TIMESTAMP,
     entryType TEXT CHECK (entryType IN ('debit', 'credit')),
     amount REAL,

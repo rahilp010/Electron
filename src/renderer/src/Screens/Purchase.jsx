@@ -93,7 +93,7 @@ const getProductName = (productId, products) => {
   // Handle both direct ID and nested object structure
   const id = typeof productId === 'object' ? productId.id : productId
   const product = products.find((p) => String(p?.id) === String(id))
-  return product ? product.name : 'Unknown Product'
+  return product ? product.productName : 'Unknown Product'
 }
 
 const getInitials = (name) => {
@@ -170,7 +170,9 @@ const PurchaseRow = React.memo(
   }) => {
     const clientName = getClientName(transaction?.clientId, clients)
     const productName = getProductName(transaction?.productId, products)
-    const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
+    const totalAmountProduct = products
+      .filter((p) => p.productName === productName)
+      .map((p) => p.productPrice)
     const totalAmount = (totalAmountProduct || 0) * (transaction?.quantity || 0)
 
     const renderPendingAmount = () => {
@@ -248,9 +250,7 @@ const PurchaseRow = React.memo(
         </td>
         <td className={`px-4 py-3 font-semibold `}>
           <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
-            {transaction.purchaseAmount > 0
-              ? '₹ ' + toThousands(Number(transaction?.purchaseAmount).toFixed(0))
-              : '₹ ' + toThousands(Number(transaction?.totalAmount).toFixed(0))}
+            {'₹ ' + toThousands(Number(transaction?.totalAmountWithTax).toFixed(0))}
           </div>
         </td>
         <td className={`px-4 py-3 `}>{renderPendingAmount()}</td>
@@ -342,9 +342,9 @@ const usePurchaseOperations = () => {
 
   const fetchAllTransactions = useCallback(async () => {
     try {
-      const response = await transactionApi.getAllTransactions()
-      console.log('Transaction response', response)
-      dispatch(setTransactions(response))
+      const response = await window.api.getAllPurchases()
+      console.log('Transaction response', response.data)
+      dispatch(setTransactions(response.data))
     } catch (error) {
       console.error('Error fetching transactions:', error)
       toast.error('Failed to fetch transactions')
@@ -356,7 +356,7 @@ const usePurchaseOperations = () => {
       if (!window.confirm('Are you sure you want to delete this purchase?')) return
 
       try {
-        const response = await transactionApi.deleteTransaction(id)
+        const response = await window.api.deletePurchase(id)
         console.log('response', response)
         dispatch(deleteTransaction(response))
         await fetchAllTransactions()
@@ -380,7 +380,7 @@ const usePurchaseOperations = () => {
 
       try {
         for (const item of items) {
-          await transactionApi.deleteTransaction(item.id)
+          await window.api.deletePurchase(item.id)
         }
         await fetchAllTransactions()
         toast.success('Bill deleted successfully')
@@ -395,14 +395,14 @@ const usePurchaseOperations = () => {
     async (id) => {
       if (!window.confirm('Are you sure you want to update the transaction status?')) return
       try {
-        const response = await window.api.getTransactionById(id)
+        const response = await window.api.getPurchaseById(id)
 
         if (response.statusOfTransaction === 'pending') {
           response.statusOfTransaction = 'completed'
         } else {
           response.statusOfTransaction = 'pending'
         }
-        const updatedResponse = await window.api.updateTransaction(response)
+        const updatedResponse = await window.api.updatePurchase(response)
         dispatch(updateTransaction(updatedResponse))
         await fetchAllTransactions()
         toast.success('Transaction status updated successfully')
@@ -421,7 +421,7 @@ const usePurchaseOperations = () => {
       try {
         for (const item of items) {
           const updatedItem = { ...item, statusOfTransaction: newStatus }
-          await window.api.updateTransaction(updatedItem)
+          await window.api.updatePurchase(updatedItem)
         }
         await fetchAllTransactions()
         toast.success('Bill status updated successfully')
@@ -435,7 +435,7 @@ const usePurchaseOperations = () => {
   const handleEditTransaction = useCallback(
     async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowPurchaseBillModal) => {
       try {
-        const response = await transactionApi.getTransactionById(transaction.id)
+        const response = await window.api.getPurchaseById(transaction.id)
         setSelectedTransaction(response)
         setIsUpdateExpense(true)
         setShowPurchaseBillModal(true)
@@ -466,7 +466,7 @@ const usePurchaseOperations = () => {
       console.log('Updating Transaction:', transactionId, newStatus)
       try {
         // Call API (assuming your backend supports update)
-        const response = await transactionApi.updateTransaction(transactionId, {
+        const response = await window.api.updatePurchase(transactionId, {
           statusOfTransaction: newStatus
         })
 
@@ -854,7 +854,6 @@ const Purchase = () => {
     const bills = new Set()
     transactions.forEach((t) => {
       if (
-        t.transactionType === 'purchase' &&
         t.pageName !== 'Salary' &&
         isMatch(
           t,
@@ -886,10 +885,7 @@ const Purchase = () => {
   ])
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(
-      (t) =>
-        candidateBills.has(t.billNo) && t.transactionType === 'purchase' && t.pageName !== 'Salary'
-    )
+    return transactions.filter((t) => candidateBills.has(t.billNo) && t.pageName !== 'Salary')
   }, [transactions, candidateBills])
 
   const filteredGrouped = useMemo(() => {
@@ -942,16 +938,18 @@ const Purchase = () => {
 
   // Memoized statistics
   const statistics = useMemo(() => {
-    const purchaseTransactions = transactions.filter((t) => t?.transactionType === 'purchase')
+    const purchaseTransactions = transactions.filter((t) => t?.pageName === 'Purchase')
 
     const currentPID = purchaseTransactions.map((p) => p.productId)
 
     const productName = getProductName(currentPID[0], products)
 
-    const totalAmountProduct = products.filter((p) => p.name === productName).map((p) => p.price)
+    const totalAmountProduct = products
+      .filter((p) => p.productName === productName)
+      .map((p) => p.productPrice)
 
     const totalPurchases = purchaseTransactions.reduce(
-      (total, item) => total + (item.purchaseAmount || 0),
+      (total, item) => total + (item.totalAmountWithTax || 0),
       0
     )
 
@@ -963,7 +961,7 @@ const Purchase = () => {
     const valueFunction = (item) => {
       switch (item.statusOfTransaction === 'pending') {
         case item.paymentType === 'full':
-          return Number(item.purchaseAmount)
+          return Number(item.totalAmountWithTax)
         case item.paymentType === 'partial':
           return Number(item.pendingAmount)
         default:
@@ -1019,7 +1017,7 @@ const Purchase = () => {
         'Client Name': getClientName(transaction.clientId, clients),
         'Product Name': getProductName(transaction.productId, products),
         Quantity: transaction.quantity,
-        'Total Amount': toThousands(transaction.purchaseAmount || 0),
+        'Total Amount': toThousands(transaction.totalAmountWithTax || 0),
         'Pending Amount': toThousands(transaction.pendingAmount || 0),
         'Paid Amount': toThousands(transaction.paidAmount || 0),
         'Payment Status': transaction.statusOfTransaction,
@@ -1268,7 +1266,7 @@ const Purchase = () => {
                 />
                 <SelectPicker
                   data={products.map((product) => ({
-                    label: product?.name,
+                    label: product?.productName,
                     value: product?.id
                   }))}
                   onChange={setProductFilter}

@@ -66,23 +66,35 @@ const ProductModal = ({
       }
 
       return {
-        name: existingProduct.name || '',
-        quantity: existingProduct.quantity || '',
-        price: Number(existingProduct.price) || '',
+        productName: existingProduct.productName || '',
+        productQuantity: existingProduct.productQuantity || '',
+        productPrice: Number(existingProduct.productPrice) || '',
         clientId: existingProduct.clientId || '',
         addParts: existingProduct.addParts ? 1 : 0,
         assetsType: existingProduct.assetsType || '',
-        parts: JSON.stringify(parsedParts || [])
+        parts: JSON.stringify(parsedParts || []),
+        saleHSN: existingProduct.saleHSN || '',
+        purchaseHSN: existingProduct.purchaseHSN || '',
+        taxRate: existingProduct.taxRate || 0,
+        taxAmount: existingProduct.taxAmount || 0,
+        totalAmountWithTax: existingProduct.totalAmountWithTax || 0,
+        totalAmountWithoutTax: existingProduct.totalAmountWithoutTax || 0
       }
     }
     return {
-      name: '',
-      quantity: '',
-      price: '',
+      productName: '',
+      productQuantity: '',
+      productPrice: '',
       clientId: '',
       addParts: 0,
       assetsType: '',
-      parts: []
+      parts: [],
+      saleHSN: '',
+      purchaseHSN: '',
+      taxRate: 0,
+      taxAmount: 0,
+      totalAmountWithTax: 0,
+      totalAmountWithoutTax: 0
     }
   }, [isUpdateExpense, existingProduct])
 
@@ -112,12 +124,12 @@ const ProductModal = ({
       const baseQtyMap = {}
 
       parsedParts.forEach((part) => {
-        qtyMap[part.partId] = part.quantity
+        qtyMap[part.partId] = part.productQuantity
         // Calculate base quantity by dividing by main product quantity
         baseQtyMap[part.partId] =
-          existingProduct.quantity > 0
-            ? Math.round(part.quantity / existingProduct.quantity)
-            : part.quantity
+          existingProduct.productQuantity > 0
+            ? Math.round(part.productQuantity / existingProduct.productQuantity)
+            : part.productQuantity
       })
 
       setQuantities(qtyMap)
@@ -134,20 +146,20 @@ const ProductModal = ({
 
       try {
         // Validation
-        if (!product.name || !product.quantity) {
+        if (!product.productName || !product.productQuantity) {
           toast.error('Please add both name and stock')
           return
         }
 
-        if (!product.price || product.price <= 0) {
+        if (!product.productPrice || product.productPrice <= 0) {
           toast.error('Please enter a valid price')
           return
         }
 
         const productData = {
-          name: product.name,
-          quantity: Number(product.quantity),
-          price: Number(product.price),
+          productName: product.productName,
+          productQuantity: Number(product.productQuantity),
+          productPrice: Number(product.productPrice),
           clientId: product.clientId || 0,
           assetsType: product.assetsType,
           addParts: product.addParts,
@@ -157,6 +169,12 @@ const ProductModal = ({
               quantity: quantities[p.partId] || 1
             }))
           ),
+          saleHSN: product.saleHSN,
+          purchaseHSN: product.purchaseHSN,
+          taxRate: product.taxRate,
+          taxAmount: product.taxAmount,
+          totalAmountWithTax: product.totalAmountWithTax,
+          totalAmountWithoutTax: product.totalAmountWithoutTax,
           pageName: 'Product'
         }
 
@@ -257,7 +275,7 @@ const ProductModal = ({
     if (product.assetsType === 'Finished Goods' && product.addParts === 1) {
       setQuantities((prev) => ({
         ...prev,
-        [partId]: Math.max((prev[partId] || 0) + delta * (Number(product.quantity) || 1), 0)
+        [partId]: Math.max((prev[partId] || 0) + delta * (Number(product.productQuantity) || 1), 0)
       }))
     } else {
       setQuantities((prev) => ({
@@ -273,12 +291,12 @@ const ProductModal = ({
         const updated = {}
         for (const [partId, baseQty] of Object.entries(baseQuantities)) {
           // Multiply base quantity by main product quantity
-          updated[partId] = (baseQty || 0) * (Number(product.quantity) || 1)
+          updated[partId] = (baseQty || 0) * (Number(product.productQuantity) || 1)
         }
         return updated
       })
     }
-  }, [product.quantity, baseQuantities, product.assetsType, product.addParts])
+  }, [product.productQuantity, baseQuantities, product.assetsType, product.addParts])
 
   // 3. Update the initialization useEffect for existing products
   useEffect(() => {
@@ -299,12 +317,12 @@ const ProductModal = ({
       const baseQtyMap = {}
 
       parsedParts.forEach((part) => {
-        qtyMap[part.partId] = part.quantity
-        // Calculate base quantity by dividing by main product quantity
+        qtyMap[part.partId] = part.productQuantity
+        // Calculate base productQuantity by dividing by main product productQuantity
         baseQtyMap[part.partId] =
-          existingProduct.quantity > 0
-            ? Math.round(part.quantity / existingProduct.quantity)
-            : part.quantity
+          existingProduct.productQuantity > 0
+            ? Math.round(part.productQuantity / existingProduct.productQuantity)
+            : part.productQuantity
       })
 
       setQuantities(qtyMap)
@@ -319,13 +337,13 @@ const ProductModal = ({
       selectedParts.length > 0
     ) {
       let totalCost = 0
-      const mainQty = Number(product.quantity) || 1
+      const mainQty = Number(product.productQuantity) || 1
 
       selectedParts.forEach((part) => {
         const partProduct = products.find((p) => p.id === part.partId)
         if (partProduct) {
           const totalPartQty = quantities[part.partId] || 0
-          totalCost += (partProduct.price || 0) * totalPartQty
+          totalCost += (partProduct.productPrice || 0) * totalPartQty
         }
       })
 
@@ -337,7 +355,14 @@ const ProductModal = ({
       //   }))
       // }
     }
-  }, [selectedParts, quantities, products, product.assetsType, product.addParts, product.quantity])
+  }, [
+    selectedParts,
+    quantities,
+    products,
+    product.assetsType,
+    product.addParts,
+    product.productQuantity
+  ])
 
   const checkPartsStock = () => {
     if (product.assetsType === 'Finished Goods' && product.addParts === 1) {
@@ -345,11 +370,11 @@ const ProductModal = ({
         const partProduct = products.find((p) => p.id === part.partId)
         const requiredQty = quantities[part.partId] || 0
 
-        if (partProduct && partProduct.quantity < requiredQty) {
+        if (partProduct && partProduct.productQuantity < requiredQty) {
           return {
             isValid: false,
-            productName: partProduct.name,
-            available: partProduct.quantity,
+            productName: partProduct.productName,
+            available: partProduct.productQuantity,
             required: requiredQty
           }
         }
@@ -447,7 +472,7 @@ const ProductModal = ({
                 </label>
                 <Input
                   size="sm"
-                  value={product.saleHSNCode}
+                  value={product.saleHSN}
                   placeholder="Enter Sale HSN Code"
                   onChange={(value) => handleOnChangeEvent(value, 'saleHSNCode')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
@@ -460,7 +485,7 @@ const ProductModal = ({
                   </label>
                   <Input
                     size="sm"
-                    value={product.purchaseHSNCode}
+                    value={product.purchaseHSN}
                     placeholder="Enter Purchase HSN Code"
                     onChange={(value) => handleOnChangeEvent(value, 'purchaseHSNCode')}
                     className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
@@ -468,26 +493,26 @@ const ProductModal = ({
                 </div>
               )}
               <div>
-                <label htmlFor="name" className="block text-sm mb-1 text-gray-600">
+                <label htmlFor="productName" className="block text-sm mb-1 text-gray-600">
                   Product Name
                 </label>
                 <Input
                   size="sm"
-                  value={product.name}
+                  value={product.productName}
                   placeholder="Enter Product Name"
-                  onChange={(value) => handleOnChangeEvent(value, 'name')}
+                  onChange={(value) => handleOnChangeEvent(value, 'productName')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
               </div>
               <div>
-                <label htmlFor="quantity" className="block text-sm mb-1 text-gray-600">
+                <label htmlFor="productQuantity" className="block text-sm mb-1 text-gray-600">
                   Quantity
                 </label>
                 <InputNumber
                   size="sm"
-                  value={product.quantity}
+                  value={product.productQuantity}
                   placeholder="Enter Quantity"
-                  onChange={(value) => handleOnChangeEvent(value, 'quantity')}
+                  onChange={(value) => handleOnChangeEvent(value, 'productQuantity')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
               </div>
@@ -498,7 +523,7 @@ const ProductModal = ({
                     data={products
                       .filter((p) => p.assetsType !== 'Finished Goods')
                       .map((product) => ({
-                        label: product.name,
+                        label: product.productName,
                         value: product.id
                       }))}
                     style={{
@@ -523,9 +548,11 @@ const ProductModal = ({
                       const partProduct = products.find((p) => p.id === item.value)
                       const requiredQty =
                         product.assetsType === 'Finished Goods' && product.addParts === 1
-                          ? (baseQuantities[item.value] || 0) * (Number(product.quantity) || 1)
+                          ? (baseQuantities[item.value] || 0) *
+                            (Number(product.productQuantity) || 1)
                           : quantities[item.value] || 0
-                      const hasEnoughStock = partProduct && partProduct.quantity >= requiredQty
+                      const hasEnoughStock =
+                        partProduct && partProduct.productQuantity >= requiredQty
 
                       return (
                         <div className="flex items-center justify-between w-full">
@@ -533,7 +560,7 @@ const ProductModal = ({
                             <span className={!hasEnoughStock ? 'text-red-500' : ''}>{label}</span>
                             {!hasEnoughStock && (
                               <span className="text-xs text-red-500">
-                                Stock: {partProduct?.quantity || 0} (Need: {requiredQty})
+                                Stock: {partProduct?.productQuantity || 0} (Need: {requiredQty})
                               </span>
                             )}
                           </div>
@@ -551,7 +578,7 @@ const ProductModal = ({
                               readOnly
                               value={
                                 product.assetsType === 'Finished Goods' && product.addParts === 1
-                                  ? `${baseQuantities[item.value] || 0} × ${product.quantity || 1}`
+                                  ? `${baseQuantities[item.value] || 0} × ${product.productQuantity || 1}`
                                   : quantities[item.value] || 0
                               }
                               style={{
@@ -584,7 +611,8 @@ const ProductModal = ({
                           product.assetsType === 'Finished Goods' && product.addParts === 1
                             ? quantities[item.value] || 0
                             : baseQuantities[item.value] || quantities[item.value] || 1
-                        const hasEnoughStock = partProduct && partProduct.quantity >= requiredQty
+                        const hasEnoughStock =
+                          partProduct && partProduct.productQuantity >= requiredQty
 
                         return (
                           <span
@@ -606,7 +634,7 @@ const ProductModal = ({
               </Animation.Collapse>
 
               <div className="mb-4">
-                <label htmlFor="price" className="block text-sm mb-1 text-gray-600">
+                <label htmlFor="productPrice" className="block text-sm mb-1 text-gray-600">
                   Price
                 </label>
                 <InputNumber
@@ -614,8 +642,8 @@ const ProductModal = ({
                   defaultValue={0}
                   size="xs"
                   formatter={toThousands}
-                  value={product.price}
-                  onChange={(value) => handleOnChangeEvent(value, 'price')}
+                  value={product.productPrice}
+                  onChange={(value) => handleOnChangeEvent(value, 'productPrice')}
                   className="w-full border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
               </div>
@@ -635,7 +663,7 @@ const ProductModal = ({
                   searchable={false}
                   size="md"
                   placeholder="Select Tax"
-                  value={Array.isArray(product.tax) ? product.tax : []}
+                  value={Array.isArray(product.taxRate) ? product.taxRate : []}
                   onChange={(value) => handleOnChangeEvent(value, 'tax')}
                   style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
                   menuStyle={{ zIndex: clientModal ? 1 : 999 }}
@@ -694,12 +722,12 @@ const ProductModal = ({
                     {selectedParts.map((part) => {
                       const partProduct = products.find((p) => p.id === part.partId)
                       const partQty = quantities[part.partId] || 0
-                      const partPrice = partProduct?.price || 0
+                      const partPrice = partProduct?.productPrice || 0
 
                       return (
                         <tr key={part.partId} className="hover:bg-gray-50 transition-all">
                           <td className="p-2 border border-gray-200">
-                            {partProduct?.name || 'Unknown'}
+                            {partProduct?.productName || 'Unknown'}
                           </td>
                           <td className="p-2 border border-gray-200 text-center">{partQty}</td>
                           <td className="p-2 border border-gray-200 text-right">
@@ -720,7 +748,7 @@ const ProductModal = ({
                           .reduce((acc, part) => {
                             const partProduct = products.find((p) => p.id === part.partId)
                             const partQty = quantities[part.partId] || 0
-                            return acc + (partProduct?.price || 0) * partQty
+                            return acc + (partProduct?.productPrice || 0) * partQty
                           }, 0)
                           .toFixed(2)}
                       </td>
@@ -738,7 +766,7 @@ const ProductModal = ({
                       .reduce((acc, part) => {
                         const partProduct = products.find((p) => p.id === part.partId)
                         const partQty = quantities[part.partId] || 0
-                        return acc + (partProduct?.price || 0) * partQty
+                        return acc + (partProduct?.productPrice || 0) * partQty
                       }, 0)
                       .toFixed(2)}
                   </span>

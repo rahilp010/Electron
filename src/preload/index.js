@@ -21,7 +21,12 @@ contextBridge.exposeInMainWorld('api', {
   createTransaction: (transaction) => ipcRenderer.invoke('createTransaction', transaction),
   updateTransaction: (transaction) => ipcRenderer.invoke('updateTransaction', transaction),
   deleteTransaction: (id) => ipcRenderer.invoke('deleteTransaction', id),
-  getTransactionById: (id) => ipcRenderer.invoke('getTransactionById', id),
+
+  getPurchaseById: (id) => ipcRenderer.invoke('getPurchaseById', id),
+  getAllPurchases: () => ipcRenderer.invoke('getAllPurchases'),
+  createPurchase: (purchase) => ipcRenderer.invoke('createPurchase', purchase),
+  updatePurchase: (purchase) => ipcRenderer.invoke('updatePurchase', purchase),
+  deletePurchase: (id) => ipcRenderer.invoke('deletePurchase', id),
 
   // Bank receipt methods
   getRecentBankReceipts: () => ipcRenderer.invoke('getRecentBankReceipts'),
@@ -64,6 +69,13 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('updateLedgerTransaction', ledgerTransaction),
   deleteLedgerTransaction: (id) => ipcRenderer.invoke('deleteLedgerTransaction', id),
   transferAmount: (data) => ipcRenderer.invoke('transferAmount', data),
+
+  getLedgerByAccount: () => ipcRenderer.invoke('getLedgerByAccount'),
+  addLedgerEntry: () => ipcRenderer.invoke('addLedgerEntry'),
+  getTransferHistory: () => ipcRenderer.invoke('getTransferHistory'),
+  getClientLedger: () => ipcRenderer.invoke('getClientLedger'),
+  deleteLedgerEntry: () => ipcRenderer.invoke('deleteLedgerEntry'),
+  deleteMultipleLedgerEntries: () => ipcRenderer.invoke('deleteMultipleLedgerEntries'),
 
   // Account methods
   getAllAccounts: () => ipcRenderer.invoke('getAllAccounts'),
