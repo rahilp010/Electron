@@ -496,39 +496,35 @@ function safeParse(v) {
 function updateClientBalances(clientId, tx, mode = 'apply') {
   const factor = mode === 'rollback' ? -1 : 1
 
-  // Always calculate total with tax
-  const total = calculateTotalWithTax(tx)
-
-  if (tx.transactionType === 'sales') {
-    if (tx.paymentType === 'partial') {
+  if (tx.pageName === 'Sales') {
+    if (tx.paymentType === 'partial' && tx.statusOfTransaction === 'pending') {
       db.prepare(
         `UPDATE clients SET pendingAmount = pendingAmount + ?, paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
       ).run(factor * tx.pendingAmount, factor * tx.paidAmount, clientId)
     } else if (tx.statusOfTransaction === 'completed') {
       db.prepare(
         `UPDATE clients SET paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
-      ).run(factor * total, clientId)
+      ).run(factor * tx.totalAmountWithTax, clientId)
     } else {
-      // SALES, FULL, PENDING → add total with tax
       db.prepare(
         `UPDATE clients SET pendingAmount = pendingAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
-      ).run(factor * total, clientId)
+      ).run(factor * tx.totalAmountWithTax, clientId)
     }
-  } else if (tx.transactionType === 'purchase') {
-    if (tx.paymentType === 'partial') {
-      db.prepare(
-        `UPDATE clients SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
-      ).run(factor * tx.pendingAmount, clientId)
-    } else if (tx.statusOfTransaction === 'completed') {
-      db.prepare(
-        `UPDATE clients SET paidAmount = paidAmount + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
-      ).run(factor * total, clientId)
-    } else {
-      // PURCHASE full pending
-      db.prepare(
-        `UPDATE clients SET pendingFromOurs = pendingFromOurs + ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`
-      ).run(factor * total, clientId)
-    }
+  } else if (tx.pageName === 'Purchase') {
+    const pendingFromOurs = Number(tx.pendingFromOurs || 0)
+    const paidAmount = Number(tx.paidAmount || 0)
+
+    console.log('PrndingfromOurs', pendingFromOurs)
+
+    db.prepare(
+      `
+    UPDATE clients
+    SET pendingFromOurs = pendingFromOurs + ?,
+        paidAmount = paidAmount + ?,
+        updatedAt = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `
+    ).run(factor * pendingFromOurs, factor * paidAmount, clientId)
   }
 }
 
@@ -837,15 +833,17 @@ ipcMain.handle('createPurchase', (event, data) => {
         quantity,
         purchaseAmount,
         paidAmount = 0,
-        paymentType = 'full',
+        paymentType,
         paymentMethod,
         pendingAmount = 0,
+        pendingFromOurs,
         statusOfTransaction,
         billNo,
         description,
         date,
         dueDate = null,
         payments,
+        taxAmount,
         totalAmountWithTax,
         totalAmountWithoutTax,
         methodType = 'Payment'
@@ -856,7 +854,7 @@ ipcMain.handle('createPurchase', (event, data) => {
       }
 
       const qty = Number(quantity)
-      const totalAmount = Number(purchaseAmount)
+      const totalAmount = Number(totalAmountWithTax)
 
       const paid = Number(paidAmount || 0)
       let pending = Number(pendingAmount || 0)
@@ -894,8 +892,6 @@ ipcMain.handle('createPurchase', (event, data) => {
         )
         .run(qty, parsedProductId)
 
-      console.log('Product update changes:', productUpdate.changes)
-
       if (productUpdate.changes === 0) {
         throw new Error(`Product with id ${parsedProductId} not found. Quantity was NOT updated.`)
       }
@@ -911,6 +907,7 @@ ipcMain.handle('createPurchase', (event, data) => {
           purchaseAmount,
           paidAmount,
           pendingAmount,
+          pendingFromOurs,
           paymentMethod,
           paymentType,
           statusOfTransaction,
@@ -919,11 +916,12 @@ ipcMain.handle('createPurchase', (event, data) => {
           date,
           dueDate,
           methodType,
+          taxAmount,
           totalAmountWithTax,
           totalAmountWithoutTax,
           payments
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?)
       `
         )
         .run(
@@ -933,6 +931,7 @@ ipcMain.handle('createPurchase', (event, data) => {
           totalAmount,
           paid,
           pending,
+          pendingFromOurs,
           paymentMethodAccordingToPayment,
           paymentType,
           finalStatus,
@@ -941,6 +940,7 @@ ipcMain.handle('createPurchase', (event, data) => {
           date,
           dueDate,
           methodType,
+          JSON.stringify(taxAmount || []),
           totalAmountWithTax,
           totalAmountWithoutTax,
           JSON.stringify(payments || [])
@@ -949,15 +949,17 @@ ipcMain.handle('createPurchase', (event, data) => {
       const purchaseId = purchaseResult.lastInsertRowid
 
       /* ================= CLIENT BALANCE UPDATE ================= */
-      if (pending > 0) {
-        db.prepare(
-          `
-          UPDATE clients
-          SET pendingFromOurs = pendingFromOurs + ?
-          WHERE id = ?
-        `
-        ).run(pending, clientId)
-      }
+      // if (pendingFromOurs > 0) {
+      //   db.prepare(
+      //     `
+      //     UPDATE clients
+      //     SET pendingFromOurs = pendingFromOurs + ?
+      //     WHERE id = ?
+      //   `
+      //   ).run(pendingFromOurs, clientId)
+      // }
+
+      updateClientBalances(clientId, data, 'apply')
 
       /* ================= CLIENT ACCOUNT LEDGER ================= */
       const client = db
@@ -1113,11 +1115,14 @@ ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
         purchaseAmount,
         paidAmount = 0,
         pendingAmount = 0,
+        pendingFromOurs = 0,
         paymentMethod = 'bank',
         billNo,
         description,
+        paymentType,
         statusOfTransaction,
         payments,
+        taxAmount,
         totalAmountWithTax,
         totalAmountWithoutTax,
         date
@@ -1171,6 +1176,40 @@ ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
       ).run(newQty, productId)
 
       /* ===============================
+   1️⃣ CLIENT BALANCE ROLLBACK + APPLY
+================================= */
+
+      //     const oldPendingFromOurs = Number(oldPurchase.pendingFromOurs || 0)
+      //     const newPendingFromOurs = Number(pendingFromOurs || 0)
+
+      //     // 🔁 Rollback old pending
+      //     if (oldPendingFromOurs > 0) {
+      //       db.prepare(
+      //         `
+      //   UPDATE clients
+      //   SET pendingFromOurs = pendingFromOurs - ?
+      //   WHERE id = ?
+      // `
+      //       ).run(oldPendingFromOurs, clientId)
+      //     }
+
+      //     // ✅ Apply new pending
+      //     if (newPendingFromOurs > 0) {
+      //       db.prepare(
+      //         `
+      //   UPDATE clients
+      //   SET pendingFromOurs = pendingFromOurs + ?
+      //   WHERE id = ?
+      // `
+      //       ).run(newPendingFromOurs, clientId)
+      //     }
+
+      console.log('oldPurchase.clientId', oldPurchase.clientId)
+      console.log('oldPurchase', oldPurchase)
+
+      updateClientBalances(oldPurchase.clientId, oldPurchase, 'rollback')
+
+      /* ===============================
          2️⃣ UPDATE PURCHASE ROW
       =============================== */
 
@@ -1183,11 +1222,14 @@ ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
             purchaseAmount = ?,
             paidAmount = ?,
             pendingAmount = ?,
+            pendingFromOurs = ?,
             billNo = ?,
             description = ?,
+            paymentType = ?,
             date = ?,
             statusOfTransaction = ?,
             payments = ?,
+            taxAmount = ?,
             totalAmountWithTax = ?,
             totalAmountWithoutTax = ?,
             paymentMethod = ?,
@@ -1201,118 +1243,113 @@ ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
         newAmount,
         paidAmount,
         pendingAmount,
+        pendingFromOurs,
         billNo,
         description,
+        paymentType,
         new Date().toISOString(),
         finalStatus,
         JSON.stringify(payments || []),
+        JSON.stringify(taxAmount || []),
         totalAmountWithTax,
         totalAmountWithoutTax,
         afterUpdatePaymentMethod,
         id
       )
 
+      updateClientBalances(clientId, { ...data, pageName: 'Purchase' }, 'apply')
+
       /* ===============================
-         3️⃣ CLIENT LEDGER DIFFERENCE
-      =============================== */
+   2️⃣ CLIENT ACCOUNT BALANCE SAFE UPDATE
+================================= */
 
-      const difference = newAmount - oldAmount
+      const client = db.prepare(`SELECT * FROM clients WHERE id = ?`).get(clientId)
+      const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(client.accountId)
 
-      if (difference !== 0) {
-        const client = db.prepare(`SELECT * FROM clients WHERE id = ?`).get(clientId)
+      let newBalance = Number(account.closingBalance)
 
-        const account = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(client.accountId)
+      // 🔁 Rollback OLD amount
+      newBalance -= oldAmount
 
-        let newBalance = Number(account.closingBalance)
+      // ✅ Apply NEW amount
+      newBalance += newAmount
 
-        if (difference > 0) {
-          // Amount increased → client owes more
-          newBalance += difference
-        } else {
-          // Amount decreased → reduce liability
-          newBalance -= Math.abs(difference)
-        }
+      // Insert adjustment entry
+      db.prepare(
+        `
+  INSERT INTO ledger
+  (accountId, clientId, entryType, amount, balanceAfter,
+   referenceType, referenceId, narration)
+  VALUES (?, ?, ?, ?, ?, 'Adjustment', ?, ?)
+`
+      ).run(
+        account.id,
+        clientId,
+        newAmount > oldAmount ? 'credit' : 'debit',
+        Math.abs(newAmount - oldAmount),
+        newBalance,
+        id,
+        'Purchase Updated Adjustment'
+      )
+
+      db.prepare(
+        `
+  UPDATE accounts
+  SET closingBalance = ?
+  WHERE id = ?
+`
+      ).run(newBalance, account.id)
+
+      /* ===============================
+   3️⃣ SYSTEM ACCOUNT SAFE UPDATE
+================================= */
+
+      const oldPaidAmount = Number(oldPurchase.paidAmount || 0)
+      const newPaidAmount = Number(paidAmount || 0)
+
+      const systemAccount = db
+        .prepare(
+          `
+    SELECT * FROM accounts
+    WHERE accountType = ?
+    LIMIT 1
+  `
+        )
+        .get(afterUpdatePaymentMethod === 'cash' ? 'Cash' : 'Bank')
+
+      if (systemAccount) {
+        let newSystemBalance = Number(systemAccount.closingBalance)
+
+        // 🔁 Rollback old paid
+        newSystemBalance += oldPaidAmount
+
+        // ✅ Apply new paid
+        newSystemBalance -= newPaidAmount
 
         db.prepare(
           `
-          INSERT INTO ledger
-          (accountId, clientId, entryType, amount, balanceAfter,
-           referenceType, referenceId, narration)
-          VALUES (?, ?, ?, ?, ?, 'Adjustment', ?, ?)
-        `
+    INSERT INTO ledger
+    (accountId, clientId, entryType, amount, balanceAfter,
+     referenceType, referenceId, narration)
+    VALUES (?, ?, ?, ?, ?, 'Adjustment', ?, ?)
+  `
         ).run(
-          account.id,
+          systemAccount.id,
           clientId,
-          difference > 0 ? 'credit' : 'debit',
-          Math.abs(difference),
-          newBalance,
+          newPaidAmount > oldPaidAmount ? 'debit' : 'credit',
+          Math.abs(newPaidAmount - oldPaidAmount),
+          newSystemBalance,
           id,
-          'Purchase Updated Adjustment'
+          'Purchase Payment Adjustment'
         )
 
         db.prepare(
           `
-          UPDATE accounts
-          SET closingBalance = ?
-          WHERE id = ?
-        `
-        ).run(newBalance, account.id)
-      }
-
-      /* ===============================
-         4️⃣ SYSTEM ACCOUNT ADJUSTMENT
-         (if paid changed)
-      =============================== */
-
-      const paidDifference = Number(paidAmount) - oldPaid
-
-      if (paidDifference !== 0) {
-        const systemAccount = db
-          .prepare(
-            `
-            SELECT * FROM accounts
-            WHERE accountType = ?
-            LIMIT 1
-          `
-          )
-          .get(paymentMethod === 'cash' ? 'Cash' : 'Bank')
-
-        if (systemAccount) {
-          let newSystemBalance = Number(systemAccount.closingBalance)
-
-          if (paidDifference > 0) {
-            // More paid now → reduce system balance
-            newSystemBalance -= paidDifference
-          } else {
-            // Less paid now → refund back
-            newSystemBalance += Math.abs(paidDifference)
-          }
-
-          db.prepare(
-            `
-            INSERT INTO ledger
-            (accountId, clientId, entryType, amount, balanceAfter,
-             referenceType, referenceId, narration)
-            VALUES (?, ?, ?, ?, ?, 'Adjustment', ?, ?)
-          `
-          ).run(
-            systemAccount.id,
-            clientId,
-            paidDifference > 0 ? 'debit' : 'credit',
-            Math.abs(paidDifference),
-            newSystemBalance,
-            id,
-            'Purchase Payment Adjustment'
-          )
-
-          db.prepare(
-            `
-            UPDATE accounts
-            SET closingBalance = ?
-            WHERE id = ?
-          `
-          ).run(newSystemBalance, systemAccount.id)
-        }
+    UPDATE accounts
+    SET closingBalance = ?
+    WHERE id = ?
+  `
+        ).run(newSystemBalance, systemAccount.id)
       }
 
       return id
@@ -1358,15 +1395,17 @@ ipcMain.handle('deletePurchase', (event, id) => {
       ).run(quantity, productId)
 
       /* ===================== 2️⃣ CLIENT PENDING FIX ===================== */
-      if (pending > 0) {
-        db.prepare(
-          `
-          UPDATE clients
-          SET pendingFromOurs = pendingFromOurs - ?
-          WHERE id = ?
-        `
-        ).run(pending, clientId)
-      }
+      // if (pending > 0) {
+      //   db.prepare(
+      //     `
+      //     UPDATE clients
+      //     SET pendingFromOurs = pendingFromOurs - ?
+      //     WHERE id = ?
+      //   `
+      //   ).run(pending, clientId)
+      // }
+
+      updateClientBalances(purchase.clientId, purchase, 'rollback')
 
       /* ===================== 3️⃣ CLIENT ACCOUNT REVERSAL ===================== */
       const client = db.prepare(`SELECT * FROM clients WHERE id = ?`).get(clientId)

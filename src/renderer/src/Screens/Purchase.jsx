@@ -184,9 +184,9 @@ const PurchaseRow = React.memo(
           <Whisper
             trigger="hover"
             placement="rightStart"
-            speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
+            speaker={<Tooltip>{toThousands(transaction?.pendingFromOurs)}</Tooltip>}
           >
-            <span>₹ {toThousands(Number(transaction?.pendingAmount).toFixed(0))}</span>
+            <span>₹ {toThousands(Number(transaction?.pendingFromOurs).toFixed(0))}</span>
           </Whisper>
         )
       }
@@ -963,9 +963,9 @@ const Purchase = () => {
         case item.paymentType === 'full':
           return Number(item.totalAmountWithTax)
         case item.paymentType === 'partial':
-          return Number(item.pendingAmount)
+          return Number(item.pendingFromOurs)
         default:
-          return Number(item.pendingAmount)
+          return Number(item.pendingFromOurs)
       }
     }
 
@@ -1018,7 +1018,7 @@ const Purchase = () => {
         'Product Name': getProductName(transaction.productId, products),
         Quantity: transaction.quantity,
         'Total Amount': toThousands(transaction.totalAmountWithTax || 0),
-        'Pending Amount': toThousands(transaction.pendingAmount || 0),
+        'Pending Amount': toThousands(transaction.pendingFromOurs || 0),
         'Paid Amount': toThousands(transaction.paidAmount || 0),
         'Payment Status': transaction.statusOfTransaction,
         'Payment Type': transaction.paymentType

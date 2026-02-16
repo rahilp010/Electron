@@ -57,7 +57,9 @@ const TABLE_HEADERS = [
 /* ========= Subcomponent: Product Row ========= */
 const ProductRow = ({ index, row, products, settings, onChange, onRemove, toThousands }) => {
   const selectedProduct = products.find((p) => p.id === row.productId)
-  const price = row.productPrice ?? selectedProduct?.productPrice ?? 0
+  const unitPrice =
+    Number(row.productPrice) - Number(row.taxAmount?.map((v) => v.value).reduce((a, b) => a + b, 0))
+  const price = unitPrice ?? selectedProduct?.productPrice ?? 0
   const subtotal = price * (row.productQuantity || 0)
   const taxTotal = Array.isArray(row.taxAmount)
     ? row.taxAmount.reduce((acc, t) => acc + (t.value || 0), 0)
@@ -70,8 +72,6 @@ const ProductRow = ({ index, row, products, settings, onChange, onRemove, toThou
       value: `custom-${s.id}`
     }))
   ]
-
-  console.log('selected', selectedProduct)
 
   return (
     <motion.tr
@@ -120,7 +120,7 @@ const ProductRow = ({ index, row, products, settings, onChange, onRemove, toThou
       <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
         <InputNumber
           prefix="₹"
-          value={row.productPrice}
+          value={unitPrice}
           onChange={(val) => onChange(index, 'productPrice', val)}
           className="w-24 [&_.rs-input-number-btn-group]:hidden [&_.rs-input]:h-10 [&_.rs-input]:rounded-lg [&_.rs-input]:bg-white/50 hover:[&_.rs-input]:bg-white/70 [&_.rs-input]:border-gray-300/50"
         />
@@ -343,6 +343,8 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     })
   }, [purchaseBill.products])
 
+  console.log("productRowTotals",productRowTotals)
+
   const billSubTotal = useMemo(() => {
     return productRowTotals.reduce((s, r) => s + r.base, 0)
   }, [productRowTotals])
@@ -536,7 +538,6 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
   /* ========= Submit Handler ========= */
   const handleSubmit = async (paymentData) => {
     try {
-      debugger
       const validRows = purchaseBill.products.filter((it) => it.productId && it.productQuantity > 0)
       const rowsDetailed = validRows.map((r) => {
         const price = Number(r.productPrice || 0)
@@ -639,7 +640,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         const row = rowsDetailed[i]
         const itemPaid = Number(paidDistribution[i] || 0)
         // const purchaseAmount = Math.round(row.totalAmountWithTax * 100) / 100
-        const purchaseAmount = row.base
+        const purchaseAmount = row.price
         const pendingAmount =
           purchaseBill.paymentType === 'full'
             ? 0
@@ -647,32 +648,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
               ? Math.max(0, Math.round((purchaseAmount - itemPaid) * 100) / 100)
               : purchaseAmount
         const pendingFromOurs =
-          purchaseBill.statusOfTransaction === 'completed' ? 0 : purchaseAmount
-
-        // const transactionData = {
-        //   clientId: purchaseBill.clientId,
-        //   productId: row.productId,
-        //   multipleProducts: rowsDetailed,
-        //   quantity: Number(row.productQuantity),
-        //   purchaseAmount: purchaseAmount,
-        //   paymentType: purchaseBill.paymentType,
-        //   sellAmount: Number(row.productPrice),
-        //   paymentMethod: purchaseBill.paymentMethod,
-        //   billNo: purchaseBill.billNumber,
-        //   statusOfTransaction: paymentData.statusOfTransaction,
-        //   pageName: 'Purchase',
-        //   transactionType: 'purchase',
-        //   pendingAmount: pendingAmount,
-        //   freightCharges: billFreight,
-        //   freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
-        //   paidAmount: itemPaid,
-        //   dueDate: new Date().setMonth(new Date().getMonth() + 1),
-        //   taxAmount: row.taxes.map((t) => ({ ...t })) || [],
-        //   date: purchaseBill.billDate || new Date().toISOString().slice(0, 19).replace('T', ' '),
-        //   isMultiProduct: rowsDetailed.length > 1 ? 1 : 0
-        // }
-
-        debugger
+          purchaseBill.statusOfTransaction === 'completed' ? 0 : row.totalAmountWithTax
 
         const purchaseData = {
           clientId: purchaseBill.clientId,
@@ -740,7 +716,6 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         return
       }
 
-      debugger
       // Recalculate everything like in create mode
       const rowsDetailed = validRows.map((r) => {
         const price = Number(r.productPrice || 0)
@@ -824,8 +799,9 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           paymentMethod: currentMethod, // Use currentMethod
           billNo: purchaseBill.billNumber,
           statusOfTransaction: txStatus, // Use txStatus
-          pendingAmount: pending,
+          pendingAmount: 0,
           paidAmount: itemPaid,
+          pendingFromOurs: pending,
           taxRate: 0,
           taxAmount: row.taxes,
           freightCharges: billFreight,

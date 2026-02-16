@@ -121,10 +121,6 @@ const PaymentMethod = ({ overflow, open, setOpen, onConfirm, grandTotal }) => {
   }
 
   const handleConfirm = () => {
-    debugger
-
-    console.log(bankAccounts.find((acc) => acc.id === Number(googlePayAccount)))
-
     const selectedBank =
       bankAccounts.find((acc) => acc.id === Number(googlePayAccount))?.accountName || ''
 
