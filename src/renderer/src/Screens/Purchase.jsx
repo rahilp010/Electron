@@ -1,3 +1,4 @@
+/* eslint-disable no-case-declarations */
 /* eslint-disable no-undef */
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
@@ -525,225 +526,319 @@ const generatePrintHTML = (
   clients = [],
   products = []
 ) => {
+  // --- 1. Helper Functions & Calculations ---
+  const toThousands = (num) => num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+  // Calculate Totals
+  const totalAmount = data.reduce((sum, row) => sum + (Number(row.totalAmountWithTax) || 0), 0)
+  const totalQuantity = data.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
+
   const getCellValue = (row, headerKey) => {
     switch (headerKey) {
       case 'billNo':
-        return row.billNo || ''
+        return `<span class="font-mono font-bold">#${row.billNo || '---'}</span>`
       case 'date':
-        return new Date(row.createdAt).toLocaleDateString()
+        return new Date(row.createdAt).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        })
       case 'clientName':
-        return getClientName(row.clientId, clients)
+        const name =
+          typeof getClientName !== 'undefined'
+            ? getClientName(row.clientId, clients)
+            : row.clientName || 'N/A'
+        return `<div class="text-wrap-cell">${name}</div>`
       case 'productName':
-        return getProductName(row.productId, products)
+        const prod =
+          typeof getProductName !== 'undefined'
+            ? getProductName(row.productId, products)
+            : row.productName || 'N/A'
+        return `<div class="text-wrap-cell">${prod}</div>`
       case 'quantity':
         return row.quantity || 0
       case 'totalAmount':
-        return `₹ ${toThousands(Number(row.purchaseAmount || 0).toFixed(0))}`
+        return `₹ ${toThousands(Number(row.totalAmountWithTax || 0).toFixed(0))}`
       case 'pendingAmount':
         if (row.statusOfTransaction === 'pending' && row.paymentType === 'partial') {
-          return `₹ ${toThousands(Number(row.pendingAmount).toFixed(0))}`
+          return `<span class="text-red font-bold">₹ ${toThousands(Number(row.pendingAmount).toFixed(0))}</span>`
         }
-        return row.statusOfTransaction === 'completed' ? '-' : 'Pending'
+        return row.statusOfTransaction === 'completed'
+          ? '<span class="badge badge-success">Paid</span>'
+          : '<span class="badge badge-warning">Pending</span>'
       default:
-        return ''
+        return row[headerKey] || ''
     }
   }
 
-  const tableHeaders = headers.map((h) => `<th class="border px-4 py-2">${h.label}</th>`).join('')
+  // --- 2. Table Construction ---
+  const tableHeaders = headers
+    .map((h) => {
+      let align = 'text-left'
+      if (h.key === 'totalAmount' || h.key === 'quantity') align = 'text-right'
+      if (h.key === 'pendingAmount') align = 'text-center'
+      return `<th class="${align}">${h.label}</th>`
+    })
+    .join('')
+
   const tableRows = data
     .map((row) => {
       const cells = headers
-        .map((h) => `<td class="border px-4 py-2 text-center">${getCellValue(row, h.key)}</td>`)
+        .map((h) => {
+          let alignClass = 'text-left'
+          if (h.key === 'totalAmount' || h.key === 'quantity') alignClass = 'text-right'
+          if (h.key === 'pendingAmount') alignClass = 'text-center'
+          return `<td class="${alignClass}">${getCellValue(row, h.key)}</td>`
+        })
         .join('')
       return `<tr>${cells}</tr>`
     })
     .join('')
 
+  // --- 3. Ledger Specific Logic ---
   let ledgerSpecificContent = ''
   if (reportType === 'ledger') {
-    // Example for ledger: Add balance columns or specific ledger logic
-    // Customize based on your ledger data structure
     ledgerSpecificContent = `
-      <tr>
-        <td colspan="${headers.length}" class="border px-4 py-2 font-bold text-right">Running Balance</td>
+      <tr class="ledger-separator">
+        <td colspan="${headers.length}" class="text-right font-bold bg-gray">Running Balance calculation below</td>
       </tr>
       ${data
-        .map((row, index) => {
-          // Assume ledger data has 'balance' field; adjust as needed
+        .map((row) => {
           const balance = row.balance || 0
-          return `<tr><td colspan="${headers.length - 1}" class="border px-4 py-2"></td><td class="border px-4 py-2 text-right">₹ ${toThousands(balance)}</td></tr>`
+          return `
+            <tr class="ledger-row">
+              <td colspan="${headers.length - 1}" class="text-right label-cell">Balance Forward:</td>
+              <td class="text-right font-bold">₹ ${toThousands(balance)}</td>
+            </tr>`
         })
         .join('')}
     `
   }
 
+  // --- 4. Company Info ---
+  const companyInfo = {
+    name: 'Electron by Envy',
+    // address: '123 Business Park, Main Street',
+    city: 'Surat, Gujarat - 395006',
+    phone: '+91 9316080624',
+    email: 'admin@envy.com'
+    // gst: 'GSTIN: 24ABCDE1234F1Z5'
+  }
+
   return `
     <!DOCTYPE html>
-<html>
-  <head>
-   <link rel="icon" type="image/png" href="../../../../resources/icon.png" />
-    <title>${title} Report</title>
-    <style>
-      body {
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        margin: 20px;
-        color: #1e293b;
-        background: #fff;
-      }
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
-      /* ===== HEADER BAR ===== */
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 25px;
-        padding-bottom: 15px;
-        border-bottom: 2px solid #e5e7eb;
-      }
+          :root {
+            --primary: #1e293b; /* Slate 800 */
+            --secondary: #64748b; /* Slate 500 */
+            --border: #e2e8f0;
+            --highlight: #f8fafc;
+          }
 
-      .header-left {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-      }
+          html, body { height: 100%; margin: 0; padding: 0; }
 
-      .header-left h1 {
-        font-size: 28px;
-        font-weight: 600;
-        margin: 0;
-        color: #111827;
-      }
+          body {
+            font-family: 'Inter', sans-serif;
+            color: #334155;
+            line-height: 1.5;
+            background: #fff;
+            display: flex;
+            flex-direction: column; 
+            min-height: 100vh;
+          }
 
-      .generated-label {
-        font-size: 12px;
-        color: #64748b;
-        background: #f1f5f9;
-        border: 1px solid #e5e7eb;
-        padding: 2px 8px;
-        border-radius: 6px;
-        margin-bottom: 6px;
-      }
+          .page-wrapper {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+          }
 
-      .header-right {
-        font-size: 14px;
-        color: #374151;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 5px;
-      }
+          .content-grow { flex: 1; }
 
-      .record-count {
-        font-weight: bold;
-        background: #f3f4f6;
-        border: 1px solid #e2e8f0;
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-size: 13px;
-        color: #1e40af;
-      }
+          /* Layout Utils */
+          .flex { display: flex; }
+          .justify-between { justify-content: space-between; }
+          .justify-end { justify-content: flex-end; }
+          .items-center { align-items: center; }
+          .items-end { align-items: flex-end; }
+          .font-bold { font-weight: 700; }
+          .font-mono { font-family: 'Courier New', Courier, monospace; }
+          .text-right { text-align: right; }
+          .text-left { text-align: left; }
+          .text-center { text-align: center; }
+          .text-red { color: #dc2626; }
+          .bg-gray { background-color: #f1f5f9; }
 
-      /* ===== TABLE ===== */
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-        font-size: 14px;
-      }
+          .text-wrap-cell {
+            max-width: 180px;
+            white-space: normal;
+            word-wrap: break-word;
+            line-height: 1.3;
+          }
 
-      thead th {
-        background: #e5e7eb;
-        color: #111827;
-        padding: 12px 14px;
-        border: 1px solid #e2e8f0;
-        font-weight: 600;
-        text-transform: capitalize;
-        font-size: 15px;
-        text-align: left;
-      }
+          /* Header */
+          .header-container {
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .company-branding h1 { margin: 0; font-size: 24px; color: var(--primary); text-transform: uppercase; }
+          .company-details { font-size: 12px; color: var(--secondary); margin-top: 8px; }
+          .logo-placeholder {
+            width: 70px; height: 65px; background: var(--primary); color: white;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px; font-weight: bold; font-size: 20px; margin-bottom: 10px;
+          }
+          .report-meta { text-align: right; }
+          .report-title { font-size: 28px; font-weight: 800; color: #cbd5e1; text-transform: uppercase; margin: 0; }
+          .meta-table { margin-top: 10px; border-collapse: collapse; float: right; font-size: 12px; }
+          .meta-table td { padding: 2px 10px; border-bottom: 1px solid var(--border); }
+          .meta-label { font-weight: 600; color: var(--primary); }
 
-      tbody td {
-        padding: 10px 14px;
-        border: 1px solid #e2e8f0;
-        font-size: 14px;
-        color: #374151;
-      }
+          /* Table */
+          table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+          table.data-table th {
+            background-color: var(--primary); color: white;
+            padding: 10px; font-weight: 600; font-size: 12px;
+            text-transform: uppercase;
+          }
+          table.data-table td {
+            padding: 8px 10px; border-bottom: 1px solid var(--border);
+            font-size: 12px; vertical-align: middle;
+          }
+          table.data-table tr:nth-child(even) { background-color: #f8fafc; }
 
-      tbody tr:nth-child(even) {
-        background: #f9fafb;
-      }
+          /* Totals Section */
+          .totals-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 20px;
+            page-break-inside: avoid;
+          }
+          .totals-table {
+            width: 40%; /* Adjust width of summary box */
+            border-collapse: collapse;
+            font-size: 13px;
+          }
+          .totals-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e2e8f0;
+          }
+          .totals-table .label { font-weight: 600; color: var(--secondary); }
+          .totals-table .value { text-align: right; font-weight: 600; color: var(--primary); }
+          .totals-table .grand-total-row {
+            background-color: var(--primary);
+            color: white;
+          }
+          .totals-table .grand-total-row .label, 
+          .totals-table .grand-total-row .value {
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+          }
 
-      tbody tr:hover {
-        background: #f1f5f9;
-      }
+          /* Status Pills */
+          .badge {
+            display: inline-block; padding: 4px 12px; border-radius: 50px;
+            font-weight: 600; font-size: 10px; text-transform: uppercase;
+            min-width: 60px; text-align: center;
+          }
+          .badge-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+          .badge-warning { background: #fef9c3; color: #a16207; border: 1px solid #fde047; }
 
-      .totals-row {
-        font-weight: bold;
-        background: #f3f4f6;
-      }
+          /* Footer */
+          .footer-section {
+            margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
+          }
+          .signature-area { width: 200px; text-align: center; }
+          .signature-line { border-top: 1px solid #334155; margin-bottom: 5px; }
 
-      /* ===== FOOTER ===== */
-      .footer {
-        margin-top: 25px;
-        text-align: center;
-        font-size: 12px;
-        color: #64748b;
-        border-top: 1px solid #e2e8f0;
-        padding-top: 10px;
-      }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; display: block; min-height: 100%; }
+            .page-wrapper { padding: 0; display: block; height: 100%; }
+            .footer-section { position: fixed; bottom: 0; left: 0; width: 100%; background: white; padding-bottom: 10px; }
+            table.data-table { margin-bottom: 20px; } /* Reset margin */
+            /* Ensure the totals don't overlap the fixed footer if data is long */
+            .totals-container { margin-bottom: 150px; } 
+          }
+        </style>
+      </head>
+      <body onload="window.print();">
+        <div class="page-wrapper">
+          <div class="content-grow">
+            <div class="header-container flex justify-between items-start">
+              <div class="company-branding">
+                <div class="logo-placeholder">Envy</div> 
+                <h1>${companyInfo.name}</h1>
+                <div class="company-details">
+                  <div>${companyInfo.city}</div>
+                  <div>${companyInfo.phone} | ${companyInfo.email}</div>
+                </div>
+              </div>
+              <div class="report-meta">
+                <h2 class="report-title">${title}</h2>
+                <table class="meta-table">
+                  <tr><td class="meta-label">Date:</td><td>${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td></tr>
+                  <tr><td class="meta-label">Records:</td><td>${data.length}</td></tr>
+                </table>
+              </div>
+            </div>
 
-      .footer strong {
-        font-size: 15px;
-        color: #1e40af;
-      }
+            <table class="data-table">
+              <thead><tr>${tableHeaders}</tr></thead>
+              <tbody>
+                ${tableRows}
+                ${ledgerSpecificContent}
+              </tbody>
+            </table>
 
-      @media print {
-        body {
-          margin: 0.8cm;
-        }
-        .footer {
-          position: fixed;
-          bottom: 10px;
-          width: 100%;
-        }
-      }
-    </style>
-  </head>
-  <body onload="window.print(); setTimeout(() => { window.close(); }, 1000);">
+            <div class="totals-container">
+              <table class="totals-table">
+                <tr>
+                  <td class="label">Total Quantity</td>
+                  <td class="value">${totalQuantity}</td>
+                </tr>
+                <tr>
+                  <td class="label">Sub Total</td>
+                  <td class="value">₹ ${toThousands(totalAmount.toFixed(0))}</td>
+                </tr>
+                <tr class="grand-total-row">
+                  <td class="label">Grand Total</td>
+                  <td class="value">₹ ${toThousands(totalAmount.toFixed(0))}</td>
+                </tr>
+              </table>
+            </div>
 
-    <!-- ===== HEADER SECTION ===== -->
-    <div class="header">
-      <div class="header-left">
-        <h1>${title}</h1>
-      </div>
-      <div class="header-right">
-      <div class="record-count">Total Records: ${data.length}</div>
-      <div>Generated on: ${new Date().toLocaleString()}</div>
-      </div>
-    </div>
-
-    <!-- ===== TABLE ===== -->
-    <table>
-      <thead>
-        <tr>
-          ${tableHeaders}
-        </tr>
-      </thead>
-      <tbody>
-        ${tableRows}
-        ${ledgerSpecificContent}
-      </tbody>
-    </table>
-
-    <!-- ===== FOOTER ===== -->
-    <div class="footer">
-      <p>This is a computer-generated report. No signature is required.</p>
-      <p><strong>Powered by Electron</strong></p>
-    </div>
-  </body>
-</html>
-
-
+          </div> <div class="footer-section">
+            <div class="flex justify-between items-end">
+              <div style="width: 60%;">
+                <p style="font-size:11px; font-weight:bold; margin-bottom:4px;">Terms & Conditions:</p>
+                <p style="font-size:10px; color:#64748b; margin:0; line-height:1.4;">
+                  1. Goods once sold will not be taken back.<br>
+                  2. Interest @18% p.a. will be charged if payment is delayed.<br>
+                  3. Subject to Surat Jurisdiction.
+                </p>
+              </div>
+              <div class="signature-area">
+                <div style="height: 50px;"></div> <div class="signature-line"></div>
+                <div class="font-bold" style="font-size:12px;">Authorized Signatory</div>
+                <div style="font-size:10px;">For, ${companyInfo.name}</div>
+              </div>
+            </div>
+            <div class="text-center" style="margin-top:20px; font-size:9px; color:#94a3b8;">
+              This is a computer-generated document. | Powered by Electron by Envy
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
   `
 }
 
@@ -974,7 +1069,17 @@ const Purchase = () => {
       0
     )
 
-    return { totalPurchases, totalProducts, totalPendingAmount }
+    const totalPendingCount = purchaseTransactions.filter(
+      (item) => item.statusOfTransaction === 'pending'
+    ).length
+
+    const totalPaidCount = purchaseTransactions.filter(
+      (item) => item.statusOfTransaction === 'completed'
+    ).length
+
+    console.log('putchaseTransaction', purchaseTransactions)
+
+    return { totalPurchases, totalProducts, totalPendingAmount, totalPendingCount, totalPaidCount }
   }, [transactions])
 
   // Event handlers
@@ -1036,7 +1141,7 @@ const Purchase = () => {
   }, [filteredTransactions, clients, products])
 
   const TABLE_HEADERS_PRINT = [
-    { key: 'billNo', label: 'Bill No', width: 'w-[100px]' },
+    // { key: 'billNo', label: 'Bill No', width: 'w-[100px]' },
     { key: 'date', label: 'Date', width: 'w-[100px]' },
     { key: 'clientName', label: 'Client Name', width: 'w-[250px]' },
     { key: 'productName', label: 'Product Name', width: 'w-[230px]' },
@@ -1209,6 +1314,14 @@ const Purchase = () => {
             </p>
           </div>
           <div className="mx-5 border-r w-52">
+            <p className="text-sm font-light mb-1">Pending Count</p>
+            <p className="text-2xl font-light">{statistics.totalPendingCount}</p>
+          </div>
+          <div className="mx-5 border-r w-52">
+            <p className="text-sm font-light mb-1">Paid Count</p>
+            <p className="text-2xl font-light">{statistics.totalPaidCount}</p>
+          </div>
+          {/* <div className="mx-5 border-r w-52">
             <p className="text-sm font-light mb-1">Purchase Bill</p>
             <div className="flex items-center gap-2">
               <IoReceipt
@@ -1220,7 +1333,7 @@ const Purchase = () => {
                 }}
               />
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Main Content */}

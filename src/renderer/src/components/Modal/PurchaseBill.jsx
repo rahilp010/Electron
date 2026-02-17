@@ -57,8 +57,10 @@ const TABLE_HEADERS = [
 /* ========= Subcomponent: Product Row ========= */
 const ProductRow = ({ index, row, products, settings, onChange, onRemove, toThousands }) => {
   const selectedProduct = products.find((p) => p.id === row.productId)
-  const unitPrice =
-    Number(row.productPrice) - Number(row.taxAmount?.map((v) => v.value).reduce((a, b) => a + b, 0))
+  console.log('row', row)
+
+  const unitPrice = Number(row.productPrice)
+  //  - Number(row.taxAmount?.map((v) => v.value).reduce((a, b) => a + b, 0))
   const price = unitPrice ?? selectedProduct?.productPrice ?? 0
   const subtotal = price * (row.productQuantity || 0)
   const taxTotal = Array.isArray(row.taxAmount)
@@ -331,6 +333,8 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     }))
   }
   const productRowTotals = useMemo(() => {
+    console.log('purchasebill', purchaseBill)
+
     return purchaseBill.products.map((p) => {
       const price = Number(p.productPrice || 0)
       const qty = Number(p.productQuantity || 0)
@@ -343,7 +347,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     })
   }, [purchaseBill.products])
 
-  console.log("productRowTotals",productRowTotals)
+  console.log('productRowTotals', productRowTotals)
 
   const billSubTotal = useMemo(() => {
     return productRowTotals.reduce((s, r) => s + r.base, 0)
@@ -637,10 +641,12 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
       const createdTransactionIds = []
 
       for (let i = 0; i < rowsDetailed.length; i++) {
+        debugger
         const row = rowsDetailed[i]
         const itemPaid = Number(paidDistribution[i] || 0)
-        // const purchaseAmount = Math.round(row.totalAmountWithTax * 100) / 100
+        console.log('row', row)
         const purchaseAmount = row.price
+        console.log('purchaseAmount', purchaseAmount)
         const pendingAmount =
           purchaseBill.paymentType === 'full'
             ? 0
@@ -655,7 +661,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           productId: row.productId,
           date: new Date().toISOString(),
           quantity: Number(row.productQuantity),
-          purchaseAmount: row.price,
+          purchaseAmount,
           paymentMethod: currentMethod,
           statusOfTransaction: txStatus,
           paymentType: purchaseBill.paymentType,

@@ -928,7 +928,7 @@ ipcMain.handle('createPurchase', (event, data) => {
           clientId,
           productId,
           qty,
-          totalAmount,
+          purchaseAmount,
           paid,
           pending,
           pendingFromOurs,

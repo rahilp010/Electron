@@ -17,7 +17,7 @@ const Navbar = () => {
       <div className="flex items-center justify-between mx-auto">
         {/* Logo */}
         <div>
-          <div className="flex items-center" onClick={() => navigate('/auth')}>
+          <div className="flex items-center">
             <div className="bg-white rounded-full px-6 py-2 border border-gray-600">
               <span className="text-lg font-medium text-gray-900">Electron</span>
             </div>
