@@ -7,9 +7,7 @@ out
 build
 .vscode
 .env
-data.db
-dataold.db
-data2.db
-clients.xlsx
+*.xlsx
 backups
 .wwebjs_auth
+*.db
