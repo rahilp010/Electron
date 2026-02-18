@@ -47,8 +47,9 @@ const TABLE_HEADERS = [
 ]
 const SalesRow = ({ index, row, products, settings, onChange, onRemove, toThousands }) => {
   const selectedProduct = products.find((p) => p.id === row.productId)
-  const price = row.price ?? selectedProduct?.price ?? 0
-  const subtotal = price * (row.quantity || 0)
+  const unitPrice = Number(row.productPrice)
+  const price = unitPrice ?? selectedProduct?.productPrice ?? 0
+  const subtotal = price * (row.productQuantity || 0)
   const taxTotal = Array.isArray(row.taxAmount)
     ? row.taxAmount.reduce((acc, t) => acc + (t.value || 0), 0)
     : 0
@@ -69,7 +70,11 @@ const SalesRow = ({ index, row, products, settings, onChange, onRemove, toThousa
     >
       <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
         <SelectPicker
-          data={products.map((p) => ({ label: p.name, value: p.id, qty: p.quantity || 0 }))}
+          data={products.map((p) => ({
+            label: p?.productName,
+            value: p?.id,
+            qty: p?.productQuantity || 0
+          }))}
           value={row.productId}
           placeholder="Select Product"
           virtualized={true}
@@ -94,7 +99,7 @@ const SalesRow = ({ index, row, products, settings, onChange, onRemove, toThousa
       <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
         <InputNumber
           min={1}
-          value={row.quantity}
+          value={row.productQuantity}
           onChange={(val) => onChange(index, 'quantity', val)}
           className="w-20 [&_.rs-input-number-btn-group]:hidden [&_.rs-input]:h-10 [&_.rs-input]:rounded-lg [&_.rs-input]:bg-white/50 hover:[&_.rs-input]:bg-white/70 [&_.rs-input]:border-gray-300/50"
         />
@@ -167,40 +172,35 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
     freightCharges: 0,
     paidAmount: 0,
     freightTaxAmount: [],
-    products: [{ productId: '', quantity: 1, taxAmount: [], price: 0, description: '' }]
+    products: [
+      {
+        id: Date.now(),
+        productId: '',
+        productQuantity: 1,
+        taxAmount: [],
+        productPrice: 0,
+        description: ''
+      }
+    ]
   })
   const [nextBillId, setNextBillId] = useState(null)
+
   /* ========= Prefill for Update ========= */
   useEffect(() => {
     if (!existingTransaction || !isUpdateExpense) return
+
     const init = existingTransaction
-    let productsList = []
-    // If it's a multi-product transaction → use multipleProducts array
-    if (
-      init.multipleProducts &&
-      Array.isArray(init.multipleProducts) &&
-      init.multipleProducts.length > 0
-    ) {
-      productsList = init.multipleProducts.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity || 1,
-        price: item.sellAmount || item.price || 0,
-        taxAmount: item.taxAmount || [],
-        description: item.description || ''
-      }))
-    }
-    // Fallback: single product (old format)
-    else if (init.productId) {
-      productsList = [
-        {
-          productId: init.productId,
-          quantity: init.quantity || 1,
-          price: init.sellAmount || 0,
-          taxAmount: init.taxAmount || [],
-          description: init.description || ''
-        }
-      ]
-    }
+
+    const productsList = [
+      {
+        productId: init.productId,
+        productQuantity: init.quantity || 1, // FIXED
+        productPrice: init.saleAmount || 0, // FIXED
+        taxAmount: Array.isArray(init.taxAmount) ? init.taxAmount : [],
+        description: init.description || ''
+      }
+    ]
+
     setSalesBill((prev) => ({
       ...prev,
       clientId: init.clientId || '',
@@ -214,12 +214,11 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       statusOfTransaction: init.statusOfTransaction || 'pending',
       paidAmount: init.paidAmount || 0,
       freightCharges: init.freightCharges || 0,
-      products:
-        productsList.length > 0
-          ? productsList
-          : [{ productId: '', quantity: 1, taxAmount: [], price: 0, description: '' }]
+      freightTaxAmount: Array.isArray(init.freightTaxAmount) ? init.freightTaxAmount : [],
+      products: productsList
     }))
-  }, [existingTransaction, isUpdateExpense])
+  }, [existingTransaction, isUpdateExpense, products])
+
   const fetchAllData = useCallback(async () => {
     try {
       const [p, c, s] = await Promise.all([
@@ -235,7 +234,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
     }
   }, [dispatch])
   const fetchNextTransactionId = async () => {
-    const allTransactions = await window.api.getAllTransactions()
+    const allTransactions = await window.api.getAllSales()
     if (allTransactions?.length) {
       const lastTransaction = allTransactions[allTransactions.length - 1]
       setNextBillId(lastTransaction.id + 1)
@@ -247,13 +246,16 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
     fetchAllData()
     fetchNextTransactionId()
   }, [fetchAllData])
+
   const inputRef = useRef(null)
   useEffect(() => {
     setTimeout(() => {
       inputRef.current?.focus?.()
     }, 200)
   }, [])
+
   const toThousands = (v) => new Intl.NumberFormat('en-IN').format(Number(v) || 0)
+
   const handleProductChange = (index, field, value) => {
     setSalesBill((prev) => {
       const updatedRows = [...prev.products]
@@ -261,12 +263,12 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       if (field === 'productId') {
         row.productId = value
         const selected = products.find((p) => p.id === value)
-        row.price = selected?.price || 0
+        row.productPrice = selected?.productPrice || 0
       }
-      if (field === 'quantity') {
-        row.quantity = Number(value) || 0
+      if (field === 'productQuantity') {
+        row.productQuantity = Number(value) || 0
       }
-      if (field === 'price') {
+      if (field === 'productPrice') {
         row.price = Number(value) || 0
       }
       if (field === 'description') {
@@ -277,7 +279,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
 
         row.taxAmount = selectedCodes.map((code) => {
           const st = settings.find((s) => `custom-${s.id}` === code)
-          const base = (row.price || 0) * (row.quantity || 0)
+          const base = (row.productPrice || 0) * (row.productQuantity || 0)
 
           return {
             code,
@@ -291,15 +293,24 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       return { ...prev, products: updatedRows }
     })
   }
+
   const handleAddRow = () => {
     setSalesBill((prev) => ({
       ...prev,
       products: [
         ...prev.products,
-        { productId: '', quantity: 1, taxAmount: [], price: 0, description: '' }
+        {
+          id: Date.now() + Math.random(),
+          productId: '',
+          productQuantity: 1,
+          taxAmount: [],
+          productPrice: 0,
+          description: ''
+        }
       ]
     }))
   }
+
   const handleRemoveRow = (index) => {
     setSalesBill((prev) => ({
       ...prev,
@@ -307,9 +318,11 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
     }))
   }
   const productRowTotals = useMemo(() => {
+    console.log('salesBill', salesBill)
+
     return salesBill.products.map((p) => {
-      const price = Number(p.price || 0)
-      const qty = Number(p.quantity || 0)
+      const price = Number(p.productPrice || 0)
+      const qty = Number(p.productQuantity || 0)
       const base = price * qty
       const tax = Array.isArray(p.taxAmount)
         ? p.taxAmount.reduce((a, t) => a + (t.value || 0), 0)
@@ -337,11 +350,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
 
   const grandTotal = useMemo(() => {
     const productTotals = productRowTotals.reduce((s, r) => s + r.total, 0)
-    console.log(productTotals)
-    console.log('1', billFreight)
-    console.log('2', billFreightTax)
-
-    const total = productTotals // Freight added ONCE here
+    const total = productTotals + billFreight + billFreightTax
     return total
   }, [productRowTotals, billFreight, billFreightTax])
 
@@ -351,7 +360,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       toast.error('Please select a client')
       return false
     }
-    const validRows = salesBill.products.filter((it) => it.productId && it.quantity > 0)
+    const validRows = salesBill.products.filter((it) => it.productId && it.productQuantity > 0)
     if (validRows.length === 0) {
       toast.error('Add at least one product with valid quantity')
       return false
@@ -377,13 +386,20 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
     })
     const invoiceNumber = `SB-${billDateObj.getFullYear()}${String(billDateObj.getMonth() + 1).padStart(2, '0')}${String(billDateObj.getDate()).padStart(2, '0')}-${number}`
     number++
-    const validProducts = salesBill.products.filter((p) => p.productId && p.quantity > 0)
+    const validProducts = salesBill.products.filter((p) => p.productId && p.productQuantity > 0)
     if (!validProducts.length) return ''
-    const totalBase = validProducts.reduce((sum, p) => sum + (p.price || 0) * (p.quantity || 0), 0)
+
+    const totalBase = validProducts.reduce(
+      (sum, p) => sum + (p.productPrice || 0) * (p.productQuantity || 0),
+      0
+    )
+
     const aggregatedItems = validProducts.map((p, idx) => {
       const product = products.find((pr) => pr.id === p.productId)
-      const base = (p.price || 0) * (p.quantity || 0)
-      const taxSum = (p.taxAmount || []).reduce((a, t) => a + Number(t?.value || 0), 0)
+      const base = (p.productPrice || 0) * (p.productQuantity || 0)
+      const taxSum = Array.isArray(p.taxAmount)
+        ? p.taxAmount.reduce((acc, t) => acc + (t.value || 0), 0)
+        : 0
       let total = base + taxSum
       let allocatedFreight = 0
       if (billFreight > 0 && totalBase > 0) {
@@ -400,14 +416,17 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       const taxesCharges = taxSum + allocatedFreight + allocatedFreightTax
       return {
         id: idx + 1,
-        productName: product?.name || '-',
-        quantity: p.quantity || 0,
-        price: p.price || 0,
+        productName: product?.productName || '-',
+        productQuantity: p.productQuantity || 0,
+        productPrice: p.productPrice || 0,
         taxesCharges,
         total
       }
     })
-    const finalItems = aggregatedItems.length > 0 ? aggregatedItems : []
+    const finalItems =
+      aggregatedItems.length > 0
+        ? aggregatedItems
+        : [{ id: '', productName: '', quantity: 1, price: 0, taxesCharges: 0, total: 0 }]
     const subTotalToShow = aggregatedItems.length > 0 ? billSubTotal : 0
     const grandTotalToShow = aggregatedItems.length > 0 ? grandTotal : 0
     const html = `<!DOCTYPE html>
@@ -486,8 +505,8 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           <tr>
             <td>${it.id}</td>
             <td>${it.productName}</td>
-            <td>${it.quantity}</td>
-            <td>${(it.price || 0).toFixed(2)}</td>
+            <td>${it.productQuantity}</td>
+            <td>${(it.productPrice || 0).toFixed(2)}</td>
             <td>${(it.taxesCharges || 0).toFixed(2)}</td>
             <td>${(it.total || 0).toFixed(2)}</td>
           </tr>
@@ -518,15 +537,19 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
 
   /* ========= Submit Handler ========= */
   const handleSubmit = async (paymentData) => {
+    debugger
     try {
-      const validRows = salesBill.products.filter((it) => it.productId && it.quantity > 0)
+      const validRows = salesBill.products.filter((it) => it.productId && it.productQuantity > 0)
       const rowsDetailed = validRows.map((r) => {
-        const price = Number(r.price || 0)
-        const qty = Number(r.quantity || 0)
+        const price = Number(r.productPrice || 0)
+        const qty = Number(r.productQuantity || 0)
         const base = price * qty
         const taxes = (r.taxAmount || [])
           .map((t) => {
             if (typeof t === 'object') return t
+            if (t === 'freightCharges') {
+              return { code: 'freightCharges', name: 'Freight Charges', percentage: 0, value: 0 }
+            }
             const st = settings.find((s) => `custom-${s.id}` === t)
             if (st) {
               return {
@@ -540,8 +563,9 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           })
           .filter(Boolean)
         const taxTotal = taxes.reduce((a, t) => a + (t.value || 0), 0)
-        const total = base + taxTotal
-        return { ...r, base, taxes, taxTotal, total }
+        const totalAmountWithoutTax = base
+        const totalAmountWithTax = base + taxTotal
+        return { ...r, price, base, taxes, taxTotal, totalAmountWithTax, totalAmountWithoutTax }
       })
       const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
       if (billFreight > 0 && totalBase > 0) {
@@ -554,7 +578,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
             percentage: 0,
             value: allocated
           })
-          r.total = r.total + allocated
+          r.totalAmountWithTax = r.totalAmountWithTax + allocated
           r.taxTotal = r.taxTotal + allocated
         })
         const allocatedSum = rowsDetailed.reduce(
@@ -566,45 +590,50 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           rowsDetailed[0].taxes = rowsDetailed[0].taxes.map((t) =>
             t.code === 'freightCharges' ? { ...t, value: t.value + drift } : t
           )
-          rowsDetailed[0].total += drift
+          rowsDetailed[0].totalAmountWithTax += drift
           rowsDetailed[0].taxTotal += drift
         }
       }
       // Freight tax allocation
-      const totalFreightTax = billFreightTax
-      if (totalFreightTax > 0 && totalBase > 0) {
-        salesBill.freightTaxAmount.forEach((ft) => {
-          const ftValueTotal = ft.value
-          let allocatedSumFt = 0
-          rowsDetailed.forEach((r) => {
-            const share = r.base / totalBase
-            const allocatedFt = Math.round(ftValueTotal * share * 100) / 100
-            r.taxes.push({
-              code: `freightTax-${ft.id}`,
-              name: `${ft.name} on Freight`,
-              percentage: ft.rate,
-              value: allocatedFt
-            })
-            r.total += allocatedFt
-            r.taxTotal += allocatedFt
-            allocatedSumFt += allocatedFt
-          })
-          const driftFt = Math.round((ftValueTotal - allocatedSumFt) * 100) / 100
-          if (Math.abs(driftFt) >= 0.01) {
-            const firstFt = rowsDetailed[0].taxes.find((t) => t.code === `freightTax-${ft.id}`)
-            if (firstFt) firstFt.value += driftFt
-            rowsDetailed[0].total += driftFt
-            rowsDetailed[0].taxTotal += driftFt
-          }
-        })
-      }
+      // const totalFreightTax = billFreightTax
+      // if (totalFreightTax > 0 && totalBase > 0) {
+      //   salesBill.freightTaxAmount.forEach((ft) => {
+      //     const ftValueTotal = ft.value
+      //     let allocatedSumFt = 0
+      //     rowsDetailed.forEach((r) => {
+      //       const share = r.base / totalBase
+      //       const allocatedFt = Math.round(ftValueTotal * share * 100) / 100
+      //       r.taxes.push({
+      //         code: `freightTax-${ft.id}`,
+      //         name: `${ft.name} on Freight`,
+      //         percentage: ft.rate,
+      //         value: allocatedFt
+      //       })
+      //       r.total += allocatedFt
+      //       r.taxTotal += allocatedFt
+      //       allocatedSumFt += allocatedFt
+      //     })
+      //     const driftFt = Math.round((ftValueTotal - allocatedSumFt) * 100) / 100
+      //     if (Math.abs(driftFt) >= 0.01) {
+      //       const firstFt = rowsDetailed[0].taxes.find((t) => t.code === `freightTax-${ft.id}`)
+      //       if (firstFt) firstFt.value += driftFt
+      //       rowsDetailed[0].total += driftFt
+      //       rowsDetailed[0].taxTotal += driftFt
+      //     }
+      //   })
+      // }
+
       let paidDistribution = []
-      const totalBillAmount = rowsDetailed.reduce((s, r) => s + r.total, 0)
-      if (salesBill.statusOfTransaction !== 'completed') {
+      const totalBillAmount = rowsDetailed.reduce((s, r) => s + r.totalAmountWithTax, 0)
+
+      const txStatus = salesBill.statusOfTransaction
+      const currentMethod = salesBill.paymentMethod
+
+      if (txStatus !== 'completed') {
         paidDistribution = rowsDetailed.map(() => 0)
       } else {
         if (salesBill.paymentType === 'full') {
-          paidDistribution = rowsDetailed.map((r) => Math.round(r.total * 100) / 100)
+          paidDistribution = rowsDetailed.map((r) => Math.round(r.totalAmountWithTax * 100) / 100)
         } else if (salesBill.paymentType === 'partial') {
           const totalToDistribute = Number(salesBill.paidAmount || 0)
           let runningAllocated = 0
@@ -614,7 +643,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
               paidDistribution.push(leftover)
               runningAllocated += leftover
             } else {
-              const share = totalBillAmount > 0 ? r.total / totalBillAmount : 0
+              const share = totalBillAmount > 0 ? r.totalAmountWithTax / totalBillAmount : 0
               const allocated = Math.round(totalToDistribute * share * 100) / 100
               paidDistribution.push(allocated)
               runningAllocated += allocated
@@ -624,153 +653,100 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           paidDistribution = rowsDetailed.map(() => 0)
         }
       }
+
+      const getClientName = (clientId, clients) => {
+        if (!clientId) return 'Unknown Client'
+        // Handle both direct ID and nested object structure
+        const id = typeof clientId === 'object' ? clientId.id : clientId
+        const client = clients.find((c) => String(c?.id) === String(id))
+        return client ? client.clientName : 'Unknown Client'
+      }
+
       const clientInfo = clients.find((c) => c.id === salesBill.clientId)
       const clientAccountName = clientInfo?.clientName || `Client-${salesBill.clientId}`
       const createdTransactionIds = []
+
       for (let i = 0; i < rowsDetailed.length; i++) {
         const row = rowsDetailed[i]
         const itemPaid = Number(paidDistribution[i] || 0)
-        const sellAmount = Math.round(row.total * 100) / 100
+        const saleAmount = row.price
         const pendingAmount =
           salesBill.paymentType === 'full'
             ? 0
             : salesBill.paymentType === 'partial'
-              ? Math.max(0, Math.round((sellAmount - itemPaid) * 100) / 100)
-              : sellAmount
-        const allocatedFreight = row.taxes.find((t) => t.code === 'freightCharges')?.value || 0
-        const allocatedFreightTaxes = row.taxes
-          .filter((t) => t.code.startsWith('freightTax-'))
-          .map((t) => ({
-            id: t.code.split('-')[2],
-            name: t.name.replace(' on Freight', ''),
-            rate: t.percentage,
-            value: t.value
-          }))
-        const transactionData = {
+              ? Math.max(0, Math.round((saleAmount - itemPaid) * 100) / 100)
+              : saleAmount
+
+        // const allocatedFreight = row.taxes.find((t) => t.code === 'freightCharges')?.value || 0
+        // const allocatedFreightTaxes = row.taxes
+        //   .filter((t) => t.code.startsWith('freightTax-'))
+        //   .map((t) => ({
+        //     id: t.code.split('-')[2],
+        //     name: t.name.replace(' on Freight', ''),
+        //     rate: t.percentage,
+        //     value: t.value
+        //   }))
+
+        const salesData = {
           clientId: salesBill.clientId,
           productId: row.productId,
-          multipleProducts: rowsDetailed,
-          quantity: Number(row.quantity),
-          sellAmount: Number(row.price),
-          purchaseAmount: sellAmount,
+          date: new Date().toISOString(),
+          quantity: Number(row.productQuantity),
+          saleAmount,
+          paymentMethod: currentMethod,
+          statusOfTransaction: txStatus,
           paymentType: salesBill.paymentType,
-          paymentMethod: salesBill.paymentMethod,
-          billNo: salesBill.billNumber,
-          statusOfTransaction: salesBill.statusOfTransaction,
-          pageName: 'Sales',
-          transactionType: 'sales',
-          pendingAmount: pendingAmount,
-          freightCharges: allocatedFreight,
-          freightTaxAmount: allocatedFreightTaxes,
           paidAmount: itemPaid,
-          dueDate: new Date().setMonth(new Date().getMonth() + 1),
+          pendingAmount: pendingAmount,
+          pendingFromOurs: 0,
+          taxRate: 0,
           taxAmount: row.taxes.map((t) => ({ ...t })) || [],
-          date: salesBill.billDate || new Date().toISOString().slice(0, 19).replace('T', ' '),
-          isMultiProduct: rowsDetailed.length > 1 ? 1 : 0,
-          sendTo: paymentData?.sendTo || salesBill.sendTo || '',
-          chequeNumber: paymentData?.chequeNumber || '',
-          transactionAccount: paymentData?.transactionAccount || '',
-          pendingFromOurs: Number(0),
-          description: `Sales of ${products.find((p) => p.id === row.productId)?.name || ''}`,
-          type: 'Receipt',
-          cash: salesBill.paymentMethod === 'cash' ? 'Cash' : '',
-          bank: salesBill.paymentMethod === 'bank' ? 'IDBI' : '',
-          totalAmount: Number(row.price) + allocatedFreight + allocatedFreightTaxes
+          freightCharges: billFreight,
+          freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
+          totalAmountWithoutTax: row.totalAmountWithoutTax || 0,
+          totalAmountWithTax: row.totalAmountWithTax || 0,
+          billNo: salesBill.billNumber,
+          dueDate: new Date().setMonth(new Date().getMonth() + 1),
+          description: salesBill?.description || '',
+          methodType: 'Receipt',
+          pageName: 'Sales',
+          payments: [
+            {
+              method: currentMethod, // Use currentMethod
+              amount: itemPaid,
+              chequeNo: null,
+              accountId: currentMethod === 'cash' ? CASH_ACCOUNT_ID : BANK_ACCOUNT_ID
+            }
+          ],
+          multipleProducts: rowsDetailed,
+          isMultiProduct: rowsDetailed.length > 1 ? 1 : 0
         }
-        const createdTransaction = await window.api.createTransaction(transactionData)
+
+        console.log('Sending to IPC:', salesData)
+
+        const createdTransaction = await window.api.createSales(salesData)
+
+        console.log('IPC response:', createdTransaction)
+
         createdTransactionIds.push(createdTransaction.id)
-        if (itemPaid > 0) {
-          const baseReceipt = {
-            transactionId: createdTransaction.id,
-            type: 'Receipt',
-            date: salesBill.billDate || new Date().toISOString().slice(0, 19).replace('T', ' '),
-            statusOfTransaction: createdTransaction.statusOfTransaction,
-            clientId: createdTransaction.clientId,
-            paymentType: createdTransaction.paymentType,
-            party: clients.find((c) => c.id === salesBill.clientId)?.clientName || 'Unknown Client',
-            amount: itemPaid,
-            description: `Sales ${products.find((p) => p.id === row.productId)?.name || ''} to ${clientInfo?.clientName || 'Unknown'}`,
-            taxAmount: row.taxes || [],
-            dueDate: null,
-            productId: createdTransaction.productId || '',
-            pendingAmount: createdTransaction.pendingAmount || 0,
-            paidAmount: createdTransaction.paidAmount || 0,
-            sendTo: paymentData?.sendTo || salesBill.sendTo || '',
-            chequeNumber: paymentData?.chequeNumber || '',
-            transactionAccount: paymentData?.transactionAccount || ''
-          }
-          if (salesBill.paymentMethod === 'bank') {
-            await window.api
-              .createBankReceipt({
-                ...baseReceipt,
-                bank: 'IDBI',
-                sendTo: paymentData?.sendTo || '',
-                amount: itemPaid
-              })
-              .catch((e) => {
-                console.error('createBankReceipt failed', e)
-              })
-          } else {
-            await window.api
-              .createCashReceipt({
-                ...baseReceipt,
-                cash: 'Cash',
-                sendTo: paymentData?.sendTo || '',
-                amount: itemPaid
-              })
-              .catch((e) => {
-                console.error('createCashReceipt failed', e)
-              })
-          }
-        }
       }
-      // Create a single ledger entry for the total sales (managing multiple product entries as aggregate)
-      const totalAmount = totalBillAmount
-      const SALES_ACCOUNT_ID = 3 // Assuming Sales account ID is 3; adjust as needed
-      let salesAccount = null
-      try {
-        salesAccount = await window.api.getAccountById(SALES_ACCOUNT_ID)
-      } catch (err) {
-        console.warn('Failed to fetch Sales account', err)
-      }
-      const salesAccountName = salesAccount ? salesAccount.accountName : 'Sales'
-      const salesLedgerTx = {
-        debitAccount: salesAccountName,
-        creditAccount: clientAccountName,
-        amount: totalAmount,
-        paymentMethod: 'credit',
-        description: `Sales bill ${salesBill.billNumber || 'N/A'} to ${clientAccountName}`,
-        referenceId: nextBillId,
-        createdAt: new Date().toISOString()
-      }
-      try {
-        if (typeof window.api.createLedgerTransaction === 'function') {
-          await window.api.createLedgerTransaction(salesLedgerTx)
-        } else {
-          console.warn(
-            'createLedgerTransaction not available on window.api; skipping sales ledger creation.'
-          )
-        }
-      } catch (err) {
-        console.error('Failed to create sales ledger transaction', err)
-        toast.warn('Sales ledger transaction creation failed (check console).')
-      }
-      const transactionsAll = await window.api.getAllTransactions()
-      dispatch(setTransactions(transactionsAll))
+      const transactionsAll = await window.api.getAllSales()
+      dispatch(setTransactions(transactionsAll.data))
       toast.success('All sales items added successfully')
       setShowSalesBillModal(false)
     } catch (err) {
-      console.error('Error saving sales bill', err)
-      toast.error('Error saving sales bill: ' + (err.message || err))
+      console.error('Error saving Sales bill', err)
+      toast.error('Error saving Sales bill: ' + (err.message || err))
     }
   }
+
   const handleUpdate = async (paymentData) => {
     try {
       if (!existingTransaction) {
         toast.error('No transaction found to update.')
         return
       }
-      const validRows = salesBill.products.filter((p) => p.productId && p.quantity > 0)
+      const validRows = salesBill.products.filter((p) => p.productId && p.productQuantity > 0)
       if (validRows.length === 0) {
         toast.error('Add at least one product')
         return
@@ -778,88 +754,39 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
 
       // Recalculate rows (unchanged)
       const rowsDetailed = validRows.map((r) => {
-        const price = Number(r.price || 0)
-        const qty = Number(r.quantity || 0)
+        const price = Number(r.productPrice || 0)
+        const qty = Number(r.productQuantity || 0)
         const base = price * qty
-        const taxes = (r.taxAmount || []).map((t) => {
-          const st = settings.find((s) => `custom-${s.id}` === t.code)
-          const percentage = st?.taxValue ?? t.percentage ?? 0
-          return {
-            code: t.code,
-            name: st?.taxName || t.name,
-            percentage,
-            value: (base * percentage) / 100
-          }
-        })
+        const taxes = (r.taxAmount || []).map((t) => ({
+          ...t,
+          value: t.percentage > 0 ? (base * t.percentage) / 100 : Number(t.value || 0)
+        }))
         const taxTotal = taxes.reduce((a, t) => a + (t.value || 0), 0)
-        return { ...r, base, taxes, taxTotal, total: base + taxTotal }
+        const totalAmountWithTax = base + taxTotal
+        const totalAmountWithoutTax = base
+        return { ...r, price, base, taxes, taxTotal, totalAmountWithTax, totalAmountWithoutTax }
       })
+
+      const txStatus = paymentData?.statusOfTransaction || salesBill.statusOfTransaction
+      const currentMethod = paymentData?.method || salesBill.paymentMethod
 
       const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
       let totalBillAmount = totalBase
 
-      // Allocate freight proportionally (unchanged)
-      const billFreight = Number(salesBill.freightCharges || 0)
       if (billFreight > 0 && totalBase > 0) {
         rowsDetailed.forEach((r) => {
           const share = r.base / totalBase
           const allocated = Math.round(billFreight * share * 100) / 100
           r.taxes.push({
-            // Add as tax for consistency with calculateTotalWithTax filter
             code: 'freightCharges',
             name: 'Freight Charges',
             percentage: 0,
             value: allocated
           })
-          r.total += allocated
+          r.totalAmountWithTax += allocated
           r.taxTotal += allocated
         })
-        // Fix drift (add to first row if needed)
-        const allocatedSum = rowsDetailed.reduce(
-          (s, r) => s + (r.taxes.find((t) => t.code === 'freightCharges')?.value || 0),
-          0
-        )
-        const drift = Math.round((billFreight - allocatedSum) * 100) / 100
-        if (Math.abs(drift) >= 0.01) {
-          const firstFreight = rowsDetailed[0].taxes.find((t) => t.code === 'freightCharges')
-          if (firstFreight) firstFreight.value += drift
-          rowsDetailed[0].total += drift
-          rowsDetailed[0].taxTotal += drift
-        }
         totalBillAmount += billFreight
-      }
-
-      // Allocate freight tax (unchanged, but push to taxes array for filter compatibility)
-      const billFreightTax = (salesBill.freightTaxAmount || []).reduce(
-        (s, t) => s + (t?.value || 0),
-        0
-      )
-      if (billFreightTax > 0 && totalBase > 0) {
-        salesBill.freightTaxAmount.forEach((ft) => {
-          const ftValueTotal = ft.value
-          let allocatedSumFt = 0
-          rowsDetailed.forEach((r) => {
-            const share = r.base / totalBase
-            const allocatedFt = Math.round(ftValueTotal * share * 100) / 100
-            r.taxes.push({
-              code: `freightTax-${ft.id}`,
-              name: `${ft.name} on Freight`,
-              percentage: ft.rate,
-              value: allocatedFt
-            })
-            r.total += allocatedFt
-            r.taxTotal += allocatedFt
-            allocatedSumFt += allocatedFt
-          })
-          const driftFt = Math.round((ftValueTotal - allocatedSumFt) * 100) / 100
-          if (Math.abs(driftFt) >= 0.01) {
-            const firstFt = rowsDetailed[0].taxes.find((t) => t.code === `freightTax-${ft.id}`)
-            if (firstFt) firstFt.value += driftFt
-            rowsDetailed[0].total += driftFt
-            rowsDetailed[0].taxTotal += driftFt
-          }
-        })
-        totalBillAmount += billFreightTax
       }
 
       // Paid/pending logic (unchanged)
@@ -871,7 +798,10 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       }
 
       // Fetch and update related transactions (unchanged)
-      const allTransactions = await window.api.getAllTransactions()
+      const response = await window.api.getAllSales()
+
+      const allTransactions = response?.data || []
+
       const relatedTransactions = allTransactions.filter(
         (tx) =>
           tx.billNo === existingTransaction.billNo &&
@@ -879,19 +809,10 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           tx.pageName === 'Sales'
       )
 
-      // Delete old receipts (unchanged)
-      for (const tx of relatedTransactions) {
-        if (tx.paymentMethod === 'cash') {
-          await window.api.deleteCashReceiptByTransaction(tx.id).catch(() => {})
-        } else {
-          await window.api.deleteBankReceiptByTransaction(tx.id).catch(() => {})
-        }
-      }
-
       // Update/create each transaction (minor tweak: use updated taxes with allocations)
       for (let i = 0; i < rowsDetailed.length; i++) {
         const row = rowsDetailed[i]
-        const itemTotal = row.total
+        const itemTotal = row.totalAmountWithTax
         const itemPaid =
           salesBill.paymentType === 'full'
             ? itemTotal
@@ -901,142 +822,51 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         const pending = Math.max(0, itemTotal - itemPaid)
         let targetTx = relatedTransactions[i]
 
-        const allocatedFreight = row.taxes.find((t) => t.code === 'freightCharges')?.value || 0
-
-        const allocatedFreightTaxes = row.taxes
-          .filter((t) => t.code.startsWith('freightTax-'))
-          .map((t) => ({
-            id: t.code.split('-')[2],
-            name: t.name.replace(' on Freight', ''),
-            rate: t.percentage,
-            value: Number(t.value || 0)
-          }))
-
         const updatedTxData = {
           id: targetTx?.id || existingTransaction.id,
           clientId: salesBill.clientId,
           productId: row.productId,
           multipleProducts: rowsDetailed,
-          quantity: row.quantity,
-          sellAmount: row.price,
-          purchaseAmount: itemTotal, // Now includes new charges
+          quantity: row.productQuantity,
+          saleAmount: row.price,
           paymentType: salesBill.paymentType,
-          paymentMethod: salesBill.paymentMethod,
+          paymentMethod: currentMethod,
           billNo: salesBill.billNumber,
-          statusOfTransaction: salesBill.statusOfTransaction,
-          pageName: 'Sales',
-          transactionType: 'sales',
+          statusOfTransaction: txStatus,
           pendingAmount: pending,
-          dueDate: new Date().setMonth(new Date().getMonth() + 1),
           paidAmount: itemPaid,
-          taxAmount: row.taxes, // Includes allocated freight/taxes (filtered later by calculateTotalWithTax)
-          freightCharges: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0, // Per-row allocation
-          freightTaxAmount: allocatedFreightTaxes,
-          date: salesBill.billDate || new Date().toISOString().slice(0, 10),
-          isMultiProduct: rowsDetailed.length > 1 ? 1 : 0,
-          sendTo: paymentData?.sendTo || salesBill.sendTo || '',
-          chequeNumber: paymentData?.chequeNumber || '',
-          transactionAccount: paymentData?.transactionAccount || '',
-          pendingFromOurs: Number(0),
-          description: `Sales of ${products.find((p) => p.id === row.productId)?.name || ''}`,
-          type: 'Receipt',
-          cash: salesBill.paymentMethod === 'cash' ? 'Cash' : '',
-          bank: salesBill.paymentMethod === 'bank' ? 'IDBI' : '',
-          totalAmount: Number(row.price) + allocatedFreight + allocatedFreightTaxes
+          pendingFromOurs: 0,
+          taxRate: 0,
+          taxAmount: row.taxes,
+          freightCharges: billFreight,
+          freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
+          totalAmountWithoutTax: row.totalAmountWithoutTax || 0,
+          totalAmountWithTax: row.totalAmountWithTax || 0,
+          dueDate: new Date().setMonth(new Date().getMonth() + 1),
+          description: salesBill?.description || '',
+          methodType: 'Payment',
+          pageName: 'Purchase',
+          payments: [
+            {
+              method: currentMethod,
+              amount: itemPaid,
+              chequeNo: null,
+              accountId: currentMethod === 'cash' ? CASH_ACCOUNT_ID : BANK_ACCOUNT_ID
+            }
+          ],
+          isMultiProduct: rowsDetailed.length > 1 ? 1 : 0
         }
 
         if (targetTx) {
-          await window.api.updateTransaction(updatedTxData)
+          await window.api.updateSales(updatedTxData)
         } else {
-          await window.api.createTransaction(updatedTxData)
-        }
-
-        // Recreate receipt if paid > 0 (unchanged)
-        if (itemPaid > 0) {
-          const receiptBase = {
-            transactionId: targetTx?.id || existingTransaction.id,
-            type: 'Receipt',
-            date: salesBill.billDate || new Date().toISOString().slice(0, 19).replace('T', ' '),
-            statusOfTransaction: salesBill.statusOfTransaction,
-            clientId: salesBill.clientId,
-            paymentType: salesBill.paymentType,
-            party: clients.find((c) => c.id === salesBill.clientId)?.clientName || 'Unknown',
-            amount: itemPaid,
-            description: `Sales of ${products.find((p) => p.id === row.productId)?.name || ''}`,
-            productId: row.productId,
-            taxAmount: row.taxes,
-            pageName: 'Sales',
-            pendingAmount: pending,
-            paidAmount: itemPaid,
-            sendTo: paymentData?.sendTo || '',
-            chequeNumber: paymentData?.chequeNumber || '',
-            transactionAccount: paymentData?.transactionAccount || '',
-            billNo: salesBill.billNumber
-          }
-          if (salesBill.paymentMethod === 'bank') {
-            await window.api.createBankReceipt({ ...receiptBase, bank: 'IDBI', amount: itemPaid })
-          } else {
-            await window.api.createCashReceipt({ ...receiptBase, cash: 'Cash', amount: itemPaid })
-          }
+          await window.api.createSales(updatedTxData)
         }
       }
 
-      // NEW: Sync Ledger (delete old + create new with updated totalBillAmount)
-      const clientInfo = clients.find((c) => c.id === salesBill.clientId)
-      const clientAccountName = clientInfo?.clientName || `Client-${salesBill.clientId}`
-      const SALES_ACCOUNT_ID = 3 // Adjust as needed
-      let salesAccount = null
-      try {
-        salesAccount = await window.api.getAccountById(SALES_ACCOUNT_ID)
-      } catch (err) {
-        console.warn('Failed to fetch Sales account', err)
-      }
-      const salesAccountName = salesAccount ? salesAccount.accountName : 'Sales'
-
-      // Step 1: Delete old ledger(s) for this bill
-      try {
-        // TODO: Implement if missing—e.g., backend query: WHERE description LIKE '%billNumber%' AND creditAccount = clientAccountName
-        const oldLedgers =
-          (await window.api.getLedgerTransactionsByBill?.(
-            salesBill.billNumber,
-            clientAccountName
-          )) || []
-        console.log(`Deleting ${oldLedgers.length} old ledgers for bill ${salesBill.billNumber}`) // Debug
-        for (const oldLedger of oldLedgers) {
-          await window.api.deleteLedgerTransaction(oldLedger.id).catch((err) => {
-            console.warn(`Failed to delete ledger ${oldLedger.id}:`, err)
-          })
-        }
-      } catch (err) {
-        console.error('Ledger cleanup failed:', err)
-        toast.warn('Old ledger cleanup skipped—totals may drift. Check console.')
-      }
-
-      // Step 2: Create new ledger with updated total (includes new charges)
-      const ledgerTx = {
-        debitAccount: salesAccountName,
-        creditAccount: clientAccountName,
-        amount: totalBillAmount, // Full updated total—now reflects added charges
-        paymentMethod: 'credit',
-        description: `Sales bill ${salesBill.billNumber} to ${clientAccountName}`,
-        referenceId: existingTransaction.id || nextBillId,
-        createdAt: new Date().toISOString()
-      }
-      try {
-        if (typeof window.api.createLedgerTransaction === 'function') {
-          await window.api.createLedgerTransaction(ledgerTx)
-          console.log(`Created ledger for updated bill total: ₹${totalBillAmount}`) // Debug
-        } else {
-          console.warn('createLedgerTransaction unavailable—skipping ledger sync.')
-        }
-      } catch (err) {
-        console.error('Ledger creation failed:', err)
-        toast.warn('Ledger update failed—added amounts may not reflect in reports.')
-      }
-
-      toast.success('Sales bill updated successfully!')
-      const list = await window.api.getAllTransactions()
-      dispatch(setTransactions(list))
+      toast.success('Multi=product Sales bill updated successfully!')
+      const list = await window.api.getAllSales()
+      dispatch(setTransactions(list.data))
       setShowSalesBillModal(false)
     } catch (err) {
       console.error('Update failed:', err)
@@ -1116,47 +946,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         referenceId: nextBillId,
         createdAt: new Date().toISOString()
       }
-      // Update source account balance (subtract amount)
-      // if (sourceAccount) {
-      // try {
-      // // ensure numeric balance
-      // const prevBal = Number(sourceAccount.balance || 0)
-      // const newBal = Math.round((prevBal - amount) * 100) / 100
-      // const updatedAccount = { ...sourceAccount, balance: newBal }
-      // // call update API
-      // if (typeof window.api.updateAccount === 'function') {
-      // const response = await window.api.updateAccount(updatedAccount)
-      // dispatch(setAccount(response))
-      // } else if (typeof accountApi.updateAccount === 'function') {
-      // const response = await accountApi.updateAccount(updatedAccount)
-      // dispatch(setAccount(response))
-      // } else {
-      // console.warn('No updateAccount method found on window.api or accountApi')
-      // }
-      // } catch (err) {
-      // console.error('Failed to update source account balance', err)
-      // // continue but warn user
-      // toast.warn('Failed to update source account balance (check console).')
-      // }
-      // } else {
-      // // If no account object available (maybe external cash), you can still create ledger tx with label
-      // console.warn('Source account not found, ledger will be created with name only.')
-      // }
-      // Create ledger transaction record
-      try {
-        if (typeof window.api.createLedgerTransaction === 'function') {
-          await window.api.createLedgerTransaction(ledgerTx)
-        } else {
-          console.warn(
-            'createLedgerTransaction not available on window.api; skipping ledger creation.'
-          )
-        }
-      } catch (err) {
-        console.error('Failed to create ledger transaction', err)
-        toast.warn('Ledger transaction creation failed (check console).')
-      }
-      // Continue with existing sales submission which will create receipts & transactions for each row.
-      // Pass paymentData so handleSubmit uses sendTo/amount etc.
+
       if (isUpdateExpense) {
         await handleUpdate(paymentData) // Now passes paymentData with sendTo
       } else {
@@ -1602,12 +1392,10 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
                       const taxSummary = {}
                       salesBill.products.forEach((p) => {
                         ;(p.taxAmount || []).forEach((t) => {
-                          const name = t.name || ''
-                          const value = Number(t.value || 0)
-
-                          if (!name) return
-
-                          taxSummary[name] = (taxSummary[name] || 0) + value
+                          if (t.name) {
+                            if (!taxSummary[t.name]) taxSummary[t.name] = 0
+                            taxSummary[t.name] += Number(t.value || 0)
+                          }
                         })
                       })
                       const entries = Object.entries(taxSummary)

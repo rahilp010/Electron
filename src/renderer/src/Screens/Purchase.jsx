@@ -291,7 +291,7 @@ const PurchaseRow = React.memo(
               onClick={() => {
                 const clientName = getClientName(transaction?.clientId, clients)
                 const productName = getProductName(transaction?.productId, products)
-                const amount = toThousands(Number(transaction?.sellAmount).toFixed(0))
+                const amount = toThousands(Number(transaction?.purchaseAmount).toFixed(0))
 
                 const message = `Hello ${clientName},\n\nHere are your transaction details:\n📦 Product: ${productName}\n💰 Amount: ₹${amount}\n📅 Date: ${new Date(
                   transaction?.createdAt
@@ -344,7 +344,6 @@ const usePurchaseOperations = () => {
   const fetchAllTransactions = useCallback(async () => {
     try {
       const response = await window.api.getAllPurchases()
-      console.log('Transaction response', response.data)
       dispatch(setTransactions(response.data))
     } catch (error) {
       console.error('Error fetching transactions:', error)
@@ -358,7 +357,6 @@ const usePurchaseOperations = () => {
 
       try {
         const response = await window.api.deletePurchase(id)
-        console.log('response', response)
         dispatch(deleteTransaction(response))
         await fetchAllTransactions()
 
@@ -470,8 +468,6 @@ const usePurchaseOperations = () => {
         const response = await window.api.updatePurchase(transactionId, {
           statusOfTransaction: newStatus
         })
-
-        console.log(response)
 
         // Update redux with new transaction
         await fetchAllTransactions()
@@ -1175,8 +1171,8 @@ const Purchase = () => {
           ...row,
           balance:
             index % 2 === 0
-              ? (row.sellAmount || 0) * (row.quantity || 0)
-              : -((row.sellAmount || 0) * (row.quantity || 0)) // Dummy balance; replace with real logic
+              ? (row.purchaseAmount || 0) * (row.quantity || 0)
+              : -((row.purchaseAmount || 0) * (row.quantity || 0)) // Dummy balance; replace with real logic
         }))
       }
 

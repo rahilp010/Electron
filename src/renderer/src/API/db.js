@@ -31,6 +31,7 @@ db.pragma('foreign_keys = ON')
 // db.prepare('DROP TABLE accounts;').run()
 // db.prepare('DROP TABLE ledger;').run()
 // db.prepare('DROP TABLE purchases;').run()
+// db.prepare('DROP TABLE sales;').run()
 // Execute SQL statements one by one
 
 db.prepare(
@@ -104,7 +105,7 @@ db.prepare(
     productId INTEGER NULL,
     date DATETIME NOT NULL,
     quantity INTEGER NOT NULL,
-    sellAmount REAL NOT NULL,
+    saleAmount REAL NOT NULL,
     purchaseAmount REAL NOT NULL,
     totalAmount REAL,
     multipleProducts TEXT,
@@ -148,6 +149,57 @@ db.prepare(
     accountId INTEGER,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (purchaseId) REFERENCES purchases(id) ON DELETE CASCADE
+  )
+`
+).run()
+
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS sales (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    clientId INTEGER,
+    productId INTEGER,
+    date DATETIME,
+    quantity INTEGER CHECK (quantity >= 1),
+    saleAmount REAL CHECK (saleAmount >= 0),
+    multipleProducts TEXT DEFAULT '[]',
+    isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1)),
+    paymentMethod TEXT DEFAULT 'bank'
+      CHECK (paymentMethod IN ('cash','bank')),
+    statusOfTransaction TEXT DEFAULT 'pending'
+      CHECK (statusOfTransaction IN ('completed','pending','partial')),
+    paymentType TEXT DEFAULT 'full'
+      CHECK (paymentType IN ('full','partial')),
+
+    pendingAmount REAL DEFAULT 0 CHECK (pendingAmount >= 0),
+    paidAmount REAL DEFAULT 0 CHECK (paidAmount >= 0),
+    pendingFromOurs REAL DEFAULT 0 CHECK (pendingFromOurs >= 0),
+
+    taxRate REAL DEFAULT 0,
+    taxAmount REAL,
+    freightCharges REAL,
+    freightTaxAmount REAL,
+
+    totalAmountWithTax REAL,
+    totalAmountWithoutTax REAL,
+
+    billNo TEXT,
+
+    methodType TEXT DEFAULT 'Receipt'
+      CHECK (methodType IN ('Receipt','Payment','Salary')),
+
+    dueDate DATETIME,
+    description TEXT,
+    payments TEXT DEFAULT '[]',
+
+    pageName TEXT DEFAULT 'Sales',
+
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE SET NULL,
+    FOREIGN KEY (productId) REFERENCES products(id) ON DELETE SET NULL
   )
 `
 ).run()

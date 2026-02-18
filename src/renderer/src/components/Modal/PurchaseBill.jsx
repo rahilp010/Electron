@@ -57,10 +57,7 @@ const TABLE_HEADERS = [
 /* ========= Subcomponent: Product Row ========= */
 const ProductRow = ({ index, row, products, settings, onChange, onRemove, toThousands }) => {
   const selectedProduct = products.find((p) => p.id === row.productId)
-  console.log('row', row)
-
   const unitPrice = Number(row.productPrice)
-  //  - Number(row.taxAmount?.map((v) => v.value).reduce((a, b) => a + b, 0))
   const price = unitPrice ?? selectedProduct?.productPrice ?? 0
   const subtotal = price * (row.productQuantity || 0)
   const taxTotal = Array.isArray(row.taxAmount)
@@ -347,8 +344,6 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     })
   }, [purchaseBill.products])
 
-  console.log('productRowTotals', productRowTotals)
-
   const billSubTotal = useMemo(() => {
     return productRowTotals.reduce((s, r) => s + r.base, 0)
   }, [productRowTotals])
@@ -370,6 +365,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     const total = productTotals + billFreight + billFreightTax
     return total
   }, [productRowTotals, billFreight, billFreightTax])
+
   /* ========= Validation ========= */
   const validateForm = () => {
     if (!purchaseBill.clientId) {
@@ -389,6 +385,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
   }
   /* ========= Generate Invoice HTML ========= */
   const generateInvoiceHtml = useCallback(() => {
+    const toThousands = (v) => new Intl.NumberFormat('en-IN').format(Number(v) || 0)
     let number = 0
     const selectedClient = clients.find((c) => c.id === purchaseBill.clientId)
     if (!selectedClient) return ''
@@ -402,10 +399,13 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     const invoiceNumber = `PB-${billDateObj.getFullYear()}${String(billDateObj.getMonth() + 1).padStart(2, '0')}${String(billDateObj.getDate()).padStart(2, '0')}-${number}`
     number++
     const validProducts = purchaseBill.products.filter((p) => p.productId && p.productQuantity > 0)
+    if (!validProducts.length) return ''
+
     const totalBase = validProducts.reduce(
       (sum, p) => sum + (p.productPrice || 0) * (p.productQuantity || 0),
       0
     )
+
     const aggregatedItems = validProducts.map((p, idx) => {
       const product = products.find((pr) => pr.id === p.productId)
       const base = (p.productPrice || 0) * (p.productQuantity || 0)
@@ -419,10 +419,16 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         allocatedFreight = Math.round(billFreight * share * 100) / 100
         total += allocatedFreight
       }
-      const taxesCharges = taxSum + allocatedFreight
+      let allocatedFreightTax = 0
+      if (billFreightTax > 0 && totalBase > 0) {
+        const share = base / totalBase
+        allocatedFreightTax = Math.round(billFreightTax * share * 100) / 100
+        total += allocatedFreightTax
+      }
+      const taxesCharges = taxSum + allocatedFreight + allocatedFreightTax
       return {
         id: idx + 1,
-        productName: product?.name || '-',
+        productName: product?.productName || '-',
         productQuantity: p.productQuantity || 0,
         productPrice: p.productPrice || 0,
         taxesCharges,
@@ -432,9 +438,9 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     const finalItems =
       aggregatedItems.length > 0
         ? aggregatedItems
-        : [{ id: 1, productName: 'Data', quantity: 1, price: 600, taxesCharges: 0, total: 600 }]
-    const subTotalToShow = aggregatedItems.length > 0 ? billSubTotal : 600
-    const grandTotalToShow = aggregatedItems.length > 0 ? grandTotal : 600
+        : [{ id: '', productName: '', quantity: 1, price: 0, taxesCharges: 0, total: 0 }]
+    const subTotalToShow = aggregatedItems.length > 0 ? billSubTotal : 0
+    const grandTotalToShow = aggregatedItems.length > 0 ? grandTotal : 0
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -538,7 +544,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
 </html>
  `
     return html
-  }, [purchaseBill, products, clients, billSubTotal, billFreight, grandTotal])
+  }, [purchaseBill, products, clients, billSubTotal, billFreight, grandTotal, billFreightTax])
   /* ========= Submit Handler ========= */
   const handleSubmit = async (paymentData) => {
     try {
@@ -641,12 +647,9 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
       const createdTransactionIds = []
 
       for (let i = 0; i < rowsDetailed.length; i++) {
-        debugger
         const row = rowsDetailed[i]
         const itemPaid = Number(paidDistribution[i] || 0)
-        console.log('row', row)
         const purchaseAmount = row.price
-        console.log('purchaseAmount', purchaseAmount)
         const pendingAmount =
           purchaseBill.paymentType === 'full'
             ? 0

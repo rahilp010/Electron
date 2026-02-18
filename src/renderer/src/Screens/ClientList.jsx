@@ -34,7 +34,7 @@ import Navbar from '../components/UI/Navbar'
 import * as XLSX from 'xlsx'
 import ImportExcel from '../components/UI/ImportExcel'
 import { IoLogoWhatsapp } from 'react-icons/io'
-import electron from '../assets/electron.svg'
+import purchase from '../assets/purchase.png'
 
 // Constants
 const TABLE_HEADERS = [
@@ -103,7 +103,7 @@ const getProductName = (productId, products) => {
   // Handle both direct ID and nested object structure
   const id = typeof productId === 'object' ? productId.id : productId
   const product = products.find((p) => String(p?.id) === String(id))
-  return product ? product.name : 'Unknown Product'
+  return product ? product.productName : 'Unknown Product'
 }
 
 // Helper for sorting values
@@ -131,17 +131,11 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
   const transactions = useSelector((state) => state.electron.transaction.data || [])
   const handleHistory = async (id) => {
     try {
-      // const response = await window.api.getAllTransactions()
-      const bankReceipts = await window.api.getRecentBankReceipts()
-      const cashReceipts = await window.api.getRecentCashReceipts()
-      const transactions = await window.api.getAllTransactions()
-      console.log('transaction', transactions)
+      const transactions = await window.api.getAllPurchases()
       // const filteredResponse = response.filter((transaction) => transaction.clientId === id)
-      const filteredBankReceipts = bankReceipts.filter((receipt) => receipt.clientId === id)
-      const filteredCashReceipts = cashReceipts.filter((receipt) => receipt.clientId === id)
-      const filteredTransactions = transactions.filter((receipt) => receipt.clientId === id)
-      const combinedHistory = [...filteredTransactions]
-      setClientHistory(combinedHistory)
+      // const filteredTransactions = transactions.filter((receipt) => receipt.clientId === id)
+      // const combinedHistory = [...filteredTransactions]
+      setClientHistory(transactions.data)
     } catch (error) {
       toast.error('Failed to fetch client details: ' + error.message)
     }
@@ -371,7 +365,7 @@ const ClientList = () => {
   const TABLE_HEADERS_HISTORY = [
     { key: 'date', label: 'Date', width: 'w-[100px]', icon: Calendar1 },
     { key: 'product', label: 'Product', width: 'w-[150px]', icon: Package },
-    { key: 'quantity', label: 'Quantity', width: 'w-[150px]', icon: Box },
+    { key: 'quantity', label: 'Quantity', width: 'w-[50px]', icon: Box },
     { key: 'amount', label: 'Amount', width: 'w-[50px]', icon: TrendingUp },
     { key: 'status', label: 'Status', width: 'w-[50px]', icon: TrendingUp }
   ]
@@ -551,8 +545,10 @@ const ClientList = () => {
     fetchClients()
   }, [fetchClients])
   const getTransactionDetails = (id) => {
-    const transaction = transactions.find((t) => t.id === id)
-    return transaction?.transactionType
+    const transaction = clientHistory.filter((history) => history.pageName === 'Purchase')
+    console.log(transaction)
+
+    return transaction
   }
   return (
     <div className="select-none gap-10 h-screen w-full overflow-x-auto transition-all duration-300 min-w-[720px] overflow-hidden relative">
@@ -792,6 +788,15 @@ const ClientList = () => {
               <div className="bg-gradient-to-br from-orange-50 to-red-50 border-b-2 border-orange-200 p-2 px-6 mx-4 rounded-2xl shadow-lg overflow-y-auto customScrollbar">
                 <div className="grid grid-cols-4 items-center justify-between">
                   <div>
+                    <p className="text-xs text-gray-600 font-medium mb-1">Total Paid Amount</p>
+                    <div className="flex items-center gap-2">
+                      <IndianRupee size={24} className="text-orange-600" />
+                      <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+                        {toThousands(clientHistory.reduce((total, t) => total + t.paidAmount, 0))}
+                      </h2>
+                    </div>
+                  </div>
+                  <div>
                     <p className="text-xs text-gray-600 font-medium mb-1">Total Pending Amount</p>
                     <div className="flex items-center gap-2">
                       <IndianRupee size={24} className="text-orange-600" />
@@ -809,21 +814,10 @@ const ClientList = () => {
                     <div className="flex items-center gap-2">
                       <IndianRupee size={24} className="text-orange-600" />
                       <h2 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-                        {console.log(
-                          clientHistory.filter(
-                            (f) =>
-                              f.transactionType === 'purchase' &&
-                              f.statusOfTransaction === 'pending'
-                          )
-                        )}
                         {toThousands(
                           clientHistory
-                            .filter(
-                              (f) =>
-                                f.transactionType === 'purchase' &&
-                                f.statusOfTransaction === 'pending'
-                            )
-                            .reduce((total, t) => total + t.purchaseAmount, 0)
+                            .filter((f) => f.statusOfTransaction === 'pending')
+                            .reduce((total, t) => total + t.pendingFromOurs, 0)
                         )}
                       </h2>
                     </div>
@@ -897,8 +891,8 @@ const ClientList = () => {
                                   ))}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center justify-center min-w-[3rem] bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
-                                  ₹{toThousands(t.totalAmount) || '-'}
+                                <span className="inline-flex items-center justify-center w-full bg-gradient-to-r from-slate-100 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold text-gray-700 shadow-sm">
+                                  ₹{toThousands(t.totalAmountWithTax) || '-'}
                                 </span>
                               )}
                             </td>
@@ -922,9 +916,11 @@ const ClientList = () => {
                                   String(t.statusOfTransaction).slice(1)}
                               </span>
                               <span className="absolute right-8">
-                                {console.log(getTransactionDetails(t.transactionId))}
-                                {getTransactionDetails(t.transactionId) === 'purchase' ? (
-                                  <img src={electron} className="w-5 h-5" />
+                                {getTransactionDetails(t.transactionId) ? (
+                                  <img
+                                    src={purchase}
+                                    className="w-7 h-7 border rounded-full p-1 border-[#ccc]"
+                                  />
                                 ) : (
                                   ''
                                 )}

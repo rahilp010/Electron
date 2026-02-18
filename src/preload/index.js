@@ -22,11 +22,19 @@ contextBridge.exposeInMainWorld('api', {
   updateTransaction: (transaction) => ipcRenderer.invoke('updateTransaction', transaction),
   deleteTransaction: (id) => ipcRenderer.invoke('deleteTransaction', id),
 
+  //Purchase methods
   getPurchaseById: (id) => ipcRenderer.invoke('getPurchaseById', id),
   getAllPurchases: () => ipcRenderer.invoke('getAllPurchases'),
   createPurchase: (purchase) => ipcRenderer.invoke('createPurchase', purchase),
   updatePurchase: (purchase) => ipcRenderer.invoke('updatePurchase', purchase),
   deletePurchase: (id) => ipcRenderer.invoke('deletePurchase', id),
+
+  //Purchase methods
+  getSalesById: (id) => ipcRenderer.invoke('getSalesById', id),
+  getAllSales: () => ipcRenderer.invoke('getAllSales'),
+  createSales: (sales) => ipcRenderer.invoke('createSales', sales),
+  updateSales: (sales) => ipcRenderer.invoke('updateSales', sales),
+  deleteSales: (id) => ipcRenderer.invoke('deleteSales', id),
 
   // Bank receipt methods
   getRecentBankReceipts: () => ipcRenderer.invoke('getRecentBankReceipts'),

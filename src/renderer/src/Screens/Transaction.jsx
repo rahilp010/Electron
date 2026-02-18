@@ -66,12 +66,6 @@ const ASSETS_TYPE_OPTIONS = [
   { label: 'Assets', value: 'Assets' }
 ]
 
-const STATUS_OPTIONS = [
-  { label: 'Completed', value: 'completed' },
-  { label: 'Pending', value: 'pending' },
-  { label: 'Partial', value: 'partial' }
-]
-
 // Utility functions
 const toThousands = (value) => {
   if (!value || isNaN(value)) return '0'
@@ -97,7 +91,7 @@ const getProductName = (productId, products) => {
   // Handle both direct ID and nested object structure
   const id = typeof productId === 'object' ? productId.id : productId
   const product = products.find((p) => String(p?.id) === String(id))
-  return product ? product.name : 'Unknown Product'
+  return product ? product.productName : 'Unknown Product'
 }
 
 const getInitials = (name) => {
@@ -174,7 +168,10 @@ const TransactionRow = memo(
   }) => {
     const clientName = getClientName(transaction?.clientId, clients)
     const productName = getProductName(transaction?.productId, products)
-    // const totalAmount = (transaction?.sellAmount || 0) * (transaction?.quantity || 0)
+    const totalAmountProduct = products
+      .filter((p) => p.productName === productName)
+      .map((p) => p.productPrice)
+    const totalAmount = (totalAmountProduct || 0) * (transaction?.quantity || 0)
 
     const renderPendingAmount = () => {
       if (
@@ -251,7 +248,7 @@ const TransactionRow = memo(
         </td>
         <td className={`px-4 py-3 font-semibold `}>
           <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
-            ₹ {toThousands(Number(transaction?.totalAmount).toFixed(0))}
+            ₹ {toThousands(Number(transaction?.totalAmountWithTax).toFixed(0))}
           </div>
         </td>
         <td className={`px-4 py-3 `}>{renderPendingAmount()}</td>
@@ -343,9 +340,8 @@ const useTransactionOperations = () => {
 
   const fetchAllTransactions = useCallback(async () => {
     try {
-      const response = await window.api.getAllTransactions()
-      console.log(response)
-      dispatch(setTransactions(response))
+      const response = await window.api.getAllSales()
+      dispatch(setTransactions(response.data))
     } catch (error) {
       console.error('Error fetching transactions:', error)
       toast.error('Failed to fetch transactions')
@@ -357,7 +353,7 @@ const useTransactionOperations = () => {
       if (!window.confirm('Are you sure you want to delete this transaction?')) return
 
       try {
-        const response = await window.api.deleteTransaction(id)
+        const response = await window.api.deleteSales(id)
         dispatch(deleteTransaction(response))
         await fetchAllTransactions()
 
@@ -380,7 +376,7 @@ const useTransactionOperations = () => {
 
       try {
         for (const item of items) {
-          await window.api.deleteTransaction(item.id)
+          await window.api.deleteSales(item.id)
         }
         await fetchAllTransactions()
         toast.success('Bill deleted successfully')
@@ -395,14 +391,14 @@ const useTransactionOperations = () => {
     async (id) => {
       if (!window.confirm('Are you sure you want to update the transaction status?')) return
       try {
-        const response = await window.api.getTransactionById(id)
+        const response = await window.api.getSalesById(id)
 
         if (response.statusOfTransaction === 'pending') {
           response.statusOfTransaction = 'completed'
         } else {
           response.statusOfTransaction = 'pending'
         }
-        const updatedResponse = await window.api.updateTransaction(response)
+        const updatedResponse = await window.api.updateSales(response)
         dispatch(updateTransaction(updatedResponse))
         await fetchAllTransactions()
         toast.success('Transaction status updated successfully')
@@ -421,7 +417,7 @@ const useTransactionOperations = () => {
       try {
         for (const item of items) {
           const updatedItem = { ...item, statusOfTransaction: newStatus }
-          await window.api.updateTransaction(updatedItem)
+          await window.api.updateSales(updatedItem)
         }
         await fetchAllTransactions()
         toast.success('Bill status updated successfully')
@@ -435,7 +431,7 @@ const useTransactionOperations = () => {
   const handleEditTransaction = useCallback(
     async (transaction, setSelectedTransaction, setIsUpdateExpense, setShowSalesBillModal) => {
       try {
-        const response = await window.api.getTransactionById(transaction.id)
+        const response = await window.api.getSalesById(transaction.id)
         setSelectedTransaction(response)
         setIsUpdateExpense(true)
         setShowSalesBillModal(true)
@@ -466,14 +462,11 @@ const useTransactionOperations = () => {
       console.log('Updating Transaction:', transactionId, newStatus)
       try {
         // Call API (assuming your backend supports update)
-        const response = await window.api.updateTransaction({
-          id: transactionId,
+        const response = await window.api.updateSales({
+          transactionId,
           statusOfTransaction: newStatus
         })
 
-        console.log(response)
-
-        // Update redux with new transaction
         await fetchAllTransactions()
 
         toast.success(`Payment status updated to ${newStatus}`)
@@ -507,43 +500,68 @@ const generatePrintHTML = (
   clients = [],
   products = []
 ) => {
+  // --- 1. Helper Functions & Calculations ---
+  const toThousands = (num) => num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+  // Calculate Totals
+  const totalAmount = data.reduce((sum, row) => sum + (Number(row.totalAmountWithTax) || 0), 0)
+  const totalQuantity = data.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
+
   const getCellValue = (row, headerKey) => {
     switch (headerKey) {
       case 'billNo':
-        return row.billNo || '-'
+        return `<span class="font-mono font-bold">#${row.billNo || '---'}</span>`
       case 'date':
-        return new Date(row.createdAt).toLocaleDateString('en-IN')
+        return new Date(row.createdAt).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        })
       case 'clientName':
-        return getClientName(row.clientId, clients)
+        const name =
+          typeof getClientName !== 'undefined'
+            ? getClientName(row.clientId, clients)
+            : row.clientName || 'N/A'
+        return `<div class="text-wrap-cell">${name}</div>`
       case 'productName':
-        return getProductName(row.productId, products)
+        const prod =
+          typeof getProductName !== 'undefined'
+            ? getProductName(row.productId, products)
+            : row.productName || 'N/A'
+        return `<div class="text-wrap-cell">${prod}</div>`
       case 'quantity':
         return row.quantity || 0
       case 'totalAmount':
-        const total = (row.sellAmount || 0) * (row.quantity || 0)
-        return `₹${toThousands(Number(total).toFixed(0))}`
+        return `₹ ${toThousands(Number(row.totalAmountWithTax || 0).toFixed(0))}`
       case 'pendingAmount':
         if (row.statusOfTransaction === 'pending' && row.paymentType === 'partial') {
-          return `₹${toThousands(Number(row.pendingAmount).toFixed(0))}`
+          return `<span class="text-red font-bold">₹ ${toThousands(Number(row.pendingAmount).toFixed(0))}</span>`
         }
-        return row.statusOfTransaction === 'completed' ? 'Settled' : 'Pending'
+        return row.statusOfTransaction === 'completed'
+          ? '<span class="badge badge-success">Paid</span>'
+          : '<span class="badge badge-warning">Pending</span>'
       default:
-        return ''
+        return row[headerKey] || ''
     }
   }
 
-  // Determine if a column is numeric to align it right
-  const isNumeric = (key) => ['quantity', 'totalAmount', 'pendingAmount', 'balance'].includes(key)
-
+  // --- 2. Table Construction ---
   const tableHeaders = headers
-    .map((h) => `<th class="${isNumeric(h.key) ? 'text-right' : 'text-left'}">${h.label}</th>`)
+    .map((h) => {
+      let align = 'text-left'
+      if (h.key === 'totalAmount' || h.key === 'quantity') align = 'text-right'
+      if (h.key === 'pendingAmount') align = 'text-center'
+      return `<th class="${align}">${h.label}</th>`
+    })
     .join('')
 
   const tableRows = data
     .map((row) => {
       const cells = headers
         .map((h) => {
-          const alignClass = isNumeric(h.key) ? 'text-right' : 'text-left'
+          let alignClass = 'text-left'
+          if (h.key === 'totalAmount' || h.key === 'quantity') alignClass = 'text-right'
+          if (h.key === 'pendingAmount') alignClass = 'text-center'
           return `<td class="${alignClass}">${getCellValue(row, h.key)}</td>`
         })
         .join('')
@@ -551,178 +569,250 @@ const generatePrintHTML = (
     })
     .join('')
 
+  // --- 3. Ledger Specific Logic ---
+  let ledgerSpecificContent = ''
+  if (reportType === 'ledger') {
+    ledgerSpecificContent = `
+      <tr class="ledger-separator">
+        <td colspan="${headers.length}" class="text-right font-bold bg-gray">Running Balance calculation below</td>
+      </tr>
+      ${data
+        .map((row) => {
+          const balance = row.balance || 0
+          return `
+            <tr class="ledger-row">
+              <td colspan="${headers.length - 1}" class="text-right label-cell">Balance Forward:</td>
+              <td class="text-right font-bold">₹ ${toThousands(balance)}</td>
+            </tr>`
+        })
+        .join('')}
+    `
+  }
+
+  // --- 4. Company Info ---
+  const companyInfo = {
+    name: 'Electron by Envy',
+    // address: '123 Business Park, Main Street',
+    city: 'Surat, Gujarat - 395006',
+    phone: '+91 9316080624',
+    email: 'admin@envy.com'
+    // gst: 'GSTIN: 24ABCDE1234F1Z5'
+  }
+
   return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>${title} | Report</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        
-        * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
-        
-        body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            margin: 0;
-            padding: 10px;
-            color: #1e293b;
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+          :root {
+            --primary: #1e293b; /* Slate 800 */
+            --secondary: #64748b; /* Slate 500 */
+            --border: #e2e8f0;
+            --highlight: #f8fafc;
+          }
+
+          html, body { height: 100%; margin: 0; padding: 0; }
+
+          body {
+            font-family: 'Inter', sans-serif;
+            color: #334155;
             line-height: 1.5;
             background: #fff;
-        }
-
-        /* ===== PREMIUM HEADER ===== */
-        .report-header {
             display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-bottom: 40px;
-            border-bottom: 3px solid #4f46e5;
+            flex-direction: column; 
+            min-height: 100vh;
+          }
+
+          .page-wrapper {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+          }
+
+          .content-grow { flex: 1; }
+
+          /* Layout Utils */
+          .flex { display: flex; }
+          .justify-between { justify-content: space-between; }
+          .justify-end { justify-content: flex-end; }
+          .items-center { align-items: center; }
+          .items-end { align-items: flex-end; }
+          .font-bold { font-weight: 700; }
+          .font-mono { font-family: 'Courier New', Courier, monospace; }
+          .text-right { text-align: right; }
+          .text-left { text-align: left; }
+          .text-center { text-align: center; }
+          .text-red { color: #dc2626; }
+          .bg-gray { background-color: #f1f5f9; }
+
+          .text-wrap-cell {
+            max-width: 180px;
+            white-space: normal;
+            word-wrap: break-word;
+            line-height: 1.3;
+          }
+
+          /* Header */
+          .header-container {
+            border-bottom: 2px solid var(--primary);
             padding-bottom: 20px;
-        }
-
-        .title-section h1 {
-            font-size: 32px;
-            font-weight: 800;
-            margin: 0;
-            color: #0f172a;
-            letter-spacing: -0.025em;
-            text-transform: uppercase;
-        }
-
-        .title-section p {
-            margin: 5px 0 0 0;
-            color: #64748b;
-            font-size: 14px;
-        }
-
-        .meta-section {
-            text-align: right;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            background: #f1f5f9;
-            color: #475569;
-            font-size: 12px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            border: 1px solid #e2e8f0;
-        }
-
-        /* ===== TABLE STYLING ===== */
-        table {
-            width: 100%;
-            border-collapse: collapse;
             margin-bottom: 30px;
-        }
+          }
+          .company-branding h1 { margin: 0; font-size: 24px; color: var(--primary); text-transform: uppercase; }
+          .company-details { font-size: 12px; color: var(--secondary); margin-top: 8px; }
+          .logo-placeholder {
+            width: 70px; height: 65px; background: var(--primary); color: white;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px; font-weight: bold; font-size: 20px; margin-bottom: 10px;
+          }
+          .report-meta { text-align: right; }
+          .report-title { font-size: 28px; font-weight: 800; color: #cbd5e1; text-transform: uppercase; margin: 0; }
+          .meta-table { margin-top: 10px; border-collapse: collapse; float: right; font-size: 12px; }
+          .meta-table td { padding: 2px 10px; border-bottom: 1px solid var(--border); }
+          .meta-label { font-weight: 600; color: var(--primary); }
 
-        thead th {
-            background-color: #f8fafc;
-            color: #475569;
-            font-weight: 600;
-            font-size: 12px;
+          /* Table */
+          table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+          table.data-table th {
+            background-color: var(--primary); color: white;
+            padding: 10px; font-weight: 600; font-size: 12px;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            padding: 14px 16px;
-            border-bottom: 2px solid #e2e8f0;
-        }
+          }
+          table.data-table td {
+            padding: 8px 10px; border-bottom: 1px solid var(--border);
+            font-size: 12px; vertical-align: middle;
+          }
+          table.data-table tr:nth-child(even) { background-color: #f8fafc; }
 
-        tbody td {
-            padding: 14px 16px;
-            font-size: 13px;
-            border-bottom: 1px solid #f1f5f9;
-            color: #334155;
-        }
-
-        tbody tr:nth-child(even) {
-            background-color: #fafbfd;
-        }
-
-        .text-right { text-align: right; }
-        .text-left { text-align: left; }
-
-        /* ===== TOTALS / LEDGER SECTION ===== */
-        .ledger-row td {
-            background: #f8fafc;
-            font-weight: 700;
-            color: #1e293b;
-            border-top: 2px solid #e2e8f0;
-        }
-
-        /* ===== FOOTER ===== */
-        .footer {
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 1px solid #f1f5f9;
+          /* Totals Section */
+          .totals-container {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 11px;
-            color: #94a3b8;
-        }
-
-        .footer-brand {
-            font-weight: 700;
-            color: #4f46e5;
+            justify-content: flex-end;
+            margin-top: 20px;
+            page-break-inside: avoid;
+          }
+          .totals-table {
+            width: 40%; /* Adjust width of summary box */
+            border-collapse: collapse;
             font-size: 13px;
-        }
+          }
+          .totals-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #e2e8f0;
+          }
+          .totals-table .label { font-weight: 600; color: var(--secondary); }
+          .totals-table .value { text-align: right; font-weight: 600; color: var(--primary); }
+          .totals-table .grand-total-row {
+            background-color: var(--primary);
+            color: white;
+          }
+          .totals-table .grand-total-row .label, 
+          .totals-table .grand-total-row .value {
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+          }
 
-        @media print {
-            body { padding: 20px; }
-            .no-print { display: none; }
-            thead { display: table-header-group; }
-            @page { size: A4; margin: 1cm; }
-        }
-    </style>
-</head>
-<body onload="window.print();">
+          /* Status Pills */
+          .badge {
+            display: inline-block; padding: 4px 12px; border-radius: 50px;
+            font-weight: 600; font-size: 10px; text-transform: uppercase;
+            min-width: 60px; text-align: center;
+          }
+          .badge-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+          .badge-warning { background: #fef9c3; color: #a16207; border: 1px solid #fde047; }
 
-    <div class="report-header">
-        <div class="title-section">
-            <span class="badge">Official Report</span>
-            <h1>${title}</h1>
-            <p>Generated on ${new Date().toLocaleDateString('en-IN', { dateStyle: 'full' })}</p>
-        </div>
-        <div class="meta-section">
-            <div style="font-size: 24px; font-weight: 700; color: #4f46e5;">${data.length}</div>
-            <div style="font-size: 12px; color: #64748b; text-transform: uppercase;">Total Records</div>
-        </div>
-    </div>
+          /* Footer */
+          .footer-section {
+            margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
+          }
+          .signature-area { width: 200px; text-align: center; }
+          .signature-line { border-top: 1px solid #334155; margin-bottom: 5px; }
 
-    <table>
-        <thead>
-            <tr>${tableHeaders}</tr>
-        </thead>
-        <tbody>
-            ${tableRows}
-            ${
-              reportType === 'ledger'
-                ? `
-                <tr class="ledger-row">
-                    <td colspan="${headers.length - 1}" class="text-right">Grand Total / Balance</td>
-                    <td class="text-right">₹${toThousands(data.reduce((acc, curr) => acc + (curr.balance || 0), 0))}</td>
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; display: block; min-height: 100%; }
+            .page-wrapper { padding: 0; display: block; height: 100%; }
+            .footer-section { position: fixed; bottom: 0; left: 0; width: 100%; background: white; padding-bottom: 10px; }
+            table.data-table { margin-bottom: 20px; } /* Reset margin */
+            /* Ensure the totals don't overlap the fixed footer if data is long */
+            .totals-container { margin-bottom: 150px; } 
+          }
+        </style>
+      </head>
+      <body onload="window.print();">
+        <div class="page-wrapper">
+          <div class="content-grow">
+            <div class="header-container flex justify-between items-start">
+              <div class="company-branding">
+                <div class="logo-placeholder">Envy</div> 
+                <h1>${companyInfo.name}</h1>
+                <div class="company-details">
+                  <div>${companyInfo.city}</div>
+                  <div>${companyInfo.phone} | ${companyInfo.email}</div>
+                </div>
+              </div>
+              <div class="report-meta">
+                <h2 class="report-title">${title}</h2>
+                <table class="meta-table">
+                  <tr><td class="meta-label">Date:</td><td>${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td></tr>
+                  <tr><td class="meta-label">Records:</td><td>${data.length}</td></tr>
+                </table>
+              </div>
+            </div>
+
+            <table class="data-table">
+              <thead><tr>${tableHeaders}</tr></thead>
+              <tbody>
+                ${tableRows}
+                ${ledgerSpecificContent}
+              </tbody>
+            </table>
+
+            <div class="totals-container">
+              <table class="totals-table">
+                <tr>
+                  <td class="label">Total Quantity</td>
+                  <td class="value">${totalQuantity}</td>
                 </tr>
-            `
-                : ''
-            }
-        </tbody>
-    </table>
+                <tr>
+                  <td class="label">Sub Total</td>
+                  <td class="value">₹ ${toThousands(totalAmount.toFixed(0))}</td>
+                </tr>
+                <tr class="grand-total-row">
+                  <td class="label">Grand Total</td>
+                  <td class="value">₹ ${toThousands(totalAmount.toFixed(0))}</td>
+                </tr>
+              </table>
+            </div>
 
-    <div class="footer">
-        <div>
-            This document is electronically generated and verified. <br>
-            Reference ID: #REP-${Math.floor(1000 + Math.random() * 9000)}
+          </div> <div class="footer-section">
+            <div class="flex justify-between items-end">
+              <div style="width: 60%;">
+                <p style="font-size:11px; font-weight:bold; margin-bottom:4px;">Terms & Conditions:</p>
+                <p style="font-size:10px; color:#64748b; margin:0; line-height:1.4;">
+                  1. Goods once sold will not be taken back.<br>
+                  2. Interest @18% p.a. will be charged if payment is delayed.<br>
+                  3. Subject to Surat Jurisdiction.
+                </p>
+              </div>
+              <div class="signature-area">
+                <div style="height: 50px;"></div> <div class="signature-line"></div>
+                <div class="font-bold" style="font-size:12px;">Authorized Signatory</div>
+                <div style="font-size:10px;">For, ${companyInfo.name}</div>
+              </div>
+            </div>
+            <div class="text-center" style="margin-top:20px; font-size:9px; color:#94a3b8;">
+              This is a computer-generated document. | Powered by Electron by Envy
+            </div>
+          </div>
         </div>
-        <div class="footer-brand">
-            ELECTRON SYSTEMS
-        </div>
-    </div>
-
-</body>
-</html>
+      </body>
+    </html>
   `
 }
 
@@ -828,7 +918,7 @@ const Transaction = () => {
   const filteredTransactions = useMemo(() => {
     return transactions.filter((data) => {
       // Only show sales transactions
-      if (data?.transactionType !== 'sales') return false
+      if (data?.pageName !== 'Sales') return false
 
       return isMatch(
         data,
@@ -969,33 +1059,45 @@ const Transaction = () => {
 
   // Memoized statistics
   const statistics = useMemo(() => {
-    const salesTransactions = transactions.filter((t) => t?.transactionType === 'sales')
+    const salesTransactions = transactions.filter((t) => t?.pageName === 'Sales')
 
-    const totalSales = salesTransactions.reduce(
-      (total, item) => total + (item.totalAmount || (item.sellAmount || 0) * (item.quantity || 0)),
-      0
-    )
+    const currentPID = salesTransactions.map((p) => p.productId)
+
+    const productName = getProductName(currentPID[0], products)
+
+    const totalAmountProduct = products
+      .filter((p) => p.productName === productName)
+      .map((p) => p.productPrice)
+
+    const totalSales = salesTransactions.reduce((total, item) => total + item.totalAmountWithTax, 0)
 
     const totalProducts = salesTransactions.reduce((total, item) => total + (item.quantity || 0), 0)
 
     const valueFunction = (item) => {
-      if (item.statusOfTransaction === 'pending') {
-        if (item.paymentType === 'full') {
-          return Number(item.totalAmount || (item.sellAmount || 0) * (item.quantity || 0))
-        } else if (item.paymentType === 'partial') {
-          return Number(item.pendingAmount || 0)
-        }
-        return Number(item.pendingAmount || 0)
+      switch (item.statusOfTransaction === 'pending') {
+        case item.paymentType === 'full':
+          return Number(item.totalAmountWithTax)
+        case item.paymentType === 'partial':
+          return Number(item.pendingFromOurs)
+        default:
+          return Number(item.pendingFromOurs)
       }
-      return 0
     }
 
     const totalPendingAmount = salesTransactions.reduce(
-      (total, item) => total + valueFunction(item),
+      (total, item) => total + (valueFunction(item) || 0),
       0
     )
 
-    return { totalSales, totalProducts, totalPendingAmount }
+    const totalPendingCount = salesTransactions.filter(
+      (item) => item.statusOfTransaction === 'pending'
+    ).length
+
+    const totalPaidCount = salesTransactions.filter(
+      (item) => item.statusOfTransaction === 'completed'
+    ).length
+
+    return { totalSales, totalProducts, totalPendingAmount, totalPendingCount, totalPaidCount }
   }, [transactions])
 
   // Event handlers
@@ -1016,7 +1118,7 @@ const Transaction = () => {
         const result = await window.api.importExcel(filePath, 'transactions')
 
         if (result.success) {
-          toast.success(`Imported ${result.count} transactions successfully`)
+          toast.success(`Imported ${result.count} sales successfully`)
           await fetchAllTransactions()
           setImportFile(false)
         } else {
@@ -1038,9 +1140,7 @@ const Transaction = () => {
         'Client Name': getClientName(transaction.clientId, clients),
         'Product Name': getProductName(transaction.productId, products),
         Quantity: transaction.quantity,
-        'Total Amount': toThousands(
-          transaction.totalAmount || (transaction.sellAmount || 0) * (transaction.quantity || 0)
-        ),
+        'Total Amount': toThousands(transaction.totalAmountWithTax || 0),
         'Pending Amount': toThousands(transaction.pendingAmount || 0),
         'Paid Amount': toThousands(transaction.paidAmount || 0),
         'Payment Status': transaction.statusOfTransaction,
@@ -1226,7 +1326,7 @@ const Transaction = () => {
               ₹ {toThousands(Number(statistics.totalPendingAmount).toFixed(2))}
             </p>
           </div>
-          <div className="mx-5 border-r w-52">
+          {/* <div className="mx-5 border-r w-52">
             <p className="text-sm font-light mb-1">Sales Bill</p>
             <div className="flex items-center gap-2">
               <IoReceipt
@@ -1238,6 +1338,14 @@ const Transaction = () => {
                 }}
               />
             </div>
+          </div> */}
+          <div className="mx-5 border-r w-52">
+            <p className="text-sm font-light mb-1">Pending Count</p>
+            <p className="text-2xl font-light">{statistics.totalPendingCount}</p>
+          </div>
+          <div className="mx-5 border-r w-52">
+            <p className="text-sm font-light mb-1">Paid Count</p>
+            <p className="text-2xl font-light">{statistics.totalPaidCount}</p>
           </div>
         </div>
 
@@ -1285,7 +1393,7 @@ const Transaction = () => {
                 />
                 <SelectPicker
                   data={products.map((product) => ({
-                    label: product?.name,
+                    label: product?.productName,
                     value: product?.id
                   }))}
                   onChange={setProductFilter}
@@ -1296,7 +1404,7 @@ const Transaction = () => {
                   container={() => document.body}
                   menuStyle={{ zIndex: 99999, position: 'absolute' }}
                 />
-                {/* <SelectPicker
+                <SelectPicker
                   data={ASSETS_TYPE_OPTIONS}
                   onChange={setAssetsTypeFilter}
                   placeholder="Select Assets Type"
@@ -1306,7 +1414,7 @@ const Transaction = () => {
                   container={() => document.body}
                   menuStyle={{ zIndex: 99999, position: 'absolute' }}
                   virtualized={true}
-                /> */}
+                />
                 <SelectPicker
                   data={[
                     { label: 'All', value: '' },
@@ -1395,16 +1503,15 @@ const Transaction = () => {
                           year: 'numeric'
                         })
                         const totalQty = items.reduce((sum, i) => sum + (i.quantity || 0), 0)
-                        const totalAmount = items.reduce(
-                          (sum, i) => sum + (i.sellAmount || 0) * (i.quantity || 0),
-                          0
-                        )
+                        const totalAmount = items.reduce((sum, i) => sum + (i.sellAmount || 0))
                         const totalPending = items.reduce((sum, i) => {
                           if (i.statusOfTransaction === 'pending') {
-                            if (i.paymentType === 'partial') {
-                              return sum + (i.pendingAmount || 0)
-                            }
-                            return sum + (i.sellAmount || 0) * (i.quantity || 0)
+                            return (
+                              sum +
+                              (i.paymentType === 'partial'
+                                ? i.pendingAmount || 0
+                                : i.purchaseAmount || 0)
+                            )
                           }
                           return sum
                         }, 0)
