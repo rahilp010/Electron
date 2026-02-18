@@ -131,11 +131,16 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
   const transactions = useSelector((state) => state.electron.transaction.data || [])
   const handleHistory = async (id) => {
     try {
-      const transactions = await window.api.getAllPurchases()
+      const purchaseData = await window.api.getAllPurchases()
+      const saleData = await window.api.getAllSales()
+
+      const transactions = [...purchaseData.data, ...saleData.data]
+
+      console.log('transaction', transactions)
       // const filteredResponse = response.filter((transaction) => transaction.clientId === id)
       // const filteredTransactions = transactions.filter((receipt) => receipt.clientId === id)
       // const combinedHistory = [...filteredTransactions]
-      setClientHistory(transactions.data)
+      setClientHistory(transactions)
     } catch (error) {
       toast.error('Failed to fetch client details: ' + error.message)
     }
@@ -775,14 +780,14 @@ const ClientList = () => {
                 <p className="text-2xl font-medium">Transaction History</p>
               </Modal.Title>
               <p className="text-xs font-light text-gray-500 mt-0.5 mx-1">
-                <span className="font-bold text-red-500">{clientHistory.length}</span> Transaction
-                {clientHistory.length !== 1 ? 's' : ''} Found
+                <span className="font-bold text-red-500">{clientHistory?.length}</span> Transaction
+                {clientHistory?.length !== 1 ? 's' : ''} Found
               </p>
             </div>
           </div>
         </Modal.Header>
         <Modal.Body>
-          {clientHistory.length > 0 ? (
+          {clientHistory?.length > 0 ? (
             <>
               {/* Summary Card */}
               <div className="bg-gradient-to-br from-orange-50 to-red-50 border-b-2 border-orange-200 p-2 px-6 mx-4 rounded-2xl shadow-lg overflow-y-auto customScrollbar">
@@ -915,7 +920,7 @@ const ClientList = () => {
                                 {String(t.statusOfTransaction).charAt(0).toUpperCase() +
                                   String(t.statusOfTransaction).slice(1)}
                               </span>
-                              <span className="absolute right-8">
+                              {/* <span className="absolute right-8">
                                 {getTransactionDetails(t.transactionId) ? (
                                   <img
                                     src={purchase}
@@ -924,7 +929,7 @@ const ClientList = () => {
                                 ) : (
                                   ''
                                 )}
-                              </span>
+                              </span> */}
                             </td>
                           </tr>
                         ))
