@@ -25,7 +25,6 @@ db.pragma('foreign_keys = ON')
 
 // db.prepare('DROP TABLE products;').run()
 // db.prepare('DROP TABLE clients;').run()
-// db.prepare('DROP TABLE transactions;').run()
 // db.prepare('DROP TABLE bankReceipts;').run()
 // db.prepare('DROP TABLE cashReceipts;').run()
 // db.prepare('DROP TABLE accounts;').run()

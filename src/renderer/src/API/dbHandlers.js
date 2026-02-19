@@ -1058,11 +1058,10 @@ ipcMain.handle('createPurchase', (event, data) => {
             referenceId,
             narration
           )
-          VALUES (?, ?, 'debit', ?, ?, 'Payment', ?, ?)
+          VALUES (?, null, 'debit', ?, ?, 'Payment', ?, ?)
         `
         ).run(
           systemAccount.id,
-          clientId,
           paid,
           newSystemBalance,
           purchaseId,
@@ -1292,11 +1291,10 @@ ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
     INSERT INTO ledger
     (accountId, clientId, entryType, amount, balanceAfter,
      referenceType, referenceId, narration)
-    VALUES (?, ?, ?, ?, ?, 'Adjustment', ?, ?)
+    VALUES (?, null, ?, ?, ?, 'Adjustment', ?, ?)
   `
         ).run(
           systemAccount.id,
-          clientId,
           newPaidAmount > oldPaidAmount ? 'debit' : 'credit',
           Math.abs(newPaidAmount - oldPaidAmount),
           newSystemBalance,
@@ -1417,11 +1415,10 @@ ipcMain.handle('deletePurchase', (event, id) => {
             INSERT INTO ledger
             (accountId, clientId, entryType, amount, balanceAfter,
              referenceType, referenceId, narration, date)
-            VALUES (?, ?, 'credit', ?, ?, 'Adjustment', ?, ?, ?)
+            VALUES (?, null, 'credit', ?, ?, 'Adjustment', ?, ?, ?)
           `
           ).run(
             systemAccount.id,
-            clientId,
             paid,
             newSystemBalance,
             id,
@@ -1545,7 +1542,7 @@ ipcMain.handle('createSales', (event, data) => {
         .prepare(
           `
     UPDATE products 
-    SET productQuantity = productQuantity + ?
+    SET productQuantity = productQuantity - ?
     WHERE id = ?
   `
         )
@@ -1717,16 +1714,9 @@ ipcMain.handle('createSales', (event, data) => {
             referenceId,
             narration
           )
-          VALUES (?, ?, 'credit', ?, ?, 'Payment', ?, ?)
+          VALUES (?, null, 'credit', ?, ?, 'Payment', ?, ?)
         `
-        ).run(
-          systemAccount.id,
-          clientId,
-          paid,
-          newSystemBalance,
-          saleId,
-          `Sale Payment ${billNo || ''}`
-        )
+        ).run(systemAccount.id, paid, newSystemBalance, saleId, `Sale Payment ${billNo || ''}`)
 
         db.prepare(
           `
@@ -1809,7 +1799,7 @@ ipcMain.handle('updateSales', (event, { id, ...data }) => {
       db.prepare(
         `
         UPDATE products
-        SET productQuantity = productQuantity - ?
+        SET productQuantity = productQuantity + ?
         WHERE id = ?
       `
       ).run(oldQty, oldSales.productId)
@@ -1818,7 +1808,7 @@ ipcMain.handle('updateSales', (event, { id, ...data }) => {
       db.prepare(
         `
         UPDATE products
-        SET productQuantity = productQuantity + ?
+        SET productQuantity = productQuantity - ?
         WHERE id = ?
       `
       ).run(newQty, productId)
@@ -1951,11 +1941,10 @@ ipcMain.handle('updateSales', (event, { id, ...data }) => {
     INSERT INTO ledger
     (accountId, clientId, entryType, amount, balanceAfter,
      referenceType, referenceId, narration)
-    VALUES (?, ?, ?, ?, ?, 'Adjustment', ?, ?)
+    VALUES (?, null, ?, ?, ?, 'Adjustment', ?, ?)
   `
         ).run(
           systemAccount.id,
-          clientId,
           newPaidAmount > oldPaidAmount ? 'debit' : 'credit',
           Math.abs(newPaidAmount - oldPaidAmount),
           newSystemBalance,
@@ -2009,7 +1998,7 @@ ipcMain.handle('deleteSales', (event, id) => {
       db.prepare(
         `
         UPDATE products
-        SET productQuantity = productQuantity - ?
+        SET productQuantity = productQuantity + ?
         WHERE id = ?
       `
       ).run(quantity, productId)
@@ -2074,11 +2063,10 @@ ipcMain.handle('deleteSales', (event, id) => {
             INSERT INTO ledger
             (accountId, clientId, entryType, amount, balanceAfter,
              referenceType, referenceId, narration, date)
-            VALUES (?, ?, 'debit', ?, ?, 'Adjustment', ?, ?, ?)
+            VALUES (?, null, 'debit', ?, ?, 'Adjustment', ?, ?, ?)
           `
           ).run(
             systemAccount.id,
-            clientId,
             paid,
             newSystemBalance,
             id,
@@ -2702,79 +2690,88 @@ ipcMain.handle('getAccountBalances', () => {
   })
 })
 
-// function createLedgerEntry({
-//   date,
-//   description,
-//   debitAccount,
-//   creditAccount,
-//   amount,
-//   paymentMethod,
-//   referenceId
-// }) {
-//   db.prepare(
-//     `
-//     INSERT INTO ledger (date, description, debitAccount, creditAccount, amount, paymentMethod, referenceId)
-//     VALUES (?, ?, ?, ?, ?, ?, ?)
-//   `
-//   ).run(date, description, debitAccount, creditAccount, amount, paymentMethod, referenceId || null)
-// }
-
-// Extend Transaction to Ledger
-// ipcMain.handle('createLedgerTransaction', (event, tx) => {
-//   const date = new Date().toISOString()
-//   createLedgerEntry({
-//     date,
-//     description: tx.description || 'General Transaction',
-//     debitAccount: tx.debitAccount,
-//     creditAccount: tx.creditAccount,
-//     amount: tx.amount,
-//     paymentMethod: tx.paymentMethod || 'bank',
-//     referenceId: tx.referenceId || null
-//   })
-//   return { success: true }
-// })
-
-// ipcMain.handle('updateLedgerTransaction', (event, tx) => {
-//   const date = new Date().toISOString()
-//   createLedgerEntry({
-//     date,
-//     description: tx.description || 'General Transaction',
-//     debitAccount: tx.debitAccount,
-//     creditAccount: tx.creditAccount,
-//     amount: tx.amount,
-//     paymentMethod: tx.paymentMethod || 'bank',
-//     referenceId: tx.referenceId || null
-//   })
-//   return { success: true }
-// })
-
-// ipcMain.handle('deleteLedgerTransaction', (event, id) => {
-//   db.prepare('DELETE FROM ledger WHERE id = ?').run(id)
-//   return { success: true }
-// })
-
-// ipcMain.handle('getLedgerTransactions', () => {
-//   const stmt = db.prepare(`SELECT * FROM ledger`)
-//   const rows = stmt.all()
-//   return rows
-// })
-
-ipcMain.handle('getLedgerByAccount', (event, accountId) => {
+ipcMain.handle('getTrialBalance', () => {
   try {
-    const ledger = db
+    const result = db
       .prepare(
         `
-      SELECT * FROM ledger
+      SELECT 
+        a.id,
+        a.accountName,
+        a.accountType,
+        SUM(CASE WHEN l.entryType = 'debit' THEN l.amount ELSE 0 END) AS totalDebit,
+        SUM(CASE WHEN l.entryType = 'credit' THEN l.amount ELSE 0 END) AS totalCredit
+      FROM accounts a
+      LEFT JOIN ledger l ON a.id = l.accountId
+      GROUP BY a.id
+      ORDER BY a.accountName ASC
+    `
+      )
+      .all()
+
+    return { success: true, data: result }
+  } catch (err) {
+    return { success: false, message: err.message }
+  }
+})
+
+ipcMain.handle('getAccountLedger', (event, accountId) => {
+  try {
+    const data = db
+      .prepare(
+        `
+      SELECT *
+      FROM ledger
       WHERE accountId = ?
-      ORDER BY date ASC, createdAt ASC
+      ORDER BY date ASC
     `
       )
       .all(accountId)
 
-    return { success: true, data: ledger }
-  } catch (error) {
-    console.error('❌ Error fetching ledger:', error)
-    return { success: false, message: 'Failed to fetch ledger' }
+    return { success: true, data }
+  } catch (err) {
+    return { success: false, message: err.message }
+  }
+})
+
+ipcMain.handle('getAccountLedgerByType', (event, accountType) => {
+  try {
+    const data = db
+      .prepare(
+        `
+      SELECT ledger.*
+      FROM ledger
+      JOIN accounts ON ledger.accountId = accounts.id
+      WHERE accounts.accountType = ?
+      ORDER BY ledger.date ASC, ledger.createdAt ASC
+    `
+      )
+      .all(accountType)
+
+    return { success: true, data }
+  } catch (err) {
+    console.error('Ledger error:', err)
+    return { success: false, message: err.message }
+  }
+})
+
+ipcMain.handle('getAccountLedgerByDate', (event, { accountId, from, to }) => {
+  try {
+    const data = db
+      .prepare(
+        `
+      SELECT *
+      FROM ledger
+      WHERE accountId = ?
+      AND date BETWEEN ? AND ?
+      ORDER BY date ASC
+    `
+      )
+      .all(accountId, from, to)
+
+    return { success: true, data }
+  } catch (err) {
+    return { success: false, message: err.message }
   }
 })
 
@@ -2866,6 +2863,8 @@ ipcMain.handle('getTransferHistory', (event, accountId) => {
 
 ipcMain.handle('getClientLedger', (event, clientId) => {
   try {
+    const numericId = Number(clientId)
+
     const ledger = db
       .prepare(
         `
@@ -2875,7 +2874,12 @@ ipcMain.handle('getClientLedger', (event, clientId) => {
       ORDER BY date ASC, createdAt ASC
     `
       )
-      .all(clientId)
+      .all(numericId)
+
+    const ledgerData = db.prepare(`SELECT * FROM ledger`).all()
+    console.log('ALL LEDGER:', ledgerData)
+
+    console.log('Fetching ledger for client:', clientId)
 
     return { success: true, data: ledger }
   } catch (error) {

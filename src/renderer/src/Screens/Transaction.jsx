@@ -288,7 +288,7 @@ const TransactionRow = memo(
               onClick={() => {
                 const clientName = getClientName(transaction?.clientId, clients)
                 const productName = getProductName(transaction?.productId, products)
-                const amount = toThousands(Number(transaction?.sellAmount).toFixed(0))
+                const amount = toThousands(Number(transaction?.saleAmount).toFixed(0))
 
                 const message = `Hello ${clientName},\n\nHere are your transaction details:\n📦 Product: ${productName}\n💰 Amount: ₹${amount}\n📅 Date: ${new Date(
                   transaction?.createdAt
@@ -873,7 +873,7 @@ const Transaction = () => {
         [
           data?.id?.toString(),
           getClientName(data?.clientId, clients)?.toLowerCase(),
-          data?.sellAmount?.toString(),
+          data?.saleAmount?.toString(),
           getProductName(data?.productId, products)?.toLowerCase(),
           data?.quantity?.toString(),
           data?.statusOfTransaction?.toLowerCase()
@@ -1193,8 +1193,8 @@ const Transaction = () => {
           ...row,
           balance:
             index % 2 === 0
-              ? (row.sellAmount || 0) * (row.quantity || 0)
-              : -((row.sellAmount || 0) * (row.quantity || 0)) // Dummy balance; replace with real logic
+              ? (row.saleAmount || 0) * (row.productQuantity || 0)
+              : -((row.saleAmount || 0) * (row.productQuantity || 0)) // Dummy balance; replace with real logic
         }))
       }
 
@@ -1503,7 +1503,7 @@ const Transaction = () => {
                           year: 'numeric'
                         })
                         const totalQty = items.reduce((sum, i) => sum + (i.quantity || 0), 0)
-                        const totalAmount = items.reduce((sum, i) => sum + (i.sellAmount || 0))
+                        const totalAmount = items.reduce((sum, i) => sum + (i.saleAmount || 0), 0)
                         const totalPending = items.reduce((sum, i) => {
                           if (i.statusOfTransaction === 'pending') {
                             return (
@@ -1559,7 +1559,7 @@ const Transaction = () => {
                               </td>
                               <td className="px-4 py-3 font-semibold">
                                 <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
-                                  ₹ {toThousands(totalAmount.toFixed(0))}
+                                  ₹ {toThousands(totalAmount?.toFixed(0))}
                                 </div>
                               </td>
                               <td className="px-4 py-3">
@@ -1569,7 +1569,7 @@ const Transaction = () => {
                                     placement="rightStart"
                                     speaker={<Tooltip>{toThousands(totalPending)}</Tooltip>}
                                   >
-                                    <span>₹ {toThousands(Number(totalPending).toFixed(0))}</span>
+                                    <span>₹ {toThousands(Number(totalPending)?.toFixed(0))}</span>
                                   </Whisper>
                                 ) : (
                                   '-'

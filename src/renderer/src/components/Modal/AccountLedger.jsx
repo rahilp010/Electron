@@ -3,12 +3,13 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
-import { memo, useCallback, useEffect, useMemo, useState, useRef, forwardRef } from 'react'
+
+import { memo, useCallback, useEffect, useMemo, useState, forwardRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { clientApi } from '../../API/Api'
-import { setBankReceipt, setClients } from '../../app/features/electronSlice'
+import { setClients } from '../../app/features/electronSlice'
 import { toast } from 'react-toastify'
-import { Input, InputNumber, Modal, Tooltip, Whisper } from 'rsuite'
+import { Tooltip, Whisper } from 'rsuite'
 import {
   TrendingUp,
   TrendingDown,
@@ -16,695 +17,223 @@ import {
   Building2,
   FileText,
   DollarSign,
-  CreditCard,
-  Banknote,
   BarChart3,
   Printer,
-  Plus,
-  Receipt,
-  BanknoteArrowDown
+  Banknote
 } from 'lucide-react'
-import { IoLogoWhatsapp } from 'react-icons/io5'
 
-// Constants
+// ======================
+// CONSTANTS
+// ======================
+
 const TABLE_HEADERS = [
   { key: 'date', label: 'Date', width: 'w-[170px]', icon: Calendar },
-  { key: 'bank', label: 'Account Type', width: 'w-[200px]', icon: Building2 },
+  { key: 'account', label: 'Account Type', width: 'w-[200px]', icon: Building2 },
   { key: 'debit', label: 'Debit', width: 'w-[200px]', icon: TrendingDown },
   { key: 'credit', label: 'Credit', width: 'w-[200px]', icon: TrendingUp },
   { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
-  { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText },
-  { key: 'statusOfTransaction', label: 'Status', width: 'w-[200px]', icon: BarChart3 }
+  { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText }
 ]
 
-const TABLE_HEADERS_PRINT = [
-  { key: 'date', label: 'Date' },
-  { key: 'bank', label: 'Account Type' },
-  { key: 'debit', label: 'Debit' },
-  { key: 'credit', label: 'Credit' },
-  { key: 'balance', label: 'Balance' }
-]
+// ======================
+// UTIL
+// ======================
 
-// Utility functions
 const toThousands = (value) => {
-  if (!value || isNaN(value)) return '0'
+  if (!value || isNaN(value)) return '₹0'
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR'
   }).format(value)
 }
 
-const getAmount = (type, amount) => {
-  if (!amount) return 0
-  return type === 'Receipt' ? -Number(amount) : Number(amount)
-}
+// ======================
+// ROW COMPONENT
+// ======================
 
-// Memoized Transaction Row Component
-const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
-  const isReceipt = receipt.type === 'Receipt'
-  const isEven = index % 2 === 0
+const TransactionRow = memo(({ entry, balance }) => {
+  const isDebit = entry.entryType === 'debit'
   const balanceColor = balance >= 0 ? 'text-emerald-600' : 'text-red-600'
 
   return (
-    <tr
-      className={`transition-all duration-200 hover:shadow-md transform hover:scale-[1.001]
-        ${isEven ? 'border-l-4' : 'border-l-4'}
-        ${isReceipt ? 'border-l-emerald-400' : 'border-l-red-400'}
-      `}
-      style={{ animationDelay: `${index * 50}ms` }}
-    >
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className={`p-1 rounded-full ${isReceipt ? 'bg-emerald-200' : 'bg-red-200'}`}>
-            <Calendar size={14} className={isReceipt ? 'text-emerald-600' : 'text-red-600'} />
-          </div>
-          <span className="font-medium text-gray-700">
-            {new Date(receipt.date).toLocaleDateString('en-IN', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric'
-            })}
-          </span>
-        </div>
-      </td>
+    <tr className="transition-all duration-200 hover:shadow-md transform hover:scale-[1.001]">
+      <td className="px-6 py-4">{new Date(entry.date).toLocaleDateString('en-IN')}</td>
 
-      <td className="px-6 py-4 no-print">
-        <div className="flex items-center gap-2">
-          <div
-            className={`p-1 rounded-full ${receipt.bank === 'Bank' ? 'bg-blue-200' : 'bg-green-200'}`}
-          >
-            {receipt.bank === 'Bank' ? (
-              <Building2 size={14} className="text-blue-600" />
-            ) : (
-              <Banknote size={14} className="text-green-600" />
-            )}
-          </div>
-          <span className="font-medium text-gray-700 capitalize">{receipt.bank} Account</span>
-        </div>
+      <td className="px-6 py-4">
+        <span className="capitalize">{entry.referenceType}</span>
       </td>
 
       <td className="px-6 py-4">
-        {receipt.type === 'Receipt' ? (
-          <div className="flex items-center gap-2">
-            <div className="p-1 rounded-full bg-red-200">
-              <TrendingDown size={14} className="text-red-600" />
-            </div>
-            <span className="font-semibold text-red-600 px-3 py-1 rounded-full">
-              {toThousands(receipt.amount)}
-            </span>
-          </div>
+        {isDebit ? (
+          <span className="font-semibold text-red-600">{toThousands(entry.amount)}</span>
         ) : (
-          <span className="text-gray-400 italic">-</span>
+          '-'
         )}
       </td>
 
       <td className="px-6 py-4">
-        {receipt.type === 'Payment' || receipt.type === 'Salary' ? (
-          <div className="flex items-center gap-2">
-            <div className="p-1 rounded-full bg-emerald-200">
-              <TrendingUp size={14} className="text-emerald-600" />
-            </div>
-            <span className="font-semibold text-emerald-600 px-3 py-1 rounded-full">
-              {toThousands(receipt.amount)}
-            </span>
-          </div>
+        {!isDebit ? (
+          <span className="font-semibold text-emerald-600">{toThousands(entry.amount)}</span>
         ) : (
-          <span className="text-gray-400 italic">-</span>
+          '-'
         )}
       </td>
 
       <td className="px-6 py-4">
-        <div className="flex items-center gap-2">
-          <span className={`font-semibold text-[16px] ${balanceColor}`}>
-            {toThousands(balance)}
-          </span>
-        </div>
+        <span className={`font-semibold ${balanceColor}`}>{toThousands(balance)}</span>
       </td>
 
-      <td className="px-6 py-4 max-w-[350px] no-print">
+      <td className="px-6 py-4 max-w-[350px]">
         <Whisper
           trigger="hover"
           placement="leftStart"
-          speaker={
-            <Tooltip>
-              <div className="max-w-xs">
-                <p className="text-sm">{receipt.description || 'No description provided'}</p>
-              </div>
-            </Tooltip>
-          }
+          speaker={<Tooltip>{entry.narration || 'No description provided'}</Tooltip>}
         >
-          <div className="flex items-center gap-2 cursor-pointer">
-            <FileText size={14} className="text-gray-400 flex-shrink-0" />
-            <span className="truncate text-gray-600">
-              {receipt.description || 'No description provided'}
-            </span>
-          </div>
+          <span className="truncate cursor-pointer">
+            {entry.narration || 'No description provided'}
+          </span>
         </Whisper>
-      </td>
-
-      <td className="px-6 py-3">
-        <span
-          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm ${
-            receipt.statusOfTransaction === 'pending'
-              ? 'bg-orange-50 text-orange-300 ring-1 ring-orange-200'
-              : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-          }`}
-        >
-          <span
-            className={`h-2 w-2 rounded-full ${
-              receipt.statusOfTransaction === 'pending' ? 'bg-orange-300' : 'bg-emerald-500'
-            }`}
-          ></span>
-          {String(receipt.statusOfTransaction).charAt(0).toUpperCase() +
-            String(receipt.statusOfTransaction).slice(1)}
-        </span>
       </td>
     </tr>
   )
 })
 
-// Custom hook for account operations
-const useAccountOperations = () => {
+// ======================
+// MAIN COMPONENT
+// ======================
+
+const AccountLedger = forwardRef(({ client }, ref) => {
   const dispatch = useDispatch()
+  const [ledgerData, setLedgerData] = useState([])
+  const [showLoader, setShowLoader] = useState(false)
+
+  console.log('ledgerData', ledgerData)
+
+  // ======================
+  // FETCH CLIENTS
+  // ======================
 
   const fetchAllClients = useCallback(async () => {
     try {
       const response = await clientApi.getAllClients()
       dispatch(setClients(response))
     } catch (error) {
-      console.error('Error fetching clients:', error)
       toast.error('Failed to fetch accounts')
     }
   }, [dispatch])
 
-  const fetchRecentBankReceipts = useCallback(async () => {
-    try {
-      const receipts = await window.api.getRecentBankReceipts()
-      return receipts.map((r) => ({
-        ...r,
-        date: r.date || r.createdAt,
-        bank: 'Bank'
-        // clientName resolved later in component to handle dependency on clients
-      }))
-    } catch (error) {
-      console.error('Error fetching bank receipts:', error)
-      toast.error('Failed to fetch bank receipts')
-      return []
-    }
-  }, [])
+  // ======================
+  // FETCH LEDGER
+  // ======================
 
-  const fetchRecentCashReceipts = useCallback(async () => {
-    try {
-      const receipts = await window.api.getRecentCashReceipts()
-      return receipts.map((r) => ({
-        ...r,
-        date: r.date || r.createdAt,
-        bank: 'Cash'
-        // clientName resolved later in component to handle dependency on clients
-      }))
-    } catch (error) {
-      console.error('Error fetching cash receipts:', error)
-      toast.error('Failed to fetch cash receipts')
-      return []
-    }
-  }, [])
+  useEffect(() => {
+    if (!client?.id) return
 
-  return { fetchAllClients, fetchRecentBankReceipts, fetchRecentCashReceipts }
-}
-
-// Main Component
-const AccountLedger = forwardRef(({ client, onClose }, ref) => {
-  const { fetchAllClients, fetchRecentBankReceipts, fetchRecentCashReceipts } =
-    useAccountOperations()
-
-  // State management
-  const [showLoader, setShowLoader] = useState(false)
-  const [rawBankReceipts, setRawBankReceipts] = useState([])
-  const [rawCashReceipts, setRawCashReceipts] = useState([])
-
-  const clients = useSelector((state) => state.electron.clients.data || [])
-
-  const openingBalance = 0 // TODO: Fetch from API or client data
-
-  // Get client name helper
-  const getClientName = useCallback(
-    (id) => {
-      const foundClient = clients.find((c) => c?.id === Number(id))
-      return foundClient ? foundClient.clientName : 'Unknown Client'
-    },
-    [clients]
-  )
-
-  // Process raw receipts to resolve clientName from party (assuming party is client ID)
-  const processedBankReceipts = useMemo(() => {
-    return rawBankReceipts.map((r) => ({
-      ...r,
-      clientName: getClientName(r.clientId)
-    }))
-  }, [rawBankReceipts, getClientName])
-
-  const processedCashReceipts = useMemo(() => {
-    return rawCashReceipts.map((r) => ({
-      ...r,
-      clientName: getClientName(r.clientId)
-    }))
-  }, [rawCashReceipts, getClientName])
-
-  // Memoized combined data (no filter, show all entries)
-  const combinedData = useMemo(() => {
-    return [...processedBankReceipts, ...processedCashReceipts]
-  }, [processedBankReceipts, processedCashReceipts])
-
-  // Memoized filtered data by client only
-  const filteredData = useMemo(() => {
-    if (client?.id) {
-      const targetClientName = getClientName(client.id)
-      return combinedData.filter((r) => r.clientName === targetClientName)
-    }
-
-    return combinedData
-  }, [combinedData, client, getClientName])
-
-  // Memoized sorted transactions (ascending by date)
-  const sortedTransactions = useMemo(() => {
-    return [...filteredData].sort((a, b) => new Date(a.date) - new Date(b.date))
-  }, [filteredData])
-
-  // Memoized running balance calculation starting from opening balance
-  const runningBalances = useMemo(() => {
-    let balance = openingBalance
-    return sortedTransactions.map((receipt) => {
-      const amount = getAmount(receipt.type, receipt.amount)
-      balance += amount
-      return balance
-    })
-  }, [sortedTransactions, openingBalance])
-
-  // Memoized display transactions and balances (reversed for newest first)
-  const displayTransactions = useMemo(() => [...sortedTransactions].reverse(), [sortedTransactions])
-  const displayBalances = useMemo(() => [...runningBalances].reverse(), [runningBalances])
-
-  // Memoized statistics
-  const statistics = useMemo(() => {
-    let totalReceipts = 0
-    let totalPayments = 0
-
-    totalReceipts = filteredData
-      .filter((r) => r.type === 'Receipt')
-      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-
-    totalPayments = filteredData
-      .filter((r) => r.type === 'Payment')
-      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-
-    const change = totalReceipts + totalPayments
-    const closingBalance = openingBalance + change
-    const transactionCount = filteredData.length
-
-    return { totalReceipts, totalPayments, closingBalance, transactionCount }
-  }, [filteredData, openingBalance])
-
-  // Utility function to generate dynamic print HTML
-  const generatePrintHTML = (data, headers, title) => {
-    const getCellValue = (row, headerKey) => {
-      switch (headerKey) {
-        case 'date':
-          return row.date === 'Opening Balance' || row.date === 'No Transactions'
-            ? row.date
-            : new Date(row.date).toLocaleDateString('en-IN')
-        case 'bank':
-          return row.bank || ''
-        case 'debit':
-          return row.debit || ''
-        case 'credit':
-          return row.credit || ''
-        case 'balance':
-          return toThousands(row.balance || 0)
-        default:
-          return ''
+    const loadLedger = async () => {
+      setShowLoader(true)
+      const response = await window.api.getClientLedger(client.id)
+      if (response.success) {
+        setLedgerData(response.data)
       }
-    }
-
-    const tableHeaders = headers.map((h) => `<th class="border px-4 py-2">${h.label}</th>`).join('')
-    const tableRows = data
-      .map((row) => {
-        const cells = headers
-          .map((h) => `<td class="border px-4 py-2 text-left">${getCellValue(row, h.key)}</td>`)
-          .join('')
-        return `<tr>${cells}</tr>`
-      })
-      .join('')
-
-    return `
-      <!DOCTYPE html>
-  <html>
-    <head>
-      <title>${title}</title>
-      <style>
-        body {
-          font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-          margin: 20px;
-          color: #1e293b;
-          background: #fff;
-        }
-  
-        /* ===== HEADER BAR ===== */
-        .header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 25px;
-          padding-bottom: 15px;
-          border-bottom: 2px solid #e5e7eb;
-        }
-  
-        .header-left {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-        }
-  
-        .header-left h1 {
-          font-size: 28px;
-          font-weight: 600;
-          margin: 0;
-          color: #111827;
-        }
-  
-        .generated-label {
-          font-size: 12px;
-          color: #64748b;
-          background: #f1f5f9;
-          border: 1px solid #e5e7eb;
-          padding: 2px 8px;
-          border-radius: 6px;
-          margin-bottom: 6px;
-        }
-  
-        .header-right {
-          font-size: 14px;
-          color: #374151;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 5px;
-        }
-  
-        .record-count {
-          font-weight: bold;
-          background: #f3f4f6;
-          border: 1px solid #e2e8f0;
-          padding: 3px 8px;
-          border-radius: 6px;
-          font-size: 13px;
-          color: #1e40af;
-        }
-  
-        /* ===== TABLE ===== */
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 20px;
-          font-size: 14px;
-        }
-  
-        thead th {
-          background: #e5e7eb;
-          color: #111827;
-          padding: 12px 14px;
-          border: 1px solid #e2e8f0;
-          font-weight: 600;
-          text-transform: capitalize;
-          font-size: 15px;
-          text-align: left;
-        }
-  
-        tbody td {
-          padding: 10px 14px;
-          border: 1px solid #e2e8f0;
-          font-size: 14px;
-          color: #374151;
-        }
-  
-        tbody tr:nth-child(even) {
-          background: #f9fafb;
-        }
-  
-        tbody tr:hover {
-          background: #f1f5f9;
-        }
-  
-        .totals-row {
-          font-weight: bold;
-          background: #f3f4f6;
-        }
-  
-        /* ===== FOOTER ===== */
-        .footer {
-          margin-top: 25px;
-          text-align: center;
-          font-size: 12px;
-          color: #64748b;
-          border-top: 1px solid #e2e8f0;
-          padding-top: 10px;
-        }
-  
-        .footer strong {
-          font-size: 15px;
-          color: #1e40af;
-        }
-  
-        @media print {
-          body {
-            margin: 0.8cm;
-          }
-          .footer {
-            position: fixed;
-            bottom: 10px;
-            width: 100%;
-          }
-        }
-      </style>
-    </head>
-    <body onload="window.print(); setTimeout(() => { window.close(); }, 1000);">
-  
-      <!-- ===== HEADER SECTION ===== -->
-      <div class="header">
-        <div class="header-left">
-          <h1>${title}</h1>
-        </div>
-        <div class="header-right">
-        <div class="record-count">Total Records: ${data.length}</div>
-        <div>Generated on: ${new Date().toLocaleString()}</div>
-        </div>
-      </div>
-  
-      <!-- ===== TABLE ===== -->
-      <table>
-        <thead>
-          <tr>
-            ${tableHeaders}
-          </tr>
-        </thead>
-        <tbody>
-          ${tableRows}
-        </tbody>
-      </table>
-  
-      <!-- ===== FOOTER ===== -->
-      <div class="footer">
-        <p>This is a computer-generated report. No signature is required.</p>
-        <p><strong>Powered by Electron</strong></p>
-      </div>
-    </body>
-  </html>  
-    `
-  }
-
-  // Updated handler for printing PDF using iframe to avoid popup blockers
-  const handlePrintPDF = useCallback(() => {
-    let printHeaders = TABLE_HEADERS_PRINT
-    const sortedTransactionsForPrint = [...filteredData].sort(
-      (a, b) => new Date(a.date) - new Date(b.date)
-    )
-    const runningBalancesForPrint = sortedTransactionsForPrint.map((receipt, index) => {
-      let balance = openingBalance
-      for (let i = 0; i <= index; i++) {
-        const amount = getAmount(
-          sortedTransactionsForPrint[i].type,
-          sortedTransactionsForPrint[i].amount
-        )
-        balance += amount
-      }
-      return balance
-    })
-    let printData
-    if (sortedTransactionsForPrint.length === 0) {
-      printData = [
-        {
-          date: 'No Transactions',
-          bank: 'All Accounts',
-          debit: '-',
-          credit: '-',
-          balance: openingBalance
-        }
-      ]
-    } else {
-      const reversedTransactions = [...sortedTransactionsForPrint].reverse()
-      printData = [
-        ...reversedTransactions.map((row, revIndex) => ({
-          date: row.date,
-          bank: row.bank || 'All Accounts',
-          debit: row.type === 'Payment' ? toThousands(Number(row.amount) || 0) : '-',
-          credit: row.type === 'Receipt' ? toThousands(Number(row.amount) || 0) : '-',
-          balance: runningBalancesForPrint[sortedTransactionsForPrint.length - 1 - revIndex]
-        })),
-        {
-          date: 'Opening Balance',
-          bank: 'All Accounts',
-          debit: '-',
-          credit: '-',
-          balance: openingBalance
-        }
-      ]
-    }
-
-    const title = `Account Ledger Report - ${client?.clientName || 'All Accounts'}`
-
-    const printHTML = generatePrintHTML(printData, printHeaders, title)
-
-    // Create iframe for printing
-    try {
-      const printFrame = document.createElement('iframe')
-      printFrame.style.position = 'absolute'
-      printFrame.style.left = '-9999px'
-      printFrame.style.width = '0'
-      printFrame.style.height = '0'
-      printFrame.style.border = '0'
-      document.body.appendChild(printFrame)
-
-      const printDoc = printFrame.contentDocument || printFrame.contentWindow.document
-      printDoc.open()
-      printDoc.write(printHTML)
-      printDoc.close()
-
-      // Wait a bit for content to load
-      setTimeout(() => {
-        printFrame.contentWindow.focus()
-        printFrame.contentWindow.print()
-
-        // Cleanup after print
-        setTimeout(() => {
-          document.body.removeChild(printFrame)
-        }, 1000)
-      }, 500)
-
-      toast.success('Print dialog opened. Choose "Save as PDF" to generate PDF.')
-    } catch (error) {
-      console.error('Error initiating print:', error)
-      toast.error('Failed to initiate print: ' + error.message)
-    }
-  }, [filteredData, client, openingBalance])
-
-  // Data fetching
-  const loadData = useCallback(async () => {
-    setShowLoader(true)
-    try {
-      await fetchAllClients()
-      const [bankData, cashData] = await Promise.all([
-        fetchRecentBankReceipts(),
-        fetchRecentCashReceipts()
-      ])
-      setRawBankReceipts(bankData)
-      setRawCashReceipts(cashData)
-    } finally {
       setShowLoader(false)
     }
-  }, [fetchAllClients, fetchRecentBankReceipts, fetchRecentCashReceipts])
 
-  // Effects
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+    loadLedger()
+  }, [client])
 
-  const openingBalanceColor = openingBalance >= 0 ? 'text-emerald-600' : 'text-red-600'
+  // ======================
+  // SORTED DATA
+  // ======================
+
+  const sortedTransactions = useMemo(() => {
+    return [...ledgerData].sort((a, b) => new Date(a.date) - new Date(b.date))
+  }, [ledgerData])
+
+  const displayTransactions = useMemo(() => [...sortedTransactions].reverse(), [sortedTransactions])
+
+  const displayBalances = useMemo(
+    () => [...sortedTransactions.map((t) => t.balanceAfter)].reverse(),
+    [sortedTransactions]
+  )
+
+  // ======================
+  // STATISTICS
+  // ======================
+
+  const statistics = useMemo(() => {
+    const totalDebit = ledgerData
+      .filter((e) => e.entryType === 'debit')
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0)
+
+    const totalCredit = ledgerData
+      .filter((e) => e.entryType === 'credit')
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0)
+
+    const closingBalance =
+      ledgerData.length > 0 ? ledgerData[ledgerData.length - 1].balanceAfter : 0
+
+    return {
+      totalDebit,
+      totalCredit,
+      closingBalance,
+      transactionCount: ledgerData.length
+    }
+  }, [ledgerData])
+
+  // ======================
+  // PRINT
+  // ======================
+
+  const handlePrintPDF = useCallback(() => {
+    window.print()
+  }, [])
+
   const closingBalanceColor = statistics.closingBalance >= 0 ? 'text-emerald-600' : 'text-red-600'
 
   return (
     <div className="space-y-6 mx-7 -mt-4">
-      {/* Client Header */}
-      <div className="flex items-center justify-end gap-5">
-        {/* Print Button */}
-        <div className="flex items-center gap-2">
-          <button
-            className="text-black flex items-center cursor-pointer gap-1 border border-gray-300 w-fit p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
-            onClick={handlePrintPDF}
-            title="Print Ledger Report"
-          >
-            <Printer size={16} />
-            <span className="text-sm">Print</span>
-          </button>
-        </div>
+      {/* PRINT BUTTON */}
+      <div className="flex justify-end">
+        <button
+          className="text-black flex items-center gap-1 border border-gray-300 p-1 px-3 rounded-sm hover:bg-black hover:text-white transition-all duration-300 hover:scale-105"
+          onClick={handlePrintPDF}
+        >
+          <Printer size={16} />
+          <span className="text-sm">Print</span>
+        </button>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="border border-gray-200 shadow-lg px-2 py-5 rounded-2xl my-4 flex overflow-x-auto bg-gradient-to-r from-white to-gray-50 no-print">
-        <div className=" border-r w-52 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg">
-              <FileText size={20} className="text-blue-600" />
-            </div>
-            <div>
-              <p className="text-gray-600 text-sm">Transactions</p>
-              <p className="text-xl font-bold text-gray-800">{statistics.transactionCount}</p>
-            </div>
-          </div>
+      {/* STATISTICS */}
+      <div className="border border-gray-200 shadow-lg px-2 py-5 rounded-2xl my-4 flex overflow-x-auto bg-gradient-to-r from-white to-gray-50">
+        <div className="border-r w-52 flex-shrink-0">
+          <p className="text-gray-600 text-sm">Transactions</p>
+          <p className="text-xl font-bold">{statistics.transactionCount}</p>
         </div>
+
         <div className="mx-4 border-r w-52 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg">
-              <TrendingUp size={20} className="text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-gray-600 text-sm">Total Credits</p>
-              <p className="text-xl font-light">{toThousands(statistics.totalPayments)}</p>
-            </div>
-          </div>
+          <p className="text-gray-600 text-sm">Total Debits</p>
+          <p className="text-xl font-light">{toThousands(statistics.totalDebit)}</p>
         </div>
-        <div className=" border-r w-52 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg">
-              <TrendingDown size={20} className="text-red-600" />
-            </div>
-            <div>
-              <p className="text-gray-600 text-sm">Total Debits</p>
-              <p className="text-xl font-light">{toThousands(statistics.totalReceipts)}</p>
-            </div>
-          </div>
+
+        <div className="border-r w-52 flex-shrink-0">
+          <p className="text-gray-600 text-sm">Total Credits</p>
+          <p className="text-xl font-light">{toThousands(statistics.totalCredit)}</p>
         </div>
+
         <div className="mx-4 w-52 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div
-              className={`p-2 rounded-lg ${statistics.closingBalance >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}
-            >
-              <DollarSign size={20} className={closingBalanceColor} />
-            </div>
-            <div>
-              <p className="text-gray-600 text-sm">Closing Balance</p>
-              <p className={`text-xl font-light ${closingBalanceColor}`}>
-                {toThousands(statistics.closingBalance)}
-              </p>
-            </div>
-          </div>
+          <p className="text-gray-600 text-sm">Closing Balance</p>
+          <p className={`text-xl font-light ${closingBalanceColor}`}>
+            {toThousands(statistics.closingBalance)}
+          </p>
         </div>
       </div>
 
-      {/* Transaction Table */}
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200 print-area">
+      {/* TABLE */}
+      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
         <div className="overflow-x-auto customScrollbar max-h-[600px] relative">
           <table className="min-w-max border-collapse text-sm w-full">
             <thead className="bg-gradient-to-r from-gray-100 to-gray-200 sticky top-0 z-10">
-              <tr className="text-gray-700">
+              <tr>
                 {TABLE_HEADERS.map((header) => {
                   const Icon = header.icon
                   return (
@@ -721,88 +250,23 @@ const AccountLedger = forwardRef(({ client, onClose }, ref) => {
                 })}
               </tr>
             </thead>
+
             <tbody className="divide-y divide-gray-100">
-              {sortedTransactions.length === 0 ? (
+              {displayTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={TABLE_HEADERS.length} className="text-center py-12">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                        <FileText size={32} className="text-gray-400" />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xl font-medium text-gray-500">No transactions found</p>
-                        <p className="text-gray-400 mt-1">
-                          No transactions available for this account
-                        </p>
-                        <p className="text-sm text-gray-500 mt-2">
-                          Current Balance: {toThousands(openingBalance)}
-                        </p>
-                      </div>
-                    </div>
+                    No transactions found
                   </td>
                 </tr>
               ) : (
-                displayTransactions.map((receipt, index) => (
-                  <TransactionRow
-                    key={`${receipt.id || receipt.transactionId}-${receipt.date}-${index}`}
-                    receipt={receipt}
-                    index={index}
-                    balance={displayBalances[index]}
-                    clientName={receipt.clientName}
-                  />
+                displayTransactions.map((entry, index) => (
+                  <TransactionRow key={entry.id} entry={entry} balance={displayBalances[index]} />
                 ))
               )}
             </tbody>
           </table>
         </div>
       </div>
-
-      {showLoader && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 shadow-2xl">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading transactions...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Custom CSS for animations */}
-      <style jsx>{`
-        @keyframes slideInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-slideInUp {
-          animation: slideInUp 0.3s ease-out forwards;
-        }
-
-        tbody tr {
-          animation: slideInUp 0.3s ease-out forwards;
-          opacity: 0;
-        }
-
-        tbody tr:nth-child(1) {
-          animation-delay: 0ms;
-        }
-        tbody tr:nth-child(2) {
-          animation-delay: 50ms;
-        }
-        tbody tr:nth-child(3) {
-          animation-delay: 100ms;
-        }
-        tbody tr:nth-child(4) {
-          animation-delay: 150ms;
-        }
-        tbody tr:nth-child(5) {
-          animation-delay: 200ms;
-        }
-      `}</style>
     </div>
   )
 })

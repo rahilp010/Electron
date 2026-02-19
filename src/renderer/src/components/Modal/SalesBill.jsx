@@ -100,15 +100,15 @@ const SalesRow = ({ index, row, products, settings, onChange, onRemove, toThousa
         <InputNumber
           min={1}
           value={row.productQuantity}
-          onChange={(val) => onChange(index, 'quantity', val)}
+          onChange={(val) => onChange(index, 'productQuantity', val)}
           className="w-20 [&_.rs-input-number-btn-group]:hidden [&_.rs-input]:h-10 [&_.rs-input]:rounded-lg [&_.rs-input]:bg-white/50 hover:[&_.rs-input]:bg-white/70 [&_.rs-input]:border-gray-300/50"
         />
       </td>
       <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
         <InputNumber
           prefix="₹"
-          value={price}
-          onChange={(val) => onChange(index, 'price', val)}
+          value={unitPrice}
+          onChange={(val) => onChange(index, 'productPrice', val)}
           className="w-24 [&_.rs-input-number-btn-group]:hidden [&_.rs-input]:h-10 [&_.rs-input]:rounded-lg [&_.rs-input]:bg-white/50 hover:[&_.rs-input]:bg-white/70 [&_.rs-input]:border-gray-300/50"
         />
       </td>
@@ -269,7 +269,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         row.productQuantity = Number(value) || 0
       }
       if (field === 'productPrice') {
-        row.price = Number(value) || 0
+        row.productPrice = Number(value) || 0
       }
       if (field === 'description') {
         row.description = value

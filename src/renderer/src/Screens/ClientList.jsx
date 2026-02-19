@@ -133,6 +133,7 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
     try {
       const purchaseData = await window.api.getAllPurchases()
       const saleData = await window.api.getAllSales()
+      const fetchData = await window.api.getLedgerByAccount()
 
       const transactions = [...purchaseData.data, ...saleData.data]
 

@@ -78,11 +78,14 @@ contextBridge.exposeInMainWorld('api', {
   deleteLedgerTransaction: (id) => ipcRenderer.invoke('deleteLedgerTransaction', id),
   transferAmount: (data) => ipcRenderer.invoke('transferAmount', data),
 
-  getLedgerByAccount: () => ipcRenderer.invoke('getLedgerByAccount'),
   addLedgerEntry: () => ipcRenderer.invoke('addLedgerEntry'),
   getTransferHistory: () => ipcRenderer.invoke('getTransferHistory'),
-  getClientLedger: () => ipcRenderer.invoke('getClientLedger'),
-  deleteLedgerEntry: () => ipcRenderer.invoke('deleteLedgerEntry'),
+  getClientLedger: (id) => ipcRenderer.invoke('getClientLedger', id),
+  deleteLedgerEntry: (id) => ipcRenderer.invoke('deleteLedgerEntry', id),
+  getAccountLedger: (id) => ipcRenderer.invoke('getAccountLedger', id),
+  getAccountLedgerByType: (data) => ipcRenderer.invoke('getAccountLedgerByType', data),
+  getAccountLedgerByDate: (data) => ipcRenderer.invoke('getAccountLedgerByDate', data),
+  getTrialBalance: () => ipcRenderer.invoke('getTrialBalance'),
   deleteMultipleLedgerEntries: () => ipcRenderer.invoke('deleteMultipleLedgerEntries'),
 
   // Account methods

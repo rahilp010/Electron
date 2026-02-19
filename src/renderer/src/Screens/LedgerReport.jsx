@@ -146,17 +146,22 @@ const useAccountOperations = () => {
     }
   }, [dispatch])
 
-  const fetchClientLedger = useCallback(async () => {
+  const fetchClientLedger = useCallback(async (clientId) => {
     try {
-      const response = await window.api.getClientLedger()
-      console.log('response', response)
+      if (!clientId) return []
 
-      // dispatch(setTransactions(response))
+      const response = await window.api.getClientLedger(clientId)
+
+      if (response.success) {
+        return response.data
+      }
+
+      return []
     } catch (error) {
-      console.error('Error fetching ClientLedger:', error)
       toast.error('Failed to fetch ClientLedger')
+      return []
     }
-  }, [dispatch])
+  }, [])
 
   return { fetchAllClients, fetchAllTransactions, fetchClientLedger }
 }
@@ -177,6 +182,7 @@ const LedgerReport = () => {
   const [sidebarSearch, setSidebarSearch] = useState('')
   const [visibleCount, setVisibleCount] = useState(30)
   const tableContainerRef = useRef(null)
+  const [ledgerData, setLedgerData] = useState([])
 
   const clients = useSelector((state) => state.electron.clients?.data || [])
   const transactions = useSelector((state) => state.electron.transaction?.data || [])
@@ -332,10 +338,16 @@ const LedgerReport = () => {
     }
   }, [filteredData])
 
-  const handleClientSelect = useCallback((client) => {
-    setOpenLedgerClient(client)
-    setSidebarSearch('')
-  }, [])
+  const handleClientSelect = useCallback(
+    async (client) => {
+      setOpenLedgerClient(client)
+      setSidebarSearch('')
+
+      const ledger = await fetchClientLedger(client.id)
+      setLedgerData(ledger)
+    },
+    [fetchClientLedger]
+  )
 
   // Data fetching
   const loadData = useCallback(async () => {
@@ -343,7 +355,6 @@ const LedgerReport = () => {
     try {
       await fetchAllClients()
       await fetchAllTransactions()
-      await fetchClientLedger()
     } finally {
       setShowLoader(false)
     }
@@ -642,8 +653,8 @@ const LedgerReport = () => {
         {openLedgerClient && (
           <AccountLedger
             client={openLedgerClient}
+            ledger={ledgerData}
             onClose={() => setOpenLedgerClient(null)}
-            transactions={transactions}
             toThousands={toThousands}
           />
         )}

@@ -405,7 +405,7 @@ const Products = () => {
 
   // Effects
   useEffect(() => {
-    const timer = setTimeout(() => setShowLoader(false), 500)
+    const timer = setTimeout(() => setShowLoader(false), 100)
     return () => clearTimeout(timer)
   }, [])
 
