@@ -14,7 +14,9 @@ import {
   ClockArrowDown,
   Printer,
   Banknote,
-  Landmark
+  Landmark,
+  TrendingDown,
+  TrendingUp
 } from 'lucide-react'
 import Navbar from '../../components/UI/Navbar'
 
@@ -39,38 +41,61 @@ const toThousands = (value) => {
 const TransactionRow = memo(({ entry }) => {
   const isDebit = entry.entryType === 'debit'
   const isCredit = entry.entryType === 'credit'
+  const borderColor = isDebit
+    ? 'border-l-red-400'
+    : isCredit
+      ? 'border-l-green-400'
+      : 'border-l-gray-300'
 
   return (
-    <tr className="transition-all duration-200 hover:shadow-md transform hover:scale-[1.001] border-l-4 border-l-red-400">
-      <td className="px-6 py-4">{entry.date ? new Date(entry.date).toLocaleDateString() : ''}</td>
+    <tr
+      className={`transition-all duration-200 text-center hover:shadow-md transform hover:scale-[1.001] border-l-4 ${borderColor}`}
+    >
+      <td className="px-6 py-4">
+        {new Date(entry.date).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        })}
+      </td>
 
       <td className="px-6 py-4">
         {isDebit ? (
-          <span className="font-semibold text-red-600">{toThousands(entry.amount)}</span>
+          <span className="font-semibold text-red-600 flex gap-2 items-center">
+            {toThousands(entry.amount)}
+            <TrendingDown size={14} />
+          </span>
         ) : (
-          <span className="text-gray-400 text-xs">—</span>
+          <span className="text-gray-400 text-xs">-</span>
         )}
       </td>
 
       <td className="px-6 py-4">
         {isCredit ? (
-          <span className="font-semibold text-green-600">{toThousands(entry.amount)}</span>
+          <span className="font-semibold text-green-600 flex gap-2 items-center">
+            {toThousands(entry.amount)}
+            <TrendingUp size={14} />
+          </span>
         ) : (
-          <span className="text-gray-400 text-xs">—</span>
+          <span className="text-gray-400 text-xs">-</span>
         )}
       </td>
 
-      <td className="px-6 py-4 font-semibold text-blue-600">
-        {toThousands(entry.balanceAfter || 0)}
+      <td className="px-6 py-4">
+        <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
+          {toThousands(isDebit ? entry.balanceAfter || 0 : entry.balanceAfter || 0)}
+        </div>
       </td>
 
-      <td className="px-6 py-4 max-w-[350px]">
+      <td className="px-6 py-4 max-w-[350px] text-left">
         <Whisper
           trigger="hover"
           placement="leftStart"
           speaker={<Tooltip>{entry.narration || 'No description'}</Tooltip>}
         >
-          <span className="truncate cursor-pointer">{entry.narration || 'No description'}</span>
+          <span className="block max-w-[350px] truncate whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer">
+            {entry.narration || 'No description'}
+          </span>
         </Whisper>
       </td>
     </tr>
@@ -234,7 +259,7 @@ const BankLedger = () => {
                   {TABLE_HEADERS.map((header) => (
                     <th
                       key={header.key}
-                      className={`px-6 py-4 border-r border-gray-200 ${header.width} font-semibold text-left`}
+                      className={`px-6 py-4 border-r border-gray-200 ${header.width} font-semibold text-center`}
                     >
                       {header.label}
                     </th>

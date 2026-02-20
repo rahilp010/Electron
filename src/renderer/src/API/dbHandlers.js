@@ -950,6 +950,8 @@ ipcMain.handle('createPurchase', (event, data) => {
 
       updateClientBalances(clientId, data, 'apply')
 
+      const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(productId)
+
       /* ================= CLIENT ACCOUNT LEDGER ================= */
       const client = db
         .prepare(
@@ -997,7 +999,7 @@ ipcMain.handle('createPurchase', (event, data) => {
         totalAmount,
         newClientBalance,
         purchaseId,
-        `Purchase Bill ${billNo || ''}`
+        `Make Payment of ${paid} to ${client.clientName} for ${qty} × ${product.productName} (Bill ${billNo || '-'})`
       )
 
       db.prepare(
@@ -1065,7 +1067,7 @@ ipcMain.handle('createPurchase', (event, data) => {
           paid,
           newSystemBalance,
           purchaseId,
-          `Purchase Payment ${billNo || ''}`
+          `Make Payment of ${paid} to ${client.clientName} for ${qty} × ${product.productName} (Bill ${billNo || '-'})`
         )
 
         db.prepare(
@@ -1504,10 +1506,11 @@ ipcMain.handle('createSales', (event, data) => {
         methodType = 'Receipt'
       } = data
 
-      console.log('data', clientId, productId, quantity, saleAmount)
       if (!clientId || !productId || !quantity || !saleAmount) {
         throw new Error('Missing required fields')
       }
+
+      const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(productId)
 
       const qty = Number(quantity)
       const totalAmount = Number(totalAmountWithTax)
@@ -1653,7 +1656,7 @@ ipcMain.handle('createSales', (event, data) => {
         totalAmount,
         newClientBalance,
         saleId,
-        `Sale Bill ${billNo || ''}`
+        `Payment received from ${client.clientName} for ${qty} × ${product.productName} (Bill ${billNo || '-'})`
       )
 
       db.prepare(
@@ -1716,7 +1719,13 @@ ipcMain.handle('createSales', (event, data) => {
           )
           VALUES (?, null, 'credit', ?, ?, 'Payment', ?, ?)
         `
-        ).run(systemAccount.id, paid, newSystemBalance, saleId, `Sale Payment ${billNo || ''}`)
+        ).run(
+          systemAccount.id,
+          paid,
+          newSystemBalance,
+          saleId,
+          `Payment received from ${client.clientName} for ${qty} × ${product.productName} (Bill ${billNo || '-'})`
+        )
 
         db.prepare(
           `
@@ -3268,6 +3277,46 @@ ipcMain.handle('getAuthorization', async () => {
   } catch (err) {
     console.error('Authorization error:', err)
     return { success: false, message: err.message }
+  }
+})
+
+ipcMain.handle('getSystemInfo', () => {
+  const totalProducts = db.prepare('SELECT COUNT(*) as count FROM products').get().count
+  const totalClients = db.prepare('SELECT COUNT(*) as count FROM clients').get().count
+  const totalAccounts = db.prepare('SELECT COUNT(*) as count FROM accounts').get().count
+  const totalTransactions = db.prepare('SELECT COUNT(*) as count FROM ledger').get().count
+
+  const lastBackup =
+    db
+      .prepare(
+        `
+    SELECT createdAt 
+    FROM backups 
+    ORDER BY createdAt DESC 
+    LIMIT 1
+  `
+      )
+      .get()?.createdAt || null
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  const backupTakenToday = !!db
+    .prepare(
+      `
+    SELECT 1 FROM backups 
+    WHERE date(createdAt) = ?
+  `
+    )
+    .get(today)
+
+  return {
+    lastBackup,
+    backupTakenToday,
+    version: app.getVersion(),
+    totalProducts,
+    totalClients,
+    totalAccounts,
+    totalTransactions
   }
 })
 

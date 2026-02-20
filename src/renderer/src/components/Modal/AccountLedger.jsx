@@ -53,11 +53,24 @@ const toThousands = (value) => {
 
 const TransactionRow = memo(({ entry, balance }) => {
   const isDebit = entry.entryType === 'debit'
-  const balanceColor = balance >= 0 ? 'text-emerald-600' : 'text-red-600'
+  const isCredit = entry.entryType === 'credit'
+  const borderColor = isDebit
+    ? 'border-l-red-400'
+    : isCredit
+      ? 'border-l-green-400'
+      : 'border-l-gray-300'
 
   return (
-    <tr className="transition-all duration-200 hover:shadow-md transform hover:scale-[1.001]">
-      <td className="px-6 py-4">{new Date(entry.date).toLocaleDateString('en-IN')}</td>
+    <tr
+      className={`transition-all duration-200 hover:shadow-md transform hover:scale-[1.001] border-l-4 ${borderColor} `}
+    >
+      <td className="px-6 py-4">
+        {new Date(entry.date).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        })}
+      </td>
 
       <td className="px-6 py-4">
         <span className="capitalize">{entry.referenceType}</span>
@@ -65,7 +78,9 @@ const TransactionRow = memo(({ entry, balance }) => {
 
       <td className="px-6 py-4">
         {isDebit ? (
-          <span className="font-semibold text-red-600">{toThousands(entry.amount)}</span>
+          <span className="font-semibold text-red-600 flex gap-2 items-center">
+            {toThousands(entry.amount)} <TrendingDown size={14} />
+          </span>
         ) : (
           '-'
         )}
@@ -73,24 +88,29 @@ const TransactionRow = memo(({ entry, balance }) => {
 
       <td className="px-6 py-4">
         {!isDebit ? (
-          <span className="font-semibold text-emerald-600">{toThousands(entry.amount)}</span>
+          <span className="font-semibold text-green-600 flex gap-2 items-center">
+            {toThousands(entry.amount)}
+            <TrendingUp size={14} />
+          </span>
         ) : (
           '-'
         )}
       </td>
 
       <td className="px-6 py-4">
-        <span className={`font-semibold ${balanceColor}`}>{toThousands(balance)}</span>
+        <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
+          <span className={`font-semibold`}>{toThousands(balance)}</span>
+        </div>
       </td>
 
-      <td className="px-6 py-4 max-w-[350px]">
+      <td className="px-6 py-4 max-w-[350px] text-left">
         <Whisper
           trigger="hover"
           placement="leftStart"
-          speaker={<Tooltip>{entry.narration || 'No description provided'}</Tooltip>}
+          speaker={<Tooltip>{entry.narration || 'No description'}</Tooltip>}
         >
-          <span className="truncate cursor-pointer">
-            {entry.narration || 'No description provided'}
+          <span className="block max-w-[350px] truncate whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer">
+            {entry.narration || 'No description'}
           </span>
         </Whisper>
       </td>
@@ -204,7 +224,7 @@ const AccountLedger = forwardRef(({ client }, ref) => {
       </div>
 
       {/* STATISTICS */}
-      <div className="border border-gray-200 shadow-lg px-2 py-5 rounded-2xl my-4 flex overflow-x-auto bg-gradient-to-r from-white to-gray-50">
+      <div className="border border-gray-200 shadow-lg px-6 py-5 rounded-2xl my-4 flex overflow-x-auto bg-gradient-to-r from-white to-gray-50">
         <div className="border-r w-52 flex-shrink-0">
           <p className="text-gray-600 text-sm">Transactions</p>
           <p className="text-xl font-bold">{statistics.transactionCount}</p>
@@ -229,7 +249,7 @@ const AccountLedger = forwardRef(({ client }, ref) => {
       </div>
 
       {/* TABLE */}
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
+      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200 mb-10">
         <div className="overflow-x-auto customScrollbar max-h-[600px] relative">
           <table className="min-w-max border-collapse text-sm w-full">
             <thead className="bg-gradient-to-r from-gray-100 to-gray-200 sticky top-0 z-10">

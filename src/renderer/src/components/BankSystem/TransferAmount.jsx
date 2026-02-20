@@ -261,18 +261,15 @@ const TransferAmount = () => {
 
   return (
     <div className="h-screen w-full bg-gray-50/50 flex flex-col font-poppins select-none">
-      <div className="w-full sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-100">
+      <div className="w-full sticky top-0 z-20 bg-white/80 backdrop-blur-md">
         <Navbar />
       </div>
 
       <div className="flex-1 overflow-y-auto customScrollbar p-4 md:p-8">
         <div className="max-w-5xl mx-auto">
           {/* Header & Toggle */}
-          <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">Transfer Amount</h1>
-              <p className="text-sm text-gray-500">Move money between your internal accounts</p>
-            </div>
+          <div className="flex flex-col md:flex-row justify-between items-center mb-8">
+            <p className="text-3xl font-light">Transfer Amount</p>
 
             <div className="flex bg-gray-200/50 p-1 rounded-xl">
               <button
@@ -299,7 +296,7 @@ const TransferAmount = () => {
           </div>
 
           {activeView === 'transfer' ? (
-            <div className="bg-white rounded-3xl shadow-2xl shadow-slate-200 p-6 md:p-10 relative">
+            <div className="bg-white rounded-3xl shadow-2xl shadow-slate-200 p-6 md:p-10 relative border border-gray-500">
               {/* --- Transfer Layout --- */}
               <div className="flex flex-col md:grid md:grid-cols-[1fr_auto_1fr] gap-6 items-center">
                 {/* From Section */}

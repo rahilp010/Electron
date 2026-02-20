@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   deleteClient: (id) => ipcRenderer.invoke('deleteClient', id),
   getClientById: (id) => ipcRenderer.invoke('getClientById', id),
 
+  getSystemInfo: () => ipcRenderer.invoke('getClientById'),
+
   // Transaction methods
   getAllTransactions: () => ipcRenderer.invoke('getAllTransactions'),
   createTransaction: (transaction) => ipcRenderer.invoke('createTransaction', transaction),
