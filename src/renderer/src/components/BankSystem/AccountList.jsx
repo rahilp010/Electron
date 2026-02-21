@@ -50,6 +50,10 @@ const AccountList = () => {
       return dateB - dateA
     })
     if (sortConfig.key) {
+
+    if (accounterTypeFilter && accounterTypeFilter !== 'All') {
+      data = data.filter((acc) => acc.accounterType?.trim() === accounterTypeFilter)
+    }
       data.sort((a, b) => {
         const x = a[sortConfig.key]
         const y = b[sortConfig.key]
