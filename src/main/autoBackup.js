@@ -2,6 +2,7 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import { BrowserWindow } from 'electron'
 
 // --- Encryption setup ---
 const ENCRYPTION_KEY = crypto
@@ -18,7 +19,8 @@ export function encryptFile(inputPath, outputPath) {
   fs.writeFileSync(outputPath, Buffer.concat([iv, tag, encrypted]))
 }
 
-export function autoBackupOncePerDay() {
+export function autoBackupOncePerDay(mainWindow) {
+  console.log('🚀 autoBackupOncePerDay CALLED')
   try {
     // const userDir = app.getPath('userData') // ✅ safe writable dir
     const dbPath = path.join(process.cwd(), 'data.db')
@@ -30,17 +32,51 @@ export function autoBackupOncePerDay() {
 
     if (fs.existsSync(backupFile)) {
       console.log(`🟡 Backup for ${today} already exists. Skipping.`)
+
+      notifyRendererBackupStatus(mainWindow, {
+        takenToday: true,
+        alreadyExists: true,
+        date: fs.statSync(backupFile).mtime.toISOString() // ✅ REAL backup time
+      })
+
       return
     }
 
     if (!fs.existsSync(dbPath)) {
       console.log(`⚠️ Database not found at ${dbPath}. Skipping backup.`)
+      notifyRendererBackupStatus(mainWindow, {
+        takenToday: false,
+        alreadyExists: false,
+        date: new Date().toISOString()
+      })
       return
     }
 
     encryptFile(dbPath, backupFile)
+
+    notifyRendererBackupStatus(mainWindow, {
+      takenToday: true,
+      alreadyExists: false,
+      date: new Date().toISOString()
+    })
     console.log(`✅ Auto backup created for ${today}: ${backupFile}`)
   } catch (err) {
     console.error('❌ Auto backup failed:', err)
+    notifyRendererBackupStatus(mainWindow, {
+      takenToday: false,
+      alreadyExists: false,
+      date: new Date().toISOString()
+    })
   }
+}
+
+function notifyRendererBackupStatus(mainWindow, payload) {
+  if (!mainWindow) {
+    console.log('❌ No mainWindow available')
+    return
+  }
+
+  console.log('📡 Sending backup-status → Renderer', payload)
+
+  mainWindow.webContents.send('backup-status', payload)
 }

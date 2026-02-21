@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('api', {
+  // Product methods
   getAllProducts: () => ipcRenderer.invoke('getAllProducts'),
   createProduct: (product) => ipcRenderer.invoke('createProduct', product),
   updateProduct: (product) => ipcRenderer.invoke('updateProduct', product),
@@ -16,7 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   deleteClient: (id) => ipcRenderer.invoke('deleteClient', id),
   getClientById: (id) => ipcRenderer.invoke('getClientById', id),
 
-  getSystemInfo: () => ipcRenderer.invoke('getClientById'),
+  getSystemInfo: () => ipcRenderer.invoke('getSystemInfo'),
 
   // Transaction methods
   getAllTransactions: () => ipcRenderer.invoke('getAllTransactions'),
@@ -114,7 +115,13 @@ contextBridge.exposeInMainWorld('api', {
   manualBackup: () => ipcRenderer.invoke('manualBackup'),
 
   // Authorization
-  getAuthorization: () => ipcRenderer.invoke('getAuthorization')
+  getAuthorization: () => ipcRenderer.invoke('getAuthorization'),
+
+  onBackupStatus: (callback) => {
+    ipcRenderer.on('backup-status', (_, data) => callback(data))
+
+    return () => ipcRenderer.removeAllListeners('backup-status')
+  }
 
   // // WhatsApp methods
   // saveAndSendWhatsAppPDF: (phone, arrayBuffer, fileName, caption) =>
@@ -137,7 +144,7 @@ contextBridge.exposeInMainWorld('api', {
   // removeWhatsAppListeners: () => {
   //   ipcRenderer.removeAllListeners('whatsapp-qr')
   //   ipcRenderer.removeAllListeners('whatsapp-status')
-  // }
+  // },
 })
 
 // Version information

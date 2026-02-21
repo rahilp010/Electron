@@ -28,8 +28,56 @@ import BankManagment from './Screens/BankManagment.jsx'
 import AccountList from './components/BankSystem/AccountList.jsx'
 import Bankledger from './components/BankSystem/BankLedger.jsx'
 import TransferAmount from './components/BankSystem/TransferAmount.jsx'
+import { useEffect } from 'react'
 
 function App() {
+  useEffect(() => {
+    if (!window.api?.onBackupStatus) return
+
+    const unsubscribe = window.api.onBackupStatus((data) => {
+      console.log('📦 Backup Event:', data)
+
+      if (!data?.takenToday) return
+
+      const existingBackupTime = localStorage.getItem('lastBackupDateTime')
+
+      // ✅ If backup already existed → DO NOTHING
+      if (data.alreadyExists && existingBackupTime) {
+        console.log('🟡 Backup already taken → keeping old time')
+        return
+      }
+
+      // ✅ Store ONLY if new backup
+      const backupTime = new Date(data.date)
+
+      const formattedBackupTime = backupTime.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+
+      const nextBackup = new Date(backupTime)
+      nextBackup.setDate(nextBackup.getDate() + 1)
+
+      const formattedNextBackup = nextBackup.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+
+      localStorage.setItem('lastBackupDateTime', formattedBackupTime)
+      localStorage.setItem('nextBackupDateTime', formattedNextBackup)
+
+      console.log('✅ Stored NEW backup time')
+    })
+
+    return unsubscribe
+  }, [])
   return (
     <>
       <Provider store={store}>

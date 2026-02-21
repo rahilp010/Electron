@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { setAccount, deleteAccount } from '../../app/features/electronSlice'
-import { InputGroup, Input } from 'rsuite'
+import { InputGroup, Input, SelectPicker } from 'rsuite'
 import { Plus, PenLine, Trash, ChevronUp, ChevronDown, FileUp, SearchIcon } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { toast } from 'react-toastify'
@@ -18,37 +18,25 @@ const AccountList = () => {
   const [isUpdateAccount, setIsUpdateAccount] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' })
-  const [recentReceipts, setRecentReceipts] = useState([])
+  const [accounterTypeFilter, setAccounterTypeFilter] = useState('All')
 
   const fetchAccounts = useCallback(async () => {
     const res = await window.api.getAllAccounts()
     dispatch(setAccount(res))
   }, [])
 
-  const fetchRecentReceipts = useCallback(async () => {
-    try {
-      const bankReceipts = await window.api.getRecentBankReceipts()
-      const cashReceipts = await window.api.getRecentCashReceipts()
-
-      const receipts = [...(bankReceipts || []), ...(cashReceipts || [])]
-
-      const sorted = receipts.sort((a, b) => b.id - a.id) // latest first
-      setRecentReceipts(sorted)
-    } catch (err) {
-      console.error('Error fetching recent receipts:', err)
-      toast.error('Failed to fetch recent receipts')
-    }
-  }, [])
-
   useEffect(() => {
     fetchAccounts()
-    fetchRecentReceipts()
-  }, [fetchAccounts, fetchRecentReceipts])
+  }, [fetchAccounts])
 
   const filteredAccounts = useMemo(() => {
     let data = [...accounts]
     if (searchQuery) {
       data = data.filter((acc) => acc.accountName.toLowerCase().includes(searchQuery.toLowerCase()))
+    }
+
+    if (accounterTypeFilter && accounterTypeFilter !== 'All') {
+      data = data.filter((acc) => acc.accounterType?.trim() === accounterTypeFilter)
     }
 
     data = data.map((acc) => ({
@@ -71,7 +59,7 @@ const AccountList = () => {
       })
     }
     return data
-  }, [accounts, searchQuery, sortConfig, recentReceipts])
+  }, [accounts, searchQuery, sortConfig, accounterTypeFilter])
   const requestSort = (key) => {
     setSortConfig((prev) => ({
       key,
@@ -103,8 +91,6 @@ const AccountList = () => {
     return new Intl.NumberFormat('en-IN').format(Number(value))
   }
 
-  console.log('🧾 recentReceipts:', recentReceipts)
-
   return (
     <div className="max-h-screen w-full select-none bg-gray-50 customScrollbar overflow-auto">
       <Navbar />
@@ -131,9 +117,10 @@ const AccountList = () => {
         </div>
       </div>
       {/* Search Section */}
-      <div className="w-72 my-4 mx-5">
+      <div className="w-96 my-4 mx-5 flex gap-2">
         <InputGroup size="md">
           <Input
+            type="text"
             placeholder="Search clients..."
             value={searchQuery}
             onChange={setSearchQuery}
@@ -143,6 +130,25 @@ const AccountList = () => {
             <SearchIcon />
           </InputGroup.Button>
         </InputGroup>
+
+        <SelectPicker
+          data={[
+            { label: 'All Types', value: 'All' },
+            {
+              label: 'Main Account',
+              value: 'Main'
+            },
+            { label: 'Client Account', value: 'Client' },
+            { label: 'GPay Account', value: 'GPay' }
+          ]}
+          className="rounded-xl outline-none"
+          value={accounterTypeFilter}
+          onChange={(value) => setAccounterTypeFilter(value)}
+          placeholder="Select Assets Type"
+          style={{ width: 300 }}
+          menuMaxHeight={200}
+          searchable={false}
+        />
       </div>
 
       {/* Table Section */}

@@ -14,14 +14,11 @@ const db = new Database(dbPath)
 // Enable foreign key constraints
 db.pragma('foreign_keys = ON')
 
-// const columns = [
-//   'multipleProducts TEXT',
-//   'isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1))'
-// ]
+const columns = [`accounterType TEXT CHECK (accounterType IN ('Main', 'GPay', 'Client'))`]
 
-// columns.forEach((col) => {
-//   db.prepare(`ALTER TABLE transactions ADD COLUMN ${col}`).run()
-// })
+columns.forEach((col) => {
+  db.prepare(`ALTER TABLE accounts ADD COLUMN ${col}`).run()
+})
 
 // db.prepare('DROP TABLE products;').run()
 // db.prepare('DROP TABLE clients;').run()
@@ -63,6 +60,7 @@ db.prepare(
     accountName TEXT NOT NULL,
     accountType TEXT NOT NULL 
       CHECK (accountType IN ('Creditor', 'Debtor', 'Bank', 'Cash', 'Employee')),
+    accounterType TEXT CHECK (accounterType IN ('Main', 'GPay', 'Client')),
     openingBalance REAL DEFAULT 0,
     closingBalance REAL DEFAULT 0,
     accountNumber TEXT,

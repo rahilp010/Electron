@@ -33,6 +33,10 @@ const Dashboard = () => {
     fetchKeyBindings()
   }, [])
 
+  const lastBackup = localStorage.getItem('lastBackupDate')
+  const nextBackup = localStorage.getItem('nextBackupDate')
+  const backupTakenToday = localStorage.getItem('backupTakenToday')
+
   const [systemInfo, setSystemInfo] = useState({
     lastBackup: null,
     nextBackup: null,
@@ -346,11 +350,14 @@ const Dashboard = () => {
             </div> */}
 
             <div className="col-span-12 bg-gradient-to-br from-gray-900 to-gray-800 rounded-4xl border border-white/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.4),0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] transition-all duration-300 hover:-translate-y-1 p-6 flex flex-col justify-center gap-4 relative overflow-hidden group w-full hover:cursor-pointer">
+              {/* Hover glow */}
               <div className="absolute inset-0 bg-gradient-to-br from-gray-700/30 via-transparent to-gray-400/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
+              {/* Corner accent */}
               <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full"></div>
 
-              <h3 className="font-semibold text-white text-xl">
+              {/* Header */}
+              <h3 className="font-semibold text-white text-xl tracking-wide">
                 {new Date().toLocaleDateString('en-IN', {
                   weekday: 'long',
                   day: '2-digit',
@@ -359,57 +366,72 @@ const Dashboard = () => {
                 })}
               </h3>
 
-              {/* ✅ Backup Status */}
+              {/* Backup Status */}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-300">Backup Status</span>
+                <span className="text-gray-400">Backup Status</span>
+
                 <span
-                  className={`font-semibold ${
-                    systemInfo?.backupTakenToday ? 'text-green-400' : 'text-red-400'
+                  className={`px-3 py-1 rounded-full text-xs font-semibold tracking-wide ${
+                    backupTakenToday
+                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                      : 'bg-red-500/10 text-red-400 border border-red-500/20'
                   }`}
                 >
-                  {systemInfo?.backupTakenToday ? '✔ Taken Today' : '⚠ Pending'}
+                  {backupTakenToday ? '✔ Taken Today' : '⚠ Pending'}
                 </span>
               </div>
 
-              {/* ✅ Last Backup */}
+              {/* Last Backup */}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-300">Last Backup</span>
-                <span className="text-white">{formatDateTime(systemInfo?.lastBackup)}</span>
+                <span className="text-gray-400">Last Backup</span>
+                <span className="text-white font-medium">{formatDateTime(lastBackup)}</span>
               </div>
 
-              {/* ✅ Version */}
+              {/* Next Backup */}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-300">App Version</span>
-                <span className="text-blue-400 font-semibold">
+                <span className="text-gray-400">Next Backup</span>
+                <span className="text-white font-medium">{formatDateTime(nextBackup)}</span>
+              </div>
+
+              {/* Version */}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">App Version</span>
+                <span className="text-blue-400 font-semibold tracking-wide">
                   v{systemInfo?.version || '1.0.0'}
                 </span>
               </div>
 
-              {/* ✅ Divider */}
+              {/* Divider */}
               <div className="border-t border-white/10 my-1"></div>
 
-              {/* ✅ Stats Row */}
-              <div className="grid grid-cols-4 gap-3 text-center mt-1">
-                <div>
-                  <p className="text-white font-semibold text-lg">{systemInfo?.totalProducts}</p>
-                  <span className="text-[10px] text-gray-400">Products</span>
-                </div>
-
-                <div>
-                  <p className="text-white font-semibold text-lg">{systemInfo?.totalClients}</p>
-                  <span className="text-[10px] text-gray-400">Clients</span>
-                </div>
-
-                <div>
-                  <p className="text-white font-semibold text-lg">{systemInfo?.totalAccounts}</p>
-                  <span className="text-[10px] text-gray-400">Accounts</span>
-                </div>
-
-                <div>
+              {/* Stats Row */}
+              <div className="grid grid-cols-4 gap-4 text-center mt-2">
+                <div className="bg-white/5 rounded-2xl py-3 border border-white/10">
                   <p className="text-white font-semibold text-lg">
-                    {systemInfo?.totalTransactions}
+                    {systemInfo?.totalProducts || 0}
                   </p>
-                  <span className="text-[10px] text-gray-400">Transactions</span>
+                  <span className="text-[10px] text-gray-400 tracking-wide">Products</span>
+                </div>
+
+                <div className="bg-white/5 rounded-2xl py-3 border border-white/10">
+                  <p className="text-white font-semibold text-lg">
+                    {systemInfo?.totalClients || 0}
+                  </p>
+                  <span className="text-[10px] text-gray-400 tracking-wide">Clients</span>
+                </div>
+
+                <div className="bg-white/5 rounded-2xl py-3 border border-white/10">
+                  <p className="text-white font-semibold text-lg">
+                    {systemInfo?.totalAccounts || 0}
+                  </p>
+                  <span className="text-[10px] text-gray-400 tracking-wide">Accounts</span>
+                </div>
+
+                <div className="bg-white/5 rounded-2xl py-3 border border-white/10">
+                  <p className="text-white font-semibold text-lg">
+                    {systemInfo?.totalTransactions || 0}
+                  </p>
+                  <span className="text-[10px] text-gray-400 tracking-wide">Transactions</span>
                 </div>
               </div>
             </div>

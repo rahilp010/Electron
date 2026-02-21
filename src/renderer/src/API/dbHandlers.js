@@ -337,8 +337,8 @@ ipcMain.handle('createClient', (event, client) => {
       .prepare(
         `
     INSERT INTO accounts
-    (clientId, accountName, openingBalance, closingBalance, accountNumber, accountType, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    (clientId, accountName, openingBalance, closingBalance, accountNumber, accountType, accounterType, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `
       )
       .run(
@@ -348,6 +348,7 @@ ipcMain.handle('createClient', (event, client) => {
         openingBalance,
         accountNumber,
         accountType,
+        'Client',
         'active'
       )
 
@@ -1026,8 +1027,8 @@ ipcMain.handle('createPurchase', (event, data) => {
           .prepare(
             `
           INSERT INTO accounts
-          (accountName, accountType, openingBalance, closingBalance, status)
-          VALUES (?, ?, 0, 0, 'active')
+          (accountName, accountType, openingBalance, closingBalance, accounterType, status)
+          VALUES (?, ?, 0, 0, 'Main', 'active')
         `
           )
           .run(
@@ -1683,8 +1684,8 @@ ipcMain.handle('createSales', (event, data) => {
           .prepare(
             `
           INSERT INTO accounts
-          (accountName, accountType, openingBalance, closingBalance, status)
-          VALUES (?, ?, 0, 0, 'active')
+          (accountName, accountType, openingBalance, closingBalance,accounterType, status)
+          VALUES (?, ?, 0, 0, 'Main', 'active')
         `
           )
           .run(
@@ -2995,6 +2996,7 @@ ipcMain.handle('createAccount', (event, accountData) => {
       accountType = 'Bank',
       clientId = null,
       openingBalance = 0,
+      accounterType,
       status = 'active'
     } = accountData
 
@@ -3012,8 +3014,8 @@ ipcMain.handle('createAccount', (event, accountData) => {
 
     const stmt = db.prepare(`
       INSERT INTO accounts
-      (clientId, accountName, accountType, openingBalance, closingBalance, status, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      (clientId, accountName, accountType, openingBalance, closingBalance, status, accounterType, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `)
 
     const info = stmt.run(
@@ -3021,8 +3023,9 @@ ipcMain.handle('createAccount', (event, accountData) => {
       accountName.trim(),
       accountType,
       openingBalance,
-      openingBalance, // closingBalance starts same
-      status
+      openingBalance,
+      status,
+      accounterType
     )
 
     return {
@@ -3035,6 +3038,7 @@ ipcMain.handle('createAccount', (event, accountData) => {
         openingBalance,
         closingBalance: openingBalance,
         status,
+        accounterType,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         pageName: 'Account'
@@ -3058,7 +3062,7 @@ ipcMain.handle('updateAccount', (event, { id, ...updates }) => {
       return { success: false, message: 'Account not found' }
     }
 
-    const { accountName, accountType, status, openingBalance } = updates
+    const { accountName, accountType, status, openingBalance, accounterType } = updates
 
     if (accountName && !accountName.trim()) {
       return { success: false, message: 'Account name cannot be empty' }
@@ -3089,6 +3093,7 @@ ipcMain.handle('updateAccount', (event, { id, ...updates }) => {
           openingBalance = ?,
           closingBalance = ?,
           status = ?,
+          accounterType = ?,
           updatedAt = CURRENT_TIMESTAMP
       WHERE id = ?
     `
@@ -3098,6 +3103,7 @@ ipcMain.handle('updateAccount', (event, { id, ...updates }) => {
       openingBalance !== undefined ? openingBalance : current.openingBalance,
       newClosingBalance,
       status || current.status,
+      accounterType || current.accounterType,
       id
     )
 
@@ -3111,6 +3117,7 @@ ipcMain.handle('updateAccount', (event, { id, ...updates }) => {
         openingBalance: openingBalance !== undefined ? openingBalance : current.openingBalance,
         closingBalance: newClosingBalance,
         status: status || current.status,
+        accounterType: accounterType || current.accounterType,
         updatedAt: new Date().toISOString()
       }
     }
@@ -3286,32 +3293,7 @@ ipcMain.handle('getSystemInfo', () => {
   const totalAccounts = db.prepare('SELECT COUNT(*) as count FROM accounts').get().count
   const totalTransactions = db.prepare('SELECT COUNT(*) as count FROM ledger').get().count
 
-  const lastBackup =
-    db
-      .prepare(
-        `
-    SELECT createdAt 
-    FROM backups 
-    ORDER BY createdAt DESC 
-    LIMIT 1
-  `
-      )
-      .get()?.createdAt || null
-
-  const today = new Date().toISOString().slice(0, 10)
-
-  const backupTakenToday = !!db
-    .prepare(
-      `
-    SELECT 1 FROM backups 
-    WHERE date(createdAt) = ?
-  `
-    )
-    .get(today)
-
   return {
-    lastBackup,
-    backupTakenToday,
     version: app.getVersion(),
     totalProducts,
     totalClients,

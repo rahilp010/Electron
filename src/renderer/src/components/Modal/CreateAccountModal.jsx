@@ -12,7 +12,7 @@ import {
 } from '../../app/features/electronSlice' // Adjust path as needed
 import { CircleX } from 'lucide-react'
 import { toast } from 'react-toastify'
-import { InputNumber, Toggle, Input } from 'rsuite'
+import { InputNumber, Toggle, Input, SelectPicker } from 'rsuite'
 import { useDispatch, useSelector } from 'react-redux' // Added for dispatch
 import { useLocation } from 'react-router-dom'
 
@@ -32,6 +32,7 @@ const CreateAccountModal = ({
     status: 'active',
     openingBalance: 0,
     closingBalance: 0,
+    accounterType: '',
     createdAt: new Date(),
     updatedAt: new Date(),
     pageName: 'Account'
@@ -44,7 +45,8 @@ const CreateAccountModal = ({
         id: existingAccount.id || '',
         accountName: existingAccount.accountName || '',
         openingBalance: existingAccount.openingBalance || 0,
-        status: existingAccount.status || 'active'
+        status: existingAccount.status || 'active',
+        accounterType: existingAccount.accounterType || ''
       }
     }
 
@@ -52,7 +54,8 @@ const CreateAccountModal = ({
       id: '',
       accountName: '',
       openingBalance: 0,
-      status: 'active'
+      status: 'active',
+      accounterType: ''
     }
   }, [isUpdateAccount, existingAccount])
 
@@ -87,8 +90,6 @@ const CreateAccountModal = ({
     fetchRecentReceipts()
   }, [fetchRecentReceipts])
 
-  console.log('recentReceipts', recentReceipts)
-
   useEffect(() => {
     const initialAccount = getInitialAccount()
     setAccountData(initialAccount)
@@ -109,6 +110,7 @@ const CreateAccountModal = ({
       if (isSubmitting) return
       setIsSubmitting(true)
 
+      debugger
       try {
         if (!accountData.accountName.trim()) {
           toast.error('Please enter a valid account name')
@@ -131,6 +133,7 @@ const CreateAccountModal = ({
           id: accountData.id || undefined,
           accountName: accountData.accountName.trim(),
           openingBalance: Number(accountData.openingBalance) || 0,
+          accounterType: accountData.accounterType,
           status: accountData.status
         }
 
@@ -166,6 +169,12 @@ const CreateAccountModal = ({
     },
     [accountData, isUpdateAccount, setShowModal, dispatch, isSubmitting]
   )
+
+  const accouterTypes = [
+    { label: 'Client Account', value: 'Client' },
+    { label: 'Main Account', value: 'Main' },
+    { label: 'GPay Account', value: 'GPay' }
+  ]
 
   return (
     <div
@@ -240,21 +249,22 @@ const CreateAccountModal = ({
               />
             </div>
 
-            {/* <div>
-              <label htmlFor="closingBalance" className="block text-sm mb-1 text-gray-600">
-                Closing Balance
+            <div>
+              <label htmlFor="accounterType" className="block text-sm mb-1 text-gray-600">
+                Accounter Type
               </label>
-              <InputNumber
-                id="closingBalance"
-                prefix="₹"
-                placeholder="0"
-                value={accountData.closingBalance}
-                onChange={(value) => handleOnChangeEvent(value, 'closingBalance')}
-                formatter={toThousands}
+              <SelectPicker
+                id="accounterType"
+                placeholder="Select Accounter Type"
+                value={accountData.accounterType}
+                searchable={false}
+                data={accouterTypes}
+                onChange={(value) => handleOnChangeEvent(value, 'accounterType')}
                 className="w-full"
-                min={0}
+                menuStyle={{ zIndex: 999 }}
+                menuMaxHeight={200}
               />
-            </div> */}
+            </div>
           </div>
           <div className="flex items-center justify-between">
             <Toggle
