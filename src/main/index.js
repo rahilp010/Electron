@@ -6,7 +6,6 @@ import icon from '../../resources/icon.png?asset'
 import '../renderer/src/API/dbHandlers.js'
 import { autoBackupOncePerDay } from './autoBackup.js'
 import checkForUpdate from './version.js'
-// import { initWhatsAppClient, getWhatsAppStatus, destroyWhatsAppClient } from './whatsappClient.js'
 
 // Get directory name in ES module
 const currentFilename = fileURLToPath(import.meta.url)

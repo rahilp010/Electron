@@ -75,21 +75,6 @@ const CreateAccountModal = ({
     fetchAccounts()
   }, [fetchAccounts])
 
-  const fetchRecentReceipts = useCallback(async () => {
-    try {
-      const receipts = await window.api.getRecentBankReceipts()
-      const sorted = receipts.sort((a, b) => b.id - a.id) // latest first
-      setRecentReceipts(sorted)
-    } catch (err) {
-      console.error('Error fetching recent receipts:', err)
-      toast.error('Failed to fetch recent receipts')
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchRecentReceipts()
-  }, [fetchRecentReceipts])
-
   useEffect(() => {
     const initialAccount = getInitialAccount()
     setAccountData(initialAccount)
@@ -110,7 +95,6 @@ const CreateAccountModal = ({
       if (isSubmitting) return
       setIsSubmitting(true)
 
-      debugger
       try {
         if (!accountData.accountName.trim()) {
           toast.error('Please enter a valid account name')

@@ -398,10 +398,12 @@ const PaymentMethod = ({ overflow = false, open, setOpen, onConfirm, grandTotal 
     try {
       const response = await accountApi.getAllAccounts()
       const filteredResponse = response.filter(
-        (acc) => acc.accounterType === 'Main' || acc.accounterType === 'Gpay'
+        (acc) =>
+          (acc.accounterType === 'Main' && acc.accountType !== 'Cash') ||
+          acc.accounterType === 'GPay'
       )
       if (Array.isArray(filteredResponse)) {
-        dispatch(setAccount(filteredResponse))
+        setAccount(filteredResponse)
         setBankAccounts(filteredResponse)
       }
     } catch {
@@ -409,7 +411,7 @@ const PaymentMethod = ({ overflow = false, open, setOpen, onConfirm, grandTotal 
     } finally {
       setLoading(false)
     }
-  }, [dispatch])
+  }, [])
 
   useEffect(() => {
     if (open) {
@@ -639,7 +641,7 @@ const PaymentMethod = ({ overflow = false, open, setOpen, onConfirm, grandTotal 
                       <span style={styles.fieldLabel}>Account</span>
                       <SelectPicker
                         data={bankAccounts.map((acc) => ({
-                          label: `${acc.accountName} (₹${toThousands(acc.balance)})`,
+                          label: `${acc.accountName} (₹${toThousands(acc?.closingBalance)})`,
                           value: acc.id
                         }))}
                         value={googlePayAccount}

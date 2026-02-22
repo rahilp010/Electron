@@ -19,12 +19,6 @@ contextBridge.exposeInMainWorld('api', {
 
   getSystemInfo: () => ipcRenderer.invoke('getSystemInfo'),
 
-  // Transaction methods
-  getAllTransactions: () => ipcRenderer.invoke('getAllTransactions'),
-  createTransaction: (transaction) => ipcRenderer.invoke('createTransaction', transaction),
-  updateTransaction: (transaction) => ipcRenderer.invoke('updateTransaction', transaction),
-  deleteTransaction: (id) => ipcRenderer.invoke('deleteTransaction', id),
-
   //Purchase methods
   getPurchaseById: (id) => ipcRenderer.invoke('getPurchaseById', id),
   getAllPurchases: () => ipcRenderer.invoke('getAllPurchases'),
@@ -39,28 +33,6 @@ contextBridge.exposeInMainWorld('api', {
   updateSales: (sales) => ipcRenderer.invoke('updateSales', sales),
   deleteSales: (id) => ipcRenderer.invoke('deleteSales', id),
 
-  // Bank receipt methods
-  getRecentBankReceipts: () => ipcRenderer.invoke('getRecentBankReceipts'),
-  getBankReceiptByTransactionId: (transactionId) =>
-    ipcRenderer.invoke('getBankReceiptByTransactionId', transactionId),
-  createBankReceipt: (bankReceipt) => ipcRenderer.invoke('createBankReceipt', bankReceipt),
-  updateBankReceipt: (bankReceipt) => ipcRenderer.invoke('updateBankReceipt', bankReceipt),
-  deleteBankReceipt: (id) => ipcRenderer.invoke('deleteBankReceipt', id),
-
-  // Cash receipt methods
-  getRecentCashReceipts: () => ipcRenderer.invoke('getRecentCashReceipts'),
-  getRecentCashReceiptsByTransactionId: (transactionId) =>
-    ipcRenderer.invoke('getRecentCashReceiptsByTransactionId', transactionId),
-  createCashReceipt: (cashReceipt) => ipcRenderer.invoke('createCashReceipt', cashReceipt),
-  updateCashReceipt: (cashReceipt) => ipcRenderer.invoke('updateCashReceipt', cashReceipt),
-  deleteCashReceipt: (id) => ipcRenderer.invoke('deleteCashReceipt', id),
-  deleteCashReceiptByTransaction: (transactionId) =>
-    ipcRenderer.invoke('deleteCashReceiptByTransaction', transactionId),
-  deleteBankReceiptByTransaction: (transactionId) =>
-    ipcRenderer.invoke('deleteBankReceiptByTransaction', transactionId),
-  getCashReceiptByTransactionId: (transactionId) =>
-    ipcRenderer.invoke('getCashReceiptByTransactionId', transactionId),
-
   // Excel Import
   importExcel: (filePath, tableName) => ipcRenderer.invoke('importExcel', filePath, tableName),
 
@@ -72,13 +44,7 @@ contextBridge.exposeInMainWorld('api', {
 
   //ladger
 
-  getLedgerTransactions: () => ipcRenderer.invoke('getLedgerTransactions'),
   getAccountBalances: () => ipcRenderer.invoke('getAccountBalances'),
-  createLedgerTransaction: (ledgerTransaction) =>
-    ipcRenderer.invoke('createLedgerTransaction', ledgerTransaction),
-  updateLedgerTransaction: (ledgerTransaction) =>
-    ipcRenderer.invoke('updateLedgerTransaction', ledgerTransaction),
-  deleteLedgerTransaction: (id) => ipcRenderer.invoke('deleteLedgerTransaction', id),
   transferAmount: (data) => ipcRenderer.invoke('transferAmount', data),
 
   addLedgerEntry: () => ipcRenderer.invoke('addLedgerEntry'),
@@ -113,6 +79,7 @@ contextBridge.exposeInMainWorld('api', {
   restoreBackup: (backupFilePath) => ipcRenderer.invoke('restoreBackup', backupFilePath),
   selectBackupFile: () => ipcRenderer.invoke('selectBackupFile'),
   manualBackup: () => ipcRenderer.invoke('manualBackup'),
+  generateBillNo: (pageName) => ipcRenderer.invoke('generateBillNo', pageName),
 
   // Authorization
   getAuthorization: () => ipcRenderer.invoke('getAuthorization'),

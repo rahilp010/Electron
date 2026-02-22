@@ -472,9 +472,9 @@ const ProductModal = ({
                 </label>
                 <Input
                   size="sm"
-                  value={product.saleHSN}
+                  value={String(product.saleHSN).toUpperCase()}
                   placeholder="Enter Sale HSN Code"
-                  onChange={(value) => handleOnChangeEvent(value, 'saleHSNCode')}
+                  onChange={(value) => handleOnChangeEvent(value, 'saleHSN')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                 />
               </div>
@@ -485,9 +485,9 @@ const ProductModal = ({
                   </label>
                   <Input
                     size="sm"
-                    value={product.purchaseHSN}
+                    value={String(product.purchaseHSN).toUpperCase()}
                     placeholder="Enter Purchase HSN Code"
-                    onChange={(value) => handleOnChangeEvent(value, 'purchaseHSNCode')}
+                    onChange={(value) => handleOnChangeEvent(value, 'purchaseHSN')}
                     className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"
                   />
                 </div>
@@ -498,7 +498,7 @@ const ProductModal = ({
                 </label>
                 <Input
                   size="sm"
-                  value={product.productName}
+                  value={String(product.productName).toUpperCase()}
                   placeholder="Enter Product Name"
                   onChange={(value) => handleOnChangeEvent(value, 'productName')}
                   className="w-full border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9 items-center tracking-wide"

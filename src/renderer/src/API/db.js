@@ -94,45 +94,6 @@ db.prepare(
 ).run()
 
 db.prepare(
-  `CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    clientId INTEGER NOT NULL,
-    productId INTEGER NULL,
-    date DATETIME NOT NULL,
-    quantity INTEGER NOT NULL,
-    saleAmount REAL NOT NULL,
-    purchaseAmount REAL NOT NULL,
-    totalAmount REAL,
-    multipleProducts TEXT,
-    isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1)),
-    paymentMethod TEXT NOT NULL DEFAULT 'bank' CHECK (paymentMethod IN ('cash', 'bank')),
-    statusOfTransaction TEXT NOT NULL DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
-    paymentType TEXT DEFAULT 'full' CHECK (paymentType IN ('full', 'partial')),
-    pendingAmount REAL DEFAULT 0,
-    paidAmount REAL DEFAULT 0,
-    pendingFromOurs REAL DEFAULT 0,
-    taxAmount TEXT,
-    freightCharges REAL,
-    freightTaxAmount TEXT,
-    billNo TEXT,
-    bank TEXT,
-    cash TEXT,
-    type TEXT CHECK (type IN ('Receipt', 'Payment', 'Salary')),
-    dueDate DATETIME,
-    description TEXT,
-    transactionType TEXT CHECK (transactionType IN ('purchase', 'sales')),
-    sendTo TEXT,
-    chequeNumber TEXT,
-    transactionAccount TEXT,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    pageName TEXT DEFAULT 'Transaction',
-    FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE,
-    FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE
-  )`
-).run()
-
-db.prepare(
   `
   CREATE TABLE IF NOT EXISTS purchase_payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,76 +213,6 @@ db.prepare(
 
 db.prepare(
   `
-  CREATE TABLE IF NOT EXISTS bankReceipts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  clientId INTEGER,
-  productId INTEGER NULL,
-  transactionId INTEGER, 
-  srNo TEXT,
-  type TEXT NOT NULL CHECK (type IN ('Receipt', 'Payment', 'Salary')),
-  bank TEXT NOT NULL,
-  date DATETIME NOT NULL,
-  amount REAL NOT NULL,
-  description TEXT,
-  taxAmount TEXT,
-  statusOfTransaction TEXT DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
-  dueDate DATETIME,
-  paymentType TEXT DEFAULT 'full' CHECK (paymentType IN ('full', 'partial')),
-  pendingAmount REAL DEFAULT 0,
-  pendingFromOurs REAL DEFAULT 0,
-  paidAmount REAL DEFAULT 0,
-  quantity REAL,
-  billNo TEXT,
-  pageName TEXT DEFAULT 'Bank Receipt',
-  sendTo TEXT,
-  chequeNumber TEXT,
-  transactionAccount TEXT,
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE,
-  FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE,
-  FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
-)
-`
-).run()
-
-db.prepare(
-  `
-  CREATE TABLE IF NOT EXISTS cashReceipts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    clientId INTEGER,
-    productId INTEGER NULL,
-    transactionId INTEGER, 
-    srNo TEXT,
-    type TEXT NOT NULL CHECK (type IN ('Receipt', 'Payment', 'Salary')),
-    cash TEXT NOT NULL,
-    date DATETIME NOT NULL,
-    amount REAL NOT NULL,
-    description TEXT,
-    billNo TEXT,
-    taxAmount TEXT,
-    statusOfTransaction TEXT DEFAULT 'pending' CHECK (statusOfTransaction IN ('completed', 'pending')),
-    dueDate DATETIME,
-    paymentType TEXT DEFAULT 'full' CHECK (paymentType IN ('full', 'partial')),
-    pendingAmount REAL DEFAULT 0,
-    pendingFromOurs REAL DEFAULT 0,
-    paidAmount REAL DEFAULT 0,
-    quantity REAL,
-    pageName TEXT DEFAULT 'Cash Receipt',
-    sendTo TEXT,
-    chequeNumber TEXT,
-    transactionAccount TEXT,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (clientId) REFERENCES clients(id) ON DELETE CASCADE,
-    FOREIGN KEY (productId) REFERENCES products(id) ON DELETE CASCADE,
-    FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE CASCADE
-  )
-`
-).run()
-
-db.prepare(
-  `
   CREATE TABLE IF NOT EXISTS ledger (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     accountId INTEGER NOT NULL,
@@ -351,36 +242,5 @@ db.prepare(
   )
 `
 ).run()
-
-// Transaction indexes
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_clientId ON transactions(clientId)`).run()
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_productId ON transactions(productId)`).run()
-db.prepare(
-  `CREATE INDEX IF NOT EXISTS idx_transactions_transactionType ON transactions(transactionType)`
-).run()
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_transactions_createdAt ON transactions(createdAt)`).run()
-
-// // Bank Receipts
-db.prepare(
-  `CREATE INDEX IF NOT EXISTS idx_bankReceipts_transactionId ON bankReceipts(transactionId)`
-).run()
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_bankReceipts_clientId ON bankReceipts(clientId)`).run()
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_bankReceipts_productId ON bankReceipts(productId)`).run()
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_bankReceipts_date ON bankReceipts(date)`).run()
-
-// // Cash Receipts
-// db.prepare(
-//   `CREATE INDEX IF NOT EXISTS idx_cashReceipts_transactionId ON cashReceipts(transactionId)`
-// ).run()
-// db.prepare(`CREATE INDEX IF NOT EXISTS idx_cashReceipts_clientId ON cashReceipts(clientId)`).run()
-// db.prepare(`CREATE INDEX IF NOT EXISTS idx_cashReceipts_productId ON cashReceipts(productId)`).run()
-// db.prepare(`CREATE INDEX IF NOT EXISTS idx_cashReceipts_date ON cashReceipts(date)`).run()
-
-// Products
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_products_clientId ON products(clientId)`).run()
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_products_name ON products(productName)`).run()
-
-// Clients
-db.prepare(`CREATE INDEX IF NOT EXISTS idx_clients_clientName ON clients(clientName)`).run()
 
 export default db

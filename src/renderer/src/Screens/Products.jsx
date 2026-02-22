@@ -256,7 +256,7 @@ const Products = () => {
       }
 
       // ✅ Low stock filter
-      const matchesLowStock = !showLowStockOnly || data.productQuantity < 5
+      const matchesLowStock = !showLowStockOnly || data.productQuantity < 10
 
       return matchesSearch && matchesProduct && matchesDate && matchesAssetsType && matchesLowStock
     })
@@ -332,8 +332,9 @@ const Products = () => {
       0
     )
     const totalQuantity = filteredData.length
+    const lowStockProducts = filteredData.filter((item) => item?.productQuantity < 10).length
 
-    return { totalAssetsValue, totalQuantity }
+    return { totalAssetsValue, totalQuantity, lowStockProducts }
   }, [filteredData])
 
   useEffect(() => {
@@ -492,8 +493,18 @@ const Products = () => {
           </div>
           <div className="mx-5 border-r w-52">
             <p className="text-sm font-light">Low Stock</p>
-            <p className="font-light text-sm">
-              <span className="font-bold text-2xl">{statistics.lowStockProducts}</span>
+            <p className="font-light text-sm relative">
+              {statistics.lowStockProducts === 0 ? (
+                <>
+                  <span className="font-light tracking-wider text-sm absolute top-2 ">
+                    Stock Health is good
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-bold text-2xl">{statistics.lowStockProducts}</span> Products
+                </>
+              )}
             </p>
           </div>
         </div>

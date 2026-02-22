@@ -8,20 +8,17 @@ import crypto from 'crypto'
 import { app } from 'electron'
 import path from 'path'
 const { v4: uuidv4 } = require('uuid')
-// import { sendWhatsAppPDF, getWhatsAppStatus, logoutWhatsApp } from '../../../main/whatsappClient.js'
-// import cron from 'node-cron'
 
 const dbPath = app.isPackaged
   ? path.join(process.resourcesPath, 'data.db')
   : path.join(process.cwd(), 'data.db')
 
 const backupDir = path.join(process.cwd(), 'backups')
+const USER_DATA = app.getPath('userData')
+const FILE_PATH = path.join(USER_DATA, 'keyBindings.json')
 
 // AES-256-GCM setup
-const ENCRYPTION_KEY = crypto
-  .createHash('sha256')
-  .update('YourStrongSecretKeyHere') // choose your secret key
-  .digest()
+const ENCRYPTION_KEY = crypto.createHash('sha256').update('YourStrongSecretKeyHere').digest()
 const ALGO = 'aes-256-gcm'
 
 // Ensure backup directory exists
@@ -260,30 +257,6 @@ ipcMain.handle('getProductById', (event, id) => {
 ipcMain.handle('getAllClients', () => {
   return db.prepare('SELECT * FROM clients ORDER BY createdAt DESC').all()
 })
-
-// ipcMain.handle('createClient', (event, client) => {
-//   return db
-//     .prepare(
-//       `
-//     INSERT INTO clients (clientName, phoneNo,address, pendingAmount, paidAmount, pendingFromOurs, accountType, gstNo, pageName, isEmployee, salary, salaryHistory)
-//     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-//   `
-//     )
-//     .run(
-//       client.clientName,
-//       client.phoneNo,
-//       client.address,
-//       client.pendingAmount,
-//       client.paidAmount,
-//       client.pendingFromOurs,
-//       client.accountType,
-//       client.gstNo,
-//       client.pageName,
-//       client.isEmployee,
-//       client.salary,
-//       client.salaryHistory
-//     )
-// })
 
 ipcMain.handle('createClient', (event, client) => {
   try {
@@ -1260,425 +1233,6 @@ ipcMain.handle('deleteSales', (event, id) => {
   }
 })
 
-// -------- Bank Receipts --------
-
-ipcMain.handle('getRecentBankReceipts', async () => {
-  return db.prepare('SELECT * FROM bankReceipts ORDER BY createdAt DESC').all()
-})
-
-// ✅ Create bank receipt
-ipcMain.handle('createBankReceipt', (event, bankReceipt) => {
-  const {
-    clientId,
-    productId,
-    transactionId,
-    type,
-    bank,
-    date,
-    amount,
-    description,
-    statusOfTransaction,
-    dueDate,
-    pendingAmount,
-    pendingFromOurs,
-    paidAmount,
-    quantity,
-    paymentType,
-    pageName,
-    sendTo,
-    billNo,
-    createdAt,
-    updatedAt
-  } = bankReceipt
-
-  const formattedDate =
-    typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
-
-  const tx = db.transaction(() => {
-    const res = db
-      .prepare(
-        `
-    INSERT INTO bankReceipts (
-      clientId, productId, transactionId, type, bank, date, amount,
-      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName, sendTo,billNo, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?)
-  `
-      )
-      .run(
-        clientId,
-        productId,
-        transactionId,
-        type,
-        bank,
-        formattedDate,
-        amount,
-        description,
-        statusOfTransaction,
-        dueDate,
-        pendingAmount,
-        pendingFromOurs,
-        paidAmount,
-        quantity,
-        paymentType,
-        pageName,
-        sendTo,
-        billNo,
-        createdAt,
-        updatedAt
-      )
-
-    const createdBankReceipt = db
-      .prepare('SELECT * FROM bankReceipts WHERE id = ?')
-      .get(res.lastInsertRowid)
-
-    return createdBankReceipt
-  })
-  return tx()
-})
-
-ipcMain.handle('updateBankReceipt', (event, bankReceipt) => {
-  const {
-    transactionId,
-    type,
-    bank,
-    date,
-    amount,
-    description,
-    statusOfTransaction,
-    dueDate,
-    pendingAmount,
-    pendingFromOurs,
-    paidAmount,
-    paymentType,
-    quantity,
-    pageName,
-    sendTo,
-    billNo
-  } = bankReceipt
-
-  const formattedDate =
-    typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
-
-  const tx = db.transaction(() => {
-    // 1️⃣ Check if bank receipt exists by transactionId
-    const existing = db
-      .prepare(`SELECT * FROM bankReceipts WHERE transactionId = ?`)
-      .get(transactionId)
-
-    if (existing) {
-      // 2️⃣ Update existing
-      db.prepare(
-        `UPDATE bankReceipts
-         SET type = ?, bank = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?,pageName = ?, sendTo = ?, billNo = ?, updatedAt = CURRENT_TIMESTAMP
-         WHERE transactionId = ?`
-      ).run(
-        type,
-        bank,
-        formattedDate,
-        amount,
-        description,
-        statusOfTransaction,
-        dueDate,
-        pendingAmount,
-        pendingFromOurs,
-        paidAmount,
-        paymentType,
-        quantity,
-        pageName,
-        sendTo,
-        billNo,
-        transactionId
-      )
-
-      // 3️⃣ Return the updated record using its id
-      return db.prepare(`SELECT * FROM bankReceipts WHERE id = ?`).get(existing.id)
-    } else {
-      // 4️⃣ Insert new record if not exists
-      const result = db
-        .prepare(
-          `INSERT INTO bankReceipts (transactionId, type, bank, date, amount, description, statusOfTransaction, dueDate,pendingAmount,pendingFromOurs,paidAmount,paymentType,quantity,pageName, sendTo, billNo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          transactionId,
-          type,
-          bank,
-          formattedDate,
-          amount,
-          description,
-          statusOfTransaction,
-          dueDate,
-          pendingAmount,
-          pendingFromOurs,
-          paidAmount,
-          paymentType,
-          quantity,
-          pageName,
-          sendTo,
-          billNo
-        )
-
-      // 5️⃣ Return newly created record
-      return db.prepare(`SELECT * FROM bankReceipts WHERE id = ?`).get(result.lastInsertRowid)
-    }
-  })
-
-  return tx()
-})
-
-ipcMain.handle('deleteBankReceipt', (event, bankReceiptId) => {
-  try {
-    const dbBankReceipt = db.prepare('DELETE FROM bankReceipts WHERE id = ?').run(bankReceiptId)
-    return { success: true, data: dbBankReceipt }
-  } catch (err) {
-    console.error('deleteBankReceipt error:', err)
-    throw new Error(err.message || 'Failed to delete bank receipt')
-  }
-})
-
-// -------- Cash Receipts --------
-
-ipcMain.handle('getRecentCashReceipts', async () => {
-  return db.prepare('SELECT * FROM cashReceipts ORDER BY createdAt DESC').all()
-})
-
-// ✅ Create bank receipt
-ipcMain.handle('createCashReceipt', (event, cashReceipt) => {
-  const {
-    clientId,
-    productId,
-    transactionId,
-    type,
-    cash,
-    date,
-    amount,
-    description,
-    statusOfTransaction,
-    dueDate,
-    pendingAmount,
-    pendingFromOurs,
-    paidAmount,
-    quantity,
-    paymentType,
-    pageName,
-    sendTo,
-    chequeNumber,
-    transactionAccount,
-    billNo,
-    createdAt,
-    updatedAt
-  } = cashReceipt
-
-  const formattedDate =
-    typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
-
-  const tx = db.transaction(() => {
-    const res = db
-      .prepare(
-        `
-       INSERT INTO cashReceipts (
-      clientId, productId, transactionId, type, cash, date, amount,
-      description, statusOfTransaction, dueDate, pendingAmount, pendingFromOurs, paidAmount,quantity,paymentType, pageName,sendTo,chequeNumber,transactionAccount,billNo, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?) `
-      )
-      .run(
-        clientId,
-        productId,
-        transactionId,
-        type,
-        cash,
-        formattedDate,
-        amount,
-        description,
-        statusOfTransaction,
-        dueDate,
-        pendingAmount,
-        pendingFromOurs,
-        paidAmount,
-        quantity,
-        paymentType,
-        pageName,
-        sendTo,
-        chequeNumber,
-        transactionAccount,
-        billNo,
-        createdAt,
-        updatedAt
-      )
-    // Fetch the inserted row
-    const createdCashReceipt = db
-      .prepare(`SELECT * FROM cashReceipts WHERE id = ?`)
-      .get(res.lastInsertRowid)
-    return createdCashReceipt
-  })
-  return tx()
-})
-
-ipcMain.handle('updateCashReceipt', (event, cashReceipt) => {
-  const {
-    transactionId,
-    type,
-    cash,
-    date,
-    amount,
-    description,
-    statusOfTransaction,
-    dueDate,
-    pendingAmount,
-    pendingFromOurs,
-    paidAmount,
-    paymentType,
-    quantity,
-    pageName,
-    sendTo,
-    chequeNumber,
-    transactionAccount,
-    billNo
-  } = cashReceipt
-
-  const formattedDate =
-    typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 19).replace('T', ' ')
-
-  const tx = db.transaction(() => {
-    // 1️⃣ Check if bank receipt exists by transactionId
-    const existing = db
-      .prepare(`SELECT * FROM cashReceipts WHERE transactionId = ?`)
-      .get(transactionId)
-
-    if (existing) {
-      // 2️⃣ Update existing
-      db.prepare(
-        `UPDATE cashReceipts
-         SET type = ?, cash = ?, date = ?, amount = ?, description = ?, statusOfTransaction = ?, dueDate = ?,pendingAmount = ?,pendingFromOurs = ?,paidAmount = ?,paymentType = ?,quantity = ?, pageName = ?,sendTo = ?,chequeNumber = ?,transactionAccount = ?,billNo = ?, updatedAt = CURRENT_TIMESTAMP
-         WHERE transactionId = ?`
-      ).run(
-        type,
-        cash,
-        formattedDate,
-        amount,
-        description,
-        statusOfTransaction,
-        dueDate,
-        pendingAmount,
-        pendingFromOurs,
-        paidAmount,
-        paymentType,
-        quantity,
-        pageName,
-        sendTo,
-        chequeNumber,
-        transactionAccount,
-        billNo,
-        transactionId
-      )
-
-      // 3️⃣ Return the updated record using its id
-      return db.prepare(`SELECT * FROM cashReceipts WHERE id = ?`).get(existing.id)
-    } else {
-      // 4️⃣ Insert new record if not exists
-      const result = db
-        .prepare(
-          `INSERT INTO cashReceipts (transactionId, type, cash, date, amount, description, statusOfTransaction, dueDate,pendingAmount,pendingFromOurs,paidAmount,paymentType,quantity, pageName,sendTo,chequeNumber,transactionAccount)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          transactionId,
-          type,
-          cash,
-          formattedDate,
-          amount,
-          description,
-          statusOfTransaction,
-          dueDate,
-          pendingAmount,
-          pendingFromOurs,
-          paidAmount,
-          paymentType,
-          quantity,
-          pageName,
-          sendTo,
-          chequeNumber,
-          transactionAccount,
-          billNo
-        )
-
-      // 5️⃣ Return newly created record
-      return db.prepare(`SELECT * FROM cashReceipts WHERE id = ?`).get(result.lastInsertRowid)
-    }
-  })
-  return tx()
-})
-
-ipcMain.handle('deleteCashReceipt', async (event, cashReceiptId) => {
-  try {
-    const result = db.prepare('DELETE FROM cashReceipts WHERE id = ?').run(cashReceiptId)
-    if (result.changes === 0) {
-      return { success: false, message: 'Cash receipt not found' }
-    }
-    return { success: true, data: result }
-  } catch (err) {
-    console.error('deleteCashReceipt error:', err)
-    return { success: false, message: err.message || 'Failed to delete cash receipt' }
-  }
-})
-
-ipcMain.handle('deleteCashReceiptByTransaction', async (event, transactionId) => {
-  try {
-    // Delete ALL receipts for this transaction (handles multi-row edge cases)
-    const result = db.prepare('DELETE FROM cashReceipts WHERE transactionId = ?').run(transactionId)
-    if (result.changes === 0) {
-      return { success: false, message: 'No cash receipts found for this transaction' }
-    }
-    console.log(`Deleted ${result.changes} cash receipt(s) for transaction ${transactionId}`)
-    return { success: true, data: { changes: result.changes, transactionId } }
-  } catch (err) {
-    console.error('deleteCashReceiptByTransaction error:', { transactionId, err })
-    return { success: false, message: err.message || 'Failed to delete cash receipt' }
-  }
-})
-
-ipcMain.handle('getCashReceiptByTransactionId', async (event, transactionId) => {
-  try {
-    const receipt = db
-      .prepare('SELECT * FROM cashReceipts WHERE transactionId = ? LIMIT 1')
-      .get(transactionId)
-    return receipt
-      ? { success: true, data: receipt }
-      : { success: false, message: 'Receipt not found' }
-  } catch (err) {
-    console.error('getCashReceiptByTransactionId error:', err)
-    return { success: false, message: err.message }
-  }
-})
-
-ipcMain.handle('getBankReceiptByTransactionId', async (event, transactionId) => {
-  try {
-    const receipt = db
-      .prepare('SELECT * FROM bankReceipts WHERE transactionId = ? LIMIT 1')
-      .get(transactionId)
-    return receipt
-      ? { success: true, data: receipt }
-      : { success: false, message: 'Receipt not found' }
-  } catch (err) {
-    console.error('getBankReceiptByTransactionId error:', err)
-    return { success: false, message: err.message }
-  }
-})
-
-ipcMain.handle('deleteBankReceiptByTransaction', async (event, transactionId) => {
-  try {
-    const result = db.prepare('DELETE FROM bankReceipts WHERE transactionId = ?').run(transactionId)
-    if (result.changes === 0) {
-      return { success: false, message: 'No bank receipts found for this transaction' }
-    }
-    console.log(`Deleted ${result.changes} bank receipt(s) for transaction ${transactionId}`)
-    return { success: true, data: { changes: result.changes, transactionId } }
-  } catch (err) {
-    console.error('deleteBankReceiptByTransaction error:', { transactionId, err })
-    return { success: false, message: err.message || 'Failed to delete bank receipt' }
-  }
-})
-
 // -------- Excel Import --------
 ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
   try {
@@ -2139,6 +1693,97 @@ ipcMain.handle('deleteMultipleLedgerEntries', (event, ids) => {
   }
 })
 
+//transferAmount
+ipcMain.handle('transferAmount', (event, data) => {
+  const { fromAccountId, toAccountId, amount, narration = 'Account Transfer' } = data
+
+  if (!fromAccountId || !toAccountId || !amount || amount <= 0) {
+    return { success: false, error: 'Invalid transfer data' }
+  }
+
+  if (fromAccountId === toAccountId) {
+    return { success: false, error: 'Same account transfer not allowed' }
+  }
+
+  try {
+    const transfer = db.transaction(() => {
+      // 1️⃣ Fetch Accounts
+      const fromAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(fromAccountId)
+
+      const toAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(toAccountId)
+
+      if (!fromAccount || !toAccount) {
+        throw new Error('Account not found')
+      }
+
+      if (fromAccount.closingBalance < amount) {
+        throw new Error('Insufficient balance')
+      }
+
+      // 2️⃣ Debit From Account
+      const newFromBalance = fromAccount.closingBalance - amount
+
+      db.prepare(
+        `
+        UPDATE accounts 
+        SET closingBalance = ? 
+        WHERE id = ?
+      `
+      ).run(newFromBalance, fromAccountId)
+
+      db.prepare(
+        `
+        INSERT INTO ledger
+        (accountId, clientId, entryType, amount, balanceAfter, referenceType, narration)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `
+      ).run(
+        fromAccountId,
+        fromAccount.clientId,
+        'debit',
+        amount,
+        newFromBalance,
+        'Transfer',
+        `To ${toAccount.accountName}`
+      )
+
+      // 3️⃣ Credit To Account
+      const newToBalance = toAccount.closingBalance + amount
+
+      db.prepare(
+        `
+        UPDATE accounts 
+        SET closingBalance = ? 
+        WHERE id = ?
+      `
+      ).run(newToBalance, toAccountId)
+
+      db.prepare(
+        `
+        INSERT INTO ledger
+        (accountId, clientId, entryType, amount, balanceAfter, referenceType, narration)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `
+      ).run(
+        toAccountId,
+        toAccount.clientId,
+        'credit',
+        amount,
+        newToBalance,
+        'Transfer',
+        `From ${fromAccount.accountName}`
+      )
+
+      return { success: true }
+    })
+
+    return transfer()
+  } catch (error) {
+    console.error('❌ Transfer failed:', error)
+    return { success: false, error: error.message }
+  }
+})
+
 // Create Account
 ipcMain.handle('createAccount', (event, accountData) => {
   try {
@@ -2331,9 +1976,6 @@ ipcMain.handle('deleteSettings', async (event, id) => {
   db.prepare(`DELETE FROM settings WHERE id = ?`).run(id)
 })
 
-const USER_DATA = app.getPath('userData')
-const FILE_PATH = path.join(USER_DATA, 'keyBindings.json')
-
 function ensureFile() {
   if (!fs.existsSync(USER_DATA)) fs.mkdirSync(USER_DATA, { recursive: true })
   if (!fs.existsSync(FILE_PATH)) fs.writeFileSync(FILE_PATH, JSON.stringify([]))
@@ -2431,6 +2073,8 @@ ipcMain.handle('getAuthorization', async () => {
     if (!passcode) {
       return { success: false, message: 'Wrong Passcode' }
     }
+    await getOrCreateSystemAccount('bank')
+    await getOrCreateSystemAccount('cash')
     return { success: true, passcode: passcode, message: 'Authorization successful.' }
   } catch (err) {
     console.error('Authorization error:', err)
@@ -2453,177 +2097,45 @@ ipcMain.handle('getSystemInfo', () => {
   }
 })
 
-// --- Schedule Daily Backup at 12:01 AM ---
-// cron.schedule(
-//   '8 23 * * *',
-//   () => {
-//     const now = moment().tz('Asia/Kolkata').format('YYYY-MM-DD HH:mm:ss')
-//     console.log(`🕐 Running backup at ${now} (IST)`)
-//     createBackup()
-//   },
-//   {
-//     scheduled: true,
-//     timezone: 'Asia/Kolkata'
-//   }
-// )
+function generateMonthlyBillNo(tableName, prefix) {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
 
-// console.log('✅ Daily backup job scheduled for 23:07 AM IST')
+  const monthPrefix = `${prefix}-${year}-${month}`
 
-// ipcMain.handle('saveAndSendWhatsAppPDF', async (event, phone, pdfBuffer, fileName, caption) => {
-//   let pdfPath = null
+  const row = db
+    .prepare(
+      `
+      SELECT billNo
+      FROM ${tableName}
+      WHERE billNo LIKE ?
+      ORDER BY id DESC
+      LIMIT 1
+    `
+    )
+    .get(`${monthPrefix}-%`)
 
-//   try {
-//     if (!phone || !pdfBuffer || !fileName) {
-//       throw new Error('Missing required parameters')
-//     }
-
-//     const sanitizedFileName = path.basename(fileName)
-
-//     let buffer
-//     if (pdfBuffer instanceof ArrayBuffer) {
-//       buffer = Buffer.from(pdfBuffer)
-//     } else if (pdfBuffer instanceof Uint8Array) {
-//       buffer = Buffer.from(pdfBuffer)
-//     } else if (Buffer.isBuffer(pdfBuffer)) {
-//       buffer = pdfBuffer
-//     } else {
-//       throw new Error('Invalid PDF data format')
-//     }
-
-//     pdfPath = path.join(app.getPath('documents'), sanitizedFileName)
-
-//     await fs.writeFile(pdfPath, buffer)
-//     console.log(`📄 PDF saved to: ${pdfPath}`)
-
-//     const success = await sendWhatsAppPDF(phone, pdfPath, caption)
-
-//     return { success, filePath: pdfPath }
-//   } catch (err) {
-//     console.error('❌ Error saving/sending PDF:', err)
-
-//     if (pdfPath) {
-//       try {
-//         await fs.access(pdfPath)
-//         await fs.unlink(pdfPath)
-//         console.log('🗑️ Cleaned up failed PDF file')
-//       } catch (unlinkErr) {
-//         // Ignore
-//         console.error('Failed to clean up failed PDF file:', unlinkErr)
-//       }
-//     }
-
-//     return { success: false, error: err.message }
-//   }
-// })
-
-// // Get WhatsApp status
-// ipcMain.handle('getWhatsAppStatus', async () => {
-//   return await getWhatsAppStatus()
-// })
-
-// // Logout WhatsApp
-// ipcMain.handle('logoutWhatsApp', async () => {
-//   await logoutWhatsApp()
-//   return { success: true }
-// })
-
-//transferAmount
-
-ipcMain.handle('transferAmount', (event, data) => {
-  const { fromAccountId, toAccountId, amount, narration = 'Account Transfer' } = data
-
-  if (!fromAccountId || !toAccountId || !amount || amount <= 0) {
-    return { success: false, error: 'Invalid transfer data' }
+  if (!row || !row.billNo) {
+    return `${monthPrefix}-0001`
   }
 
-  if (fromAccountId === toAccountId) {
-    return { success: false, error: 'Same account transfer not allowed' }
+  const lastNumber = parseInt(row.billNo.split('-')[3], 10) || 0
+  const nextNumber = lastNumber + 1
+
+  return `${monthPrefix}-${String(nextNumber).padStart(4, '0')}`
+}
+
+ipcMain.handle('generateBillNo', (event, pageName) => {
+  if (pageName === 'Sales') {
+    return generateMonthlyBillNo('Sales', 'SAL')
   }
 
-  try {
-    const transfer = db.transaction(() => {
-      // 1️⃣ Fetch Accounts
-      const fromAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(fromAccountId)
-
-      const toAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(toAccountId)
-
-      if (!fromAccount || !toAccount) {
-        throw new Error('Account not found')
-      }
-
-      if (fromAccount.closingBalance < amount) {
-        throw new Error('Insufficient balance')
-      }
-
-      // 2️⃣ Debit From Account
-      const newFromBalance = fromAccount.closingBalance - amount
-
-      db.prepare(
-        `
-        UPDATE accounts 
-        SET closingBalance = ? 
-        WHERE id = ?
-      `
-      ).run(newFromBalance, fromAccountId)
-
-      db.prepare(
-        `
-        INSERT INTO ledger
-        (accountId, clientId, entryType, amount, balanceAfter, referenceType, narration)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `
-      ).run(
-        fromAccountId,
-        fromAccount.clientId,
-        'debit',
-        amount,
-        newFromBalance,
-        'Transfer',
-        `To ${toAccount.accountName}`
-      )
-
-      // 3️⃣ Credit To Account
-      const newToBalance = toAccount.closingBalance + amount
-
-      db.prepare(
-        `
-        UPDATE accounts 
-        SET closingBalance = ? 
-        WHERE id = ?
-      `
-      ).run(newToBalance, toAccountId)
-
-      db.prepare(
-        `
-        INSERT INTO ledger
-        (accountId, clientId, entryType, amount, balanceAfter, referenceType, narration)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `
-      ).run(
-        toAccountId,
-        toAccount.clientId,
-        'credit',
-        amount,
-        newToBalance,
-        'Transfer',
-        `From ${fromAccount.accountName}`
-      )
-
-      return { success: true }
-    })
-
-    return transfer()
-  } catch (error) {
-    console.error('❌ Transfer failed:', error)
-    return { success: false, error: error.message }
+  if (pageName === 'Purchase') {
+    return generateMonthlyBillNo('Purchases', 'PUR')
   }
+
+  return null
 })
-
-db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_transactions_clientId ON transactions(clientId);
-    CREATE INDEX IF NOT EXISTS idx_transactions_productId ON transactions(productId);
-    CREATE INDEX IF NOT EXISTS idx_bankReceipts_bank ON bankReceipts(bank);
-    CREATE INDEX IF NOT EXISTS idx_cashReceipts_cash ON cashReceipts(cash);
-  `)
 
 export default db

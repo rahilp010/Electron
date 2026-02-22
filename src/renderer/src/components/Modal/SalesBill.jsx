@@ -186,6 +186,22 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
   })
   const [nextBillId, setNextBillId] = useState(null)
 
+  useEffect(() => {
+    const fetchNextBillId = async () => {
+      const next = await window.api.generateBillNo('Sales')
+      setNextBillId(next)
+
+      if (!isUpdateExpense) {
+        setSalesBill((prev) => ({
+          ...prev,
+          billNumber: next
+        }))
+      }
+    }
+
+    fetchNextBillId()
+  }, [])
+
   /* ========= Prefill for Update ========= */
   useEffect(() => {
     if (!existingTransaction || !isUpdateExpense) return
@@ -234,18 +250,9 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       console.error('fetchAllData error', err)
     }
   }, [dispatch])
-  const fetchNextTransactionId = async () => {
-    const allTransactions = await window.api.getAllSales()
-    if (allTransactions?.length) {
-      const lastTransaction = allTransactions[allTransactions.length - 1]
-      setNextBillId(lastTransaction.id + 1)
-    } else {
-      setNextBillId(1)
-    }
-  }
+
   useEffect(() => {
     fetchAllData()
-    fetchNextTransactionId()
   }, [fetchAllData])
 
   const inputRef = useRef(null)
@@ -672,7 +679,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
           totalAmountWithoutTax: row.totalAmountWithoutTax || 0,
           totalAmountWithTax: row.totalAmountWithTax || 0,
-          billNo: salesBill.billNumber,
+          billNo: salesBill.billNumber?.trim() ? salesBill.billNumber.trim() : nextBillId,
           dueDate: new Date().setMonth(new Date().getMonth() + 1),
           description: salesBill?.description || '',
           methodType: 'Receipt',
@@ -722,7 +729,6 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         return
       }
 
-      debugger
       // Recalculate rows (unchanged)
       const rowsDetailed = validRows.map((r) => {
         const price = Number(r.productPrice || 0)
@@ -743,8 +749,6 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         paymentData.paymentMethod === 'split'
           ? paymentData.splits.map((m) => m)
           : paymentData.paymentMethod
-
-      console.log('currentMethod', currentMethod)
 
       const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
       let totalBillAmount = totalBase
@@ -798,7 +802,6 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         const pending = Math.max(0, itemTotal - itemPaid)
         let targetTx = relatedTransactions[i]
 
-        debugger
         const updatedTxData = {
           id: targetTx?.id || existingTransaction.id,
           clientId: salesBill.clientId,
@@ -929,11 +932,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         toast.error('Failed to generate PDF. Check console for details.')
       })
   }, [generateInvoiceHtml])
-  const formatTransactionId = (id) => {
-    if (!id) return ''
-    const padded = id.toString().padStart(6, '0')
-    return `SB${padded}`
-  }
+
   // --- Framer Motion variants for modal and panels ---
   const modalVariants = {
     hidden: { opacity: 0 },
@@ -972,6 +971,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       fetchExistingReceipt()
     }
   }, [isUpdateExpense, existingTransaction, showPaymentModal])
+
   return (
     <AnimatePresence>
       <motion.div
@@ -1028,7 +1028,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
                   </div>
                   <div className="flex items-center gap-2 bg-white/40 text-indigo-700 font-medium p-2 text-sm rounded-full px-3 ring-1 ring-indigo-200">
                     <FileText size={16} />
-                    {formatTransactionId(nextBillId)}
+                    {nextBillId}
                   </div>
                 </div>
                 <button
