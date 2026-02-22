@@ -181,7 +181,8 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         productPrice: 0,
         description: ''
       }
-    ]
+    ],
+    payments: []
   })
   const [nextBillId, setNextBillId] = useState(null)
 
@@ -537,7 +538,6 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
 
   /* ========= Submit Handler ========= */
   const handleSubmit = async (paymentData) => {
-    debugger
     try {
       const validRows = salesBill.products.filter((it) => it.productId && it.productQuantity > 0)
       const rowsDetailed = validRows.map((r) => {
@@ -594,40 +594,16 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           rowsDetailed[0].taxTotal += drift
         }
       }
-      // Freight tax allocation
-      // const totalFreightTax = billFreightTax
-      // if (totalFreightTax > 0 && totalBase > 0) {
-      //   salesBill.freightTaxAmount.forEach((ft) => {
-      //     const ftValueTotal = ft.value
-      //     let allocatedSumFt = 0
-      //     rowsDetailed.forEach((r) => {
-      //       const share = r.base / totalBase
-      //       const allocatedFt = Math.round(ftValueTotal * share * 100) / 100
-      //       r.taxes.push({
-      //         code: `freightTax-${ft.id}`,
-      //         name: `${ft.name} on Freight`,
-      //         percentage: ft.rate,
-      //         value: allocatedFt
-      //       })
-      //       r.total += allocatedFt
-      //       r.taxTotal += allocatedFt
-      //       allocatedSumFt += allocatedFt
-      //     })
-      //     const driftFt = Math.round((ftValueTotal - allocatedSumFt) * 100) / 100
-      //     if (Math.abs(driftFt) >= 0.01) {
-      //       const firstFt = rowsDetailed[0].taxes.find((t) => t.code === `freightTax-${ft.id}`)
-      //       if (firstFt) firstFt.value += driftFt
-      //       rowsDetailed[0].total += driftFt
-      //       rowsDetailed[0].taxTotal += driftFt
-      //     }
-      //   })
-      // }
 
       let paidDistribution = []
       const totalBillAmount = rowsDetailed.reduce((s, r) => s + r.totalAmountWithTax, 0)
 
       const txStatus = salesBill.statusOfTransaction
-      const currentMethod = salesBill.paymentMethod
+
+      const currentMethod =
+        paymentData.paymentMethod === 'split'
+          ? paymentData.splits.map((m) => m)
+          : paymentData.paymentMethod
 
       if (txStatus !== 'completed') {
         paidDistribution = rowsDetailed.map(() => 0)
@@ -677,23 +653,14 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
               ? Math.max(0, Math.round((saleAmount - itemPaid) * 100) / 100)
               : saleAmount
 
-        // const allocatedFreight = row.taxes.find((t) => t.code === 'freightCharges')?.value || 0
-        // const allocatedFreightTaxes = row.taxes
-        //   .filter((t) => t.code.startsWith('freightTax-'))
-        //   .map((t) => ({
-        //     id: t.code.split('-')[2],
-        //     name: t.name.replace(' on Freight', ''),
-        //     rate: t.percentage,
-        //     value: t.value
-        //   }))
-
         const salesData = {
           clientId: salesBill.clientId,
           productId: row.productId,
           date: new Date().toISOString(),
           quantity: Number(row.productQuantity),
           saleAmount,
-          paymentMethod: currentMethod,
+          paymentMethod:
+            currentMethod === 'googlepay' || currentMethod === 'cheque' ? 'bank' : currentMethod,
           statusOfTransaction: txStatus,
           paymentType: salesBill.paymentType,
           paidAmount: itemPaid,
@@ -712,7 +679,10 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           pageName: 'Sales',
           payments: [
             {
-              method: currentMethod, // Use currentMethod
+              method:
+                currentMethod === 'googlepay' || currentMethod === 'cheque'
+                  ? 'Bank'
+                  : currentMethod, // Use currentMethod
               amount: itemPaid,
               chequeNo: null,
               accountId: currentMethod === 'cash' ? CASH_ACCOUNT_ID : BANK_ACCOUNT_ID
@@ -752,6 +722,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         return
       }
 
+      debugger
       // Recalculate rows (unchanged)
       const rowsDetailed = validRows.map((r) => {
         const price = Number(r.productPrice || 0)
@@ -768,7 +739,12 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       })
 
       const txStatus = paymentData?.statusOfTransaction || salesBill.statusOfTransaction
-      const currentMethod = paymentData?.method || salesBill.paymentMethod
+      const currentMethod =
+        paymentData.paymentMethod === 'split'
+          ? paymentData.splits.map((m) => m)
+          : paymentData.paymentMethod
+
+      console.log('currentMethod', currentMethod)
 
       const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
       let totalBillAmount = totalBase
@@ -822,6 +798,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         const pending = Math.max(0, itemTotal - itemPaid)
         let targetTx = relatedTransactions[i]
 
+        debugger
         const updatedTxData = {
           id: targetTx?.id || existingTransaction.id,
           clientId: salesBill.clientId,
@@ -848,7 +825,10 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           pageName: 'Purchase',
           payments: [
             {
-              method: currentMethod,
+              method:
+                currentMethod === 'googlepay' || currentMethod === 'cheque'
+                  ? 'Bank'
+                  : currentMethod, // Use currentMethod
               amount: itemPaid,
               chequeNo: null,
               accountId: currentMethod === 'cash' ? CASH_ACCOUNT_ID : BANK_ACCOUNT_ID
@@ -864,7 +844,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         }
       }
 
-      toast.success('Multi=product Sales bill updated successfully!')
+      toast.success('Multiproduct Sales bill updated successfully!')
       const list = await window.api.getAllSales()
       dispatch(setTransactions(list.data))
       setShowSalesBillModal(false)
@@ -890,12 +870,13 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
   const bankAccount = accounts.find((acc) => acc.accountName.toUpperCase() === 'BANK ACCOUNT')
   const CASH_ACCOUNT_ID = cashAccount?.id
   const BANK_ACCOUNT_ID = bankAccount?.id
+
   const handlePaymentConfirm = async (paymentData) => {
     try {
       // Update local state for UI only
       setSalesBill((prev) => ({
         ...prev,
-        paymentMethod: paymentData.method,
+        paymentMethod: paymentData.paymentMethod,
         referenceNo: paymentData.account,
         sendTo: paymentData.sendTo, // Option B stored here
         paidAmount: salesBill.statusOfTransaction === 'completed' ? paymentData.amount : 0
@@ -913,38 +894,6 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         sourceAccountId = CASH_ACCOUNT_ID
       } else {
         sourceAccountId = BANK_ACCOUNT_ID
-      }
-      // Try to fetch source account (if exists)
-      let sourceAccount = null
-      try {
-        if (typeof window.api.getAccountById === 'function') {
-          sourceAccount = await window.api.getAccountById(sourceAccountId)
-        } else if (typeof accountApi.getAccountById === 'function') {
-          // fallback to REST api wrapper if available
-          sourceAccount = await accountApi.getAccountById(sourceAccountId)
-        } else {
-          // no API to fetch account, leave sourceAccount null
-          console.warn('No getAccountById available on window.api or accountApi')
-        }
-      } catch (err) {
-        console.warn('Failed to fetch account by id', sourceAccountId, err)
-      }
-      // Determine source account display name for ledger
-      let fromAccountName = paymentData.sendTo || (sourceAccount ? sourceAccount.accountName : null)
-      // Prepare ledger transaction object:
-      // debitAccount: client (we're paying supplier/client)
-      // creditAccount: source (bank/cash/check)
-      // amount: amount
-      const clientInfo = clients.find((c) => c.id === salesBill.clientId)
-      const clientAccountName = clientInfo?.clientName || `Client-${salesBill.clientId}`
-      const ledgerTx = {
-        debitAccount: clientAccountName,
-        creditAccount: fromAccountName || `Account-${sourceAccountId}`,
-        amount: amount,
-        paymentMethod: paymentData.method || salesBill.paymentMethod || 'bank',
-        description: `Sales payment via ${paymentData.method || 'bank'} for Bill ${salesBill.billNumber || ''}`,
-        referenceId: nextBillId,
-        createdAt: new Date().toISOString()
       }
 
       if (isUpdateExpense) {

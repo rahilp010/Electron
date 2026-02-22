@@ -12,18 +12,16 @@ const dbPath = app.isPackaged
 const db = new Database(dbPath)
 
 // Enable foreign key constraints
-db.pragma('foreign_keys = ON')
+// db.pragma('foreign_keys = ON')
 
-const columns = [`accounterType TEXT CHECK (accounterType IN ('Main', 'GPay', 'Client'))`]
+// const columns = [`accounterType TEXT CHECK (accounterType IN ('Main', 'GPay', 'Client'))`]
 
-columns.forEach((col) => {
-  db.prepare(`ALTER TABLE accounts ADD COLUMN ${col}`).run()
-})
+// columns.forEach((col) => {
+//   db.prepare(`ALTER TABLE accounts ADD COLUMN ${col}`).run()
+// })
 
 // db.prepare('DROP TABLE products;').run()
 // db.prepare('DROP TABLE clients;').run()
-// db.prepare('DROP TABLE bankReceipts;').run()
-// db.prepare('DROP TABLE cashReceipts;').run()
 // db.prepare('DROP TABLE accounts;').run()
 // db.prepare('DROP TABLE ledger;').run()
 // db.prepare('DROP TABLE purchases;').run()
