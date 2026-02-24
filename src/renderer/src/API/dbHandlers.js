@@ -2138,4 +2138,80 @@ ipcMain.handle('generateBillNo', (event, pageName) => {
   return null
 })
 
+// GET PENDING COLLECTIONS (Sales)
+ipcMain.handle('getPendingCollections', () => {
+  try {
+    const sales = db
+      .prepare(
+        `
+      SELECT 
+        s.id,
+        s.clientId,
+        c.clientName,
+        s.pendingAmount,
+        s.totalAmountWithTax,
+        s.totalAmountWithoutTax,
+        s.paymentMethod,
+        s.dueDate,
+        s.createdAt
+      FROM sales s
+      LEFT JOIN clients c ON s.clientId = c.id
+      WHERE s.pendingAmount > 0
+      ORDER BY s.createdAt DESC
+    `
+      )
+      .all()
+
+    const totalPending = sales.reduce((sum, s) => sum + (s.pendingAmount || 0), 0)
+
+    return {
+      success: true,
+      totalPending,
+      count: sales.length,
+      list: sales
+    }
+  } catch (error) {
+    console.error('Pending Collections Error:', error)
+    return { success: false, message: 'Failed to load pending collections' }
+  }
+})
+
+// GET PENDING PAYMENTS (Purchase)
+ipcMain.handle('getPendingPayments', () => {
+  try {
+    const purchases = db
+      .prepare(
+        `
+      SELECT 
+        p.id,
+        p.clientId,
+        c.clientName AS vendorName,
+        p.pendingAmount,
+        p.totalAmountWithTax,
+        p.totalAmountWithoutTax,
+        p.paymentMethod,
+        p.dueDate,
+        p.createdAt
+      FROM purchase p
+      LEFT JOIN clients c ON p.clientId = c.id
+      WHERE p.pendingAmount > 0
+      ORDER BY p.createdAt DESC
+    `
+      )
+      .all()
+
+    const totalPending = purchases.reduce((sum, p) => sum + (p.pendingAmount || 0), 0)
+
+    return {
+      success: true,
+      totalPending,
+      count: purchases.length,
+      list: purchases
+    }
+  } catch (error) {
+    console.error('Pending Payments Error:', error)
+    return { success: false, message: 'Failed to load pending payments' }
+  }
+})
+
 export default db

@@ -84,6 +84,9 @@ contextBridge.exposeInMainWorld('api', {
   // Authorization
   getAuthorization: () => ipcRenderer.invoke('getAuthorization'),
 
+  getPendingCollections: () => ipcRenderer.invoke('getPendingCollections'),
+  getPendingPayments: () => ipcRenderer.invoke('getPendingPayments'),
+
   onBackupStatus: (callback) => {
     ipcRenderer.on('backup-status', (_, data) => callback(data))
 

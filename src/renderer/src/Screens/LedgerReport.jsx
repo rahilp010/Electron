@@ -75,30 +75,22 @@ const AccountRow = memo(({ client, onOpenLedger }) => {
         </div>
       </td>
       <td className="px-6 py-3">
-        <div
-          className={`py-2 px-3 w-fit rounded-full text-xs font-bold transition-all duration-200 ${
-            client.accountType === 'Creditors'
-              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-              : client.accountType === 'Debtors'
-                ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                : 'bg-gray-100 text-gray-700 border border-gray-200'
-          }`}
-        >
-          {client.accountType || 'Other'}
-        </div>
+        <div>{client.accountType || 'Other'}</div>
       </td>
-      <td className="px-6 py-3 font-mono text-sm uppercase">
-        {client.gstNo ? (
-          <Whisper
-            trigger="hover"
-            placement="top"
-            speaker={<Tooltip>GST Number: {client.gstNo}</Tooltip>}
-          >
-            <span className="bg-gray-100 px-2 py-1 rounded border">{client.gstNo}</span>
-          </Whisper>
-        ) : (
-          <span className="text-gray-400 italic">Not provided</span>
-        )}
+      <td className="px-6 py-3 text-sm uppercase">
+        <div className="flex items-center justify-center bg-gradient-to-r from-slate-50 to-gray-100 border border-gray-200 px-3 py-1.5 rounded-full font-semibold text-sm shadow-sm hover:shadow-md hover:scale-[1.03] transition-all duration-300">
+          {client.gstNo ? (
+            <Whisper
+              trigger="hover"
+              placement="top"
+              speaker={<Tooltip>GST Number: {client.gstNo}</Tooltip>}
+            >
+              <span>{client.gstNo}</span>
+            </Whisper>
+          ) : (
+            <span className="text-gray-400 italic">Not provided</span>
+          )}
+        </div>
       </td>
       <td className="px-6 py-3 max-w-[350px] truncate">
         {client.address ? (
@@ -110,13 +102,16 @@ const AccountRow = memo(({ client, onOpenLedger }) => {
         )}
       </td>
       <td className="px-6 py-3">
-        <span
-          className={`font-semibold text-lg ${
-            (client.pendingAmount || 0) > 0 ? 'text-red-500' : 'text-emerald-500'
+        <div
+          className={`inline-flex items-center justify-center gap-1 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300 ${
+            (client.pendingAmount || 0) > 0
+              ? 'bg-gradient-to-r from-red-50 to-green-100 text-red-700 border border-red-300 '
+              : 'bg-gradient-to-r from-emerald-50 to-green-100 text-emerald-700 border border-emerald-300 '
           }`}
         >
           {toThousands(client.pendingAmount || 0)}
-        </span>
+        </div>
+        <span className={`font-semibold text-lg `}></span>
       </td>
     </tr>
   )
@@ -133,16 +128,6 @@ const useAccountOperations = () => {
     } catch (error) {
       console.error('Error fetching clients:', error)
       toast.error('Failed to fetch accounts')
-    }
-  }, [dispatch])
-
-  const fetchAllTransactions = useCallback(async () => {
-    try {
-      const response = await transactionApi.getAllTransactions()
-      dispatch(setTransactions(response))
-    } catch (error) {
-      console.error('Error fetching transactions:', error)
-      toast.error('Failed to fetch transactions')
     }
   }, [dispatch])
 
@@ -163,12 +148,12 @@ const useAccountOperations = () => {
     }
   }, [])
 
-  return { fetchAllClients, fetchAllTransactions, fetchClientLedger }
+  return { fetchAllClients, fetchClientLedger }
 }
 
 // Main Component
 const LedgerReport = () => {
-  const { fetchAllClients, fetchAllTransactions, fetchClientLedger } = useAccountOperations()
+  const { fetchAllClients, fetchClientLedger } = useAccountOperations()
 
   // State management
   const [showLoader, setShowLoader] = useState(false)
