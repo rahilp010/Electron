@@ -5,13 +5,13 @@
 /* eslint-disable prettier/prettier */
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { setClients, setProducts, setTransactions } from '../app/features/electronSlice'
+import { setAccount, setClients, setProducts, setTransactions } from '../app/features/electronSlice'
 import { clientApi, productApi, transactionApi } from '../API/Api'
 import { toast } from 'react-toastify'
 import Navbar from '../components/UI/Navbar'
 import { useNavigate } from 'react-router-dom'
 import { DateRangePicker, SelectPicker } from 'rsuite'
-import { Doughnut } from 'react-chartjs-2'
+import { Doughnut, Line } from 'react-chartjs-2'
 import {
   TrendingUp,
   TrendingDown,
@@ -19,21 +19,51 @@ import {
   Package,
   DollarSign,
   CreditCard,
-  BarChart3,
-  PieChart as PieChartIcon,
   Calendar,
   RefreshCcw,
-  Eye,
-  FileText,
+  FileUp,
+  MoreVertical,
+  Maximize2,
+  ChevronRight,
+  Star,
+  Activity,
   Building2,
+  FileText,
   ShoppingCart,
-  Wallet,
-  FileUp
+  Wallet, // Added Wallet icon
+  User,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Receipt
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import { Chart as ChartJs, defaults } from 'chart.js/auto'
+import {
+  Chart as ChartJs,
+  defaults,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  Filler
+} from 'chart.js'
 
-// ✅ Register elements/plugins for Doughnut chart
+// Register ChartJS components
+ChartJs.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  Filler
+)
+
 defaults.maintainAspectRatio = false
 defaults.responsive = true
 
@@ -50,7 +80,11 @@ const formatCurrency = (value) => {
 
 const formatDate = (dateString) => {
   if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('en-IN')
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  })
 }
 
 const getDateRange = (range) => {
@@ -95,18 +129,15 @@ const getDateRange = (range) => {
     default:
       start.setDate(now.getDate() - 30)
   }
-
   return { start, end }
 }
 
-// Animated Number Component
-const AnimatedNumber = React.memo(({ value, duration = 200 }) => {
+const AnimatedNumber = React.memo(({ value, duration = 800 }) => {
   const [displayValue, setDisplayValue] = useState(0)
 
   useEffect(() => {
     const numericValue =
       typeof value === 'string' ? parseFloat(value.replace(/[^\d.-]/g, '')) || 0 : value || 0
-
     let startTime
     let startValue = displayValue
 
@@ -114,25 +145,18 @@ const AnimatedNumber = React.memo(({ value, duration = 200 }) => {
       if (!startTime) startTime = currentTime
       const elapsed = currentTime - startTime
       const progress = Math.min(elapsed / duration, 1)
-
-      // Easing function for smooth animation
       const easeOut = 1 - Math.pow(1 - progress, 3)
       const current = startValue + (numericValue - startValue) * easeOut
 
       setDisplayValue(current)
-
-      if (progress < 1) {
-        requestAnimationFrame(animate)
-      }
+      if (progress < 1) requestAnimationFrame(animate)
     }
-
     requestAnimationFrame(animate)
-  }, [value, duration, displayValue])
+  }, [value, duration])
 
   return Math.round(displayValue).toLocaleString('en-IN')
 })
 
-// Custom hooks for data operations
 const useAnalyticsData = () => {
   const dispatch = useDispatch()
   const [loading, setLoading] = useState(false)
@@ -140,177 +164,117 @@ const useAnalyticsData = () => {
   const clients = useSelector((state) => state.electron.clients.data || [])
   const products = useSelector((state) => state.electron.products.data || [])
   const transactions = useSelector((state) => state.electron.transaction.data || [])
+  const accounts = useSelector((state) => state.electron.account.data || [])
 
   const fetchAllData = useCallback(async () => {
-    setLoading(true)
     try {
-      const [clientsRes, productsRes, transactionsRes] = await Promise.all([
-        clientApi.getAllClients(),
-        productApi.getAllProducts(),
-        transactionApi.getAllTransactions()
+      setLoading(true)
+      const [clientsRes, productsRes, purchaseRes, salesRes, accountsRef] = await Promise.all([
+        window.api.getAllClients(),
+        window.api.getAllProducts(),
+        window.api.getAllPurchases(),
+        window.api.getAllSales(),
+        window.api.getAllAccounts()
       ])
 
       dispatch(setClients(clientsRes))
       dispatch(setProducts(productsRes))
-      dispatch(setTransactions(transactionsRes))
-    } catch (error) {
-      console.error('Error fetching analytics data:', error)
+
+      const purchases = purchaseRes?.data || []
+      const sales = salesRes?.data || []
+      dispatch(setTransactions([...purchases, ...sales]))
+      dispatch(setAccount(accountsRef))
+    } catch (err) {
       toast.error('Failed to fetch analytics data')
     } finally {
       setLoading(false)
     }
   }, [dispatch])
 
-  return { clients, products, transactions, loading, fetchAllData }
+  useEffect(() => {
+    fetchAllData()
+  }, [fetchAllData])
+  return { clients, products, transactions, loading, accounts, fetchAllData }
 }
 
-// Main Component
 const Analytics = () => {
   const navigate = useNavigate()
-  const { clients, products, transactions, loading, fetchAllData } = useAnalyticsData()
+  const { clients, products, transactions, loading, accounts, fetchAllData } = useAnalyticsData()
 
-  // State management
-  const [dateRange, setDateRange] = useState('last30days')
+  const [dateRange, setDateRange] = useState('last7days')
   const [customDateRange, setCustomDateRange] = useState([])
-  const [activeTab, setActiveTab] = useState('overview')
-  const [autoRefresh, setAutoRefresh] = useState(false)
 
-  // Filtered data based on date range
   const filteredData = useMemo(() => {
-    let dateFilter
-
-    if (customDateRange && customDateRange.length === 2) {
-      dateFilter = {
-        start: new Date(customDateRange[0]),
-        end: new Date(customDateRange[1])
-      }
-    } else {
-      dateFilter = getDateRange(dateRange)
-    }
-
-    const filteredTransactions = transactions.filter((t) => {
-      const transactionDate = new Date(t.createdAt)
-      return transactionDate >= dateFilter.start && transactionDate <= dateFilter.end
-    })
-
-    const filteredClients = clients.filter((c) => {
-      const clientDate = new Date(c.createdAt)
-      return clientDate >= dateFilter.start && clientDate <= dateFilter.end
-    })
-
-    const filteredProducts = products.filter((p) => {
-      const productDate = new Date(p.createdAt)
-      return productDate >= dateFilter.start && productDate <= dateFilter.end
-    })
+    let dateFilter =
+      customDateRange && customDateRange.length === 2
+        ? { start: new Date(customDateRange[0]), end: new Date(customDateRange[1]) }
+        : getDateRange(dateRange)
 
     return {
-      transactions: filteredTransactions,
-      clients: filteredClients,
-      products: filteredProducts,
+      transactions: transactions.filter(
+        (t) => new Date(t.createdAt) >= dateFilter.start && new Date(t.createdAt) <= dateFilter.end
+      ),
+      clients: clients.filter(
+        (c) => new Date(c.createdAt) >= dateFilter.start && new Date(c.createdAt) <= dateFilter.end
+      ),
+      products: products.filter(
+        (p) => new Date(p.createdAt) >= dateFilter.start && new Date(p.createdAt) <= dateFilter.end
+      ),
       allTransactions: transactions,
       allClients: clients,
-      allProducts: products
+      allProducts: products,
+      allAccounts: accounts
     }
-  }, [transactions, clients, products, dateRange, customDateRange])
+  }, [transactions, clients, products, accounts, dateRange, customDateRange])
 
-  // Analytics calculations
   const analytics = useMemo(() => {
-    const { transactions: filteredTx, allTransactions, allClients, allProducts } = filteredData
+    const {
+      transactions: filteredTx,
+      allTransactions,
+      allClients,
+      allProducts,
+      allAccounts
+    } = filteredData
 
-    // Sales Analytics
-    const salesTransactions = filteredTx.filter((t) => t.transactionType === 'sales')
-    const purchaseTransactions = filteredTx.filter((t) => t.transactionType === 'purchase')
+    const salesTransactions = filteredTx.filter((t) => t.pageName === 'Sales')
+    const purchaseTransactions = filteredTx.filter((t) => t.pageName === 'Purchase')
 
-    const totalSales = salesTransactions.reduce(
-      (sum, t) => sum + (t.sellAmount * t.quantity || 0),
+    const totalSales = salesTransactions.reduce((sum, t) => sum + (t.totalAmountWithTax || 0), 0)
+    const totalPurchases = purchaseTransactions.reduce(
+      (sum, t) => sum + (t.totalAmountWithTax || 0),
       0
     )
-    const totalPurchases = purchaseTransactions.reduce((sum, t) => sum + (t.purchaseAmount || 0), 0)
 
-    const totalRevenue = totalSales
-    const totalExpenses = totalPurchases
-    const netProfit = totalRevenue - totalExpenses
-    const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
+    const totalRevenue = totalSales - totalPurchases
+    const netProfit = totalRevenue
+    const totalInventoryValue = allProducts.reduce(
+      (sum, p) => sum + (p.productPrice || 0) * (p.productQuantity || 0),
+      0
+    )
+    const profitMargin = totalSales > 0 ? (netProfit / totalSales) * 100 : 0
 
-    // Transaction counts
-    const totalOrders = filteredTx.length
     const completedOrders = filteredTx.filter((t) => t.statusOfTransaction === 'completed').length
     const pendingOrders = filteredTx.filter((t) => t.statusOfTransaction === 'pending').length
-
-    // Client Analytics
     const activeClients = allClients.filter((c) =>
       allTransactions.some((t) => t.clientId === c.id)
     ).length
+    const lowStockProducts = allProducts.filter((p) => (p.productQuantity || 0) < 10).length
 
-    const newClients = filteredData.clients.length
-
-    // Product Analytics
-    const totalProducts = allProducts.length
-    const lowStockProducts = allProducts.filter((p) => (p.quantity || 0) < 10).length
-    const totalInventoryValue = allProducts.reduce(
-      (sum, p) => sum + (p.price || 0) * (p.quantity || 0),
-      0
-    )
-
-    // Average calculations
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
-    const avgProductPrice =
-      allProducts.length > 0
-        ? allProducts.reduce((sum, p) => sum + (p.price || 0), 0) / allProducts.length
-        : 0
-
-    // Pending amounts
-    const totalPendingAmount = allClients.reduce((sum, c) => sum + (c.pendingAmount || 0), 0)
-    const totalPaidAmount = allClients.reduce((sum, c) => sum + (c.paidAmount || 0), 0)
-    console.log('all', allClients)
-
-    console.log('totalPaidAmount', totalPaidAmount)
-
-    // Monthly trend data
     const monthlyData = {}
     filteredTx.forEach((t) => {
-      const month = new Date(t.createdAt).toLocaleString('en-IN', {
-        month: 'short',
-        year: 'numeric'
-      })
-      if (!monthlyData[month]) {
-        monthlyData[month] = { sales: 0, purchases: 0, orders: 0 }
-      }
-
-      let amount = 0
-      if (t.transactionType === 'sales') {
-        amount = (t.sellAmount || 0) * (t.quantity || 0)
-      } else if (t.transactionType === 'purchase') {
-        amount = t.purchaseAmount || 0
-      }
-
-      if (t.transactionType === 'sales') {
-        monthlyData[month].sales += amount
-      } else if (t.transactionType === 'purchase') {
-        monthlyData[month].purchases += amount
-      }
-      monthlyData[month].orders += 1
+      const month = new Date(t.createdAt).toLocaleString('en-US', { month: 'short' })
+      if (!monthlyData[month]) monthlyData[month] = { sales: 0, purchases: 0 }
+      const amount = t.totalAmountWithTax || 0
+      if (t.pageName === 'Sales') monthlyData[month].sales += amount
+      else if (t.pageName === 'Purchase') monthlyData[month].purchases += amount
     })
 
-    // Product category analysis
     const categoryData = {}
     allProducts.forEach((p) => {
       const category = p.assetsType || 'Other'
-      if (!categoryData[category]) {
-        categoryData[category] = { count: 0, value: 0 }
-      }
+      if (!categoryData[category]) categoryData[category] = { count: 0, value: 0 }
       categoryData[category].count += 1
-      categoryData[category].value += (p.price || 0) * (p.quantity || 0)
-    })
-
-    // Top clients by transaction volume
-    const clientTransactionVolume = {}
-    allTransactions.forEach((t) => {
-      const clientId = t.clientId
-      if (!clientTransactionVolume[clientId]) {
-        clientTransactionVolume[clientId] = 0
-      }
-      clientTransactionVolume[clientId] += (t.sellAmount || 0) * (t.quantity || 0)
+      categoryData[category].value += (p.productPrice || 0) * (p.productQuantity || 0)
     })
 
     return {
@@ -321,24 +285,21 @@ const Analytics = () => {
         netProfit,
         profitMargin
       },
-      orders: {
-        total: totalOrders,
-        completed: completedOrders,
-        pending: pendingOrders,
-        avgValue: avgOrderValue
-      },
+      orders: { total: filteredTx.length, completed: completedOrders, pending: pendingOrders },
       clients: {
         total: allClients.length,
         active: activeClients,
-        new: newClients,
-        pendingAmount: totalPendingAmount,
-        paidAmount: totalPaidAmount
+        new: filteredData.clients.length,
+        pendingAmount: allClients.reduce((sum, c) => sum + (c.pendingAmount || 0), 0),
+        paidAmount: allClients.reduce((sum, c) => sum + (c.paidAmount || 0), 0)
       },
       products: {
-        total: totalProducts,
-        lowStock: lowStockProducts,
+        total: allProducts.length,
         inventoryValue: totalInventoryValue,
-        avgPrice: avgProductPrice
+        lowStock: lowStockProducts
+      },
+      accounts: {
+        total: allAccounts.length
       },
       trends: {
         monthly: Object.entries(monthlyData).map(([month, data]) => ({
@@ -346,100 +307,16 @@ const Analytics = () => {
           ...data,
           profit: data.sales - data.purchases
         })),
-        categories: Object.entries(categoryData).map(([category, data]) => ({
-          category,
-          ...data,
-          percentage: totalInventoryValue > 0 ? (data.value / totalInventoryValue) * 100 : 0
-        }))
+        categories: Object.entries(categoryData)
+          .map(([category, data]) => ({
+            category,
+            ...data,
+            percentage: totalInventoryValue > 0 ? (data.value / totalInventoryValue) * 100 : 0
+          }))
+          .sort((a, b) => b.value - a.value)
       }
     }
   }, [filteredData])
-
-  // KPI Cards configuration
-  const kpiCards = [
-    {
-      title: 'Total Revenue',
-      value: formatCurrency(analytics.revenue.total),
-      change: `${analytics.revenue.profitMargin.toFixed(1)}%`,
-      trend: 'up',
-      icon: DollarSign,
-      gradient: 'from-emerald-500 to-emerald-600',
-      bgPattern: 'from-emerald-50/50 to-emerald-100/30'
-    },
-    {
-      title: 'Net Profit',
-      value: formatCurrency(analytics.revenue.netProfit),
-      change: `${analytics.revenue.profitMargin.toFixed(1)}%`,
-      trend: analytics.revenue.netProfit >= 0 ? 'up' : 'down',
-      icon: TrendingUp,
-      gradient:
-        analytics.revenue.netProfit >= 0
-          ? 'from-green-500 to-green-600'
-          : 'from-red-500 to-red-600',
-      bgPattern:
-        analytics.revenue.netProfit >= 0
-          ? 'from-green-50/50 to-green-100/30'
-          : 'from-red-50/50 to-red-100/30'
-    },
-    {
-      title: 'Total Orders',
-      value: analytics.orders.total.toLocaleString(),
-      change: `${analytics.orders.completed} completed`,
-      trend: 'up',
-      icon: ShoppingCart,
-      gradient: 'from-blue-500 to-blue-600',
-      bgPattern: 'from-blue-50/50 to-blue-100/30'
-    },
-    {
-      title: 'Active Clients',
-      value: analytics.clients.active.toLocaleString(),
-      change: `${analytics.clients.new} new`,
-      trend: 'up',
-      icon: Users,
-      gradient: 'from-purple-500 to-purple-600',
-      bgPattern: 'from-purple-50/50 to-purple-100/30'
-    },
-    {
-      title: 'Avg Order Value',
-      value: formatCurrency(analytics.orders.avgValue),
-      change: '+3.2%',
-      trend: 'up',
-      icon: CreditCard,
-      gradient: 'from-orange-500 to-orange-600',
-      bgPattern: 'from-orange-50/50 to-orange-100/30'
-    },
-    {
-      title: 'Inventory Value',
-      value: formatCurrency(analytics.products.inventoryValue),
-      change: `${analytics.products.lowStock} low stock`,
-      trend: analytics.products.lowStock > 0 ? 'down' : 'up',
-      icon: Package,
-      gradient: 'from-teal-500 to-teal-600',
-      bgPattern: 'from-teal-50/50 to-teal-100/30'
-    }
-  ]
-
-  const dateRanges = [
-    { label: 'Today', value: 'today' },
-    { label: 'Yesterday', value: 'yesterday' },
-    { label: 'Last 7 Days', value: 'last7days' },
-    { label: 'This Month', value: 'thisMonth' },
-    { label: 'Last Month', value: 'lastMonth' },
-    { label: 'This Year', value: 'thisYear' },
-    { label: 'Last Year', value: 'lastYear' },
-    { label: 'Custom Range', value: 'custom' }
-  ]
-
-  // Event handlers
-  const handleDateRangeChange = useCallback((range) => {
-    setDateRange(range)
-    setCustomDateRange([])
-  }, [])
-
-  const handleCustomDateRangeChange = useCallback((dates) => {
-    setCustomDateRange(dates)
-    setDateRange('custom')
-  }, [])
 
   const handleExportData = useCallback(() => {
     try {
@@ -456,13 +333,12 @@ const Analytics = () => {
         ['Inventory Value', formatCurrency(analytics.products.inventoryValue)],
         [],
         ['Monthly Trends'],
-        ['Month', 'Sales', 'Purchases', 'Profit', 'Orders'],
+        ['Month', 'Sales', 'Purchases', 'Profit'],
         ...analytics.trends.monthly.map((m) => [
           m.month,
           formatCurrency(m.sales),
           formatCurrency(m.purchases),
-          formatCurrency(m.profit),
-          m.orders
+          formatCurrency(m.profit)
         ]),
         [],
         ['Product Categories'],
@@ -491,590 +367,592 @@ const Analytics = () => {
     toast.success('Data refreshed successfully')
   }, [fetchAllData])
 
-  // Auto-refresh effect
-  useEffect(() => {
-    if (autoRefresh) {
-      const interval = setInterval(() => {
-        fetchAllData()
-      }, 30000) // Refresh every 30 seconds
+  const dateRanges = [
+    { label: 'Today', value: 'today' },
+    { label: 'Yesterday', value: 'yesterday' },
+    { label: 'Last 7 Days', value: 'last7days' },
+    { label: 'This Month', value: 'thisMonth' },
+    { label: 'Custom Range', value: 'custom' }
+  ]
 
-      return () => clearInterval(interval)
-    }
-  }, [autoRefresh, fetchAllData])
-
-  // Initial data load
-  useEffect(() => {
-    fetchAllData()
-  }, [fetchAllData])
-
-  const toThousands = (value) => {
-    if (!value) return value
-    return new Intl.NumberFormat('en-IN').format(value)
-  }
-
-  const centerTextPlugin = useMemo(
-    () => ({
-      id: 'centerText',
-      beforeDraw(chart) {
-        const { width, height, ctx } = chart
-        ctx.restore()
-
-        const remaining = chart.data.datasets[0].data[0]
-
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-
-        ctx.fillStyle = '#9CA3AF'
-        ctx.font = `${height * 0.06}px sans-serif`
-        ctx.fillText('Remaining', width / 2, height / 2.7)
-
-        ctx.fillStyle = '#111827'
-        ctx.font = `bold ${height * 0.08}px sans-serif`
-        ctx.fillText(`₹${toThousands(remaining)}`, width / 2, height / 2)
-
-        ctx.save()
-      }
-    }),
-    []
-  )
-
-  const monthlyData = analytics.trends.monthly.slice(-6)
-  const totalSales = monthlyData.reduce((sum, m) => sum + m.sales, 0)
-  const totalPurchases = monthlyData.reduce((sum, m) => sum + m.purchases, 0)
-  const totalProfit = monthlyData.reduce((sum, m) => sum + m.profit, 0)
-
-  const data = {
-    labels: ['Sales', 'Purchases', 'Profit'],
+  // CHART CONFIGURATIONS
+  const donutColors = [
+    '#6366f1', // indigo
+    '#0ea5e9', // sky
+    '#f59e0b', // amber
+    '#10b981' // emerald
+  ]
+  const donutData = {
+    labels: analytics.trends.categories.slice(0, 4).map((c) => c.category),
     datasets: [
       {
-        data: [totalSales, totalPurchases, totalProfit],
-        backgroundColor: ['#10b981', '#ef4444', '#3b82f6'],
-        borderWidth: 2,
-        cutout: '60%',
-        borderColor: 'white',
-        borderRadius: 10,
-        animation: {
-          easing: 'easeInOutQuad'
+        data: analytics.trends.categories.slice(0, 4).map((c) => c.value),
+        backgroundColor: donutColors,
+        borderWidth: 0,
+        borderRadius: 20,
+        circumference: 180,
+        rotation: -90,
+        cutout: '75%'
+      }
+    ]
+  }
+
+  const chartTrends = useMemo(() => {
+    const { start, end } = getDateRange(dateRange)
+
+    const dataMap = {}
+
+    const startDate = new Date(start)
+    const endDate = new Date(end)
+
+    // 🔥 Build full date range first
+    while (startDate <= endDate) {
+      const label = startDate.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      })
+
+      dataMap[label] = { sales: 0, purchases: 0 }
+
+      startDate.setDate(startDate.getDate() + 1)
+    }
+
+    // 🔥 Now inject actual transaction data
+    transactions.forEach((t) => {
+      const txDate = new Date(t.createdAt)
+
+      if (txDate >= start && txDate <= end) {
+        const label = txDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric'
+        })
+
+        const amount = Number(t.totalAmountWithTax || 0)
+
+        if (t.pageName === 'Sales') {
+          dataMap[label].sales += amount
+        } else if (t.pageName === 'Purchase') {
+          dataMap[label].purchases += amount
         }
+      }
+    })
+
+    return Object.entries(dataMap).map(([label, values]) => ({
+      label,
+      ...values
+    }))
+  }, [transactions, dateRange])
+
+  const lineData = {
+    labels: chartTrends.map((t) => t.label),
+    datasets: [
+      {
+        label: 'Sales',
+        data: chartTrends.map((t) => t.sales),
+        borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.2)',
+        borderWidth: 3,
+        tension: 0.5, // 🔥 smooth curve
+        fill: true,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#fff',
+        pointBorderColor: '#6366f1',
+        pointBorderWidth: 2
+      },
+      {
+        label: 'Purchases',
+        data: chartTrends.map((t) => t.purchases),
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245,158,11,0.2)',
+        borderWidth: 3,
+        tension: 0.5,
+        fill: true,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#fff',
+        pointBorderColor: '#f59e0b',
+        pointBorderWidth: 2
       }
     ]
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
-      {/* Animated background elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 -left-40 w-80 h-80 bg-blue-400/5 rounded-full blur-3xl animate-pulse" />
-        <div
-          className="absolute bottom-1/4 -right-40 w-96 h-96 bg-indigo-400/5 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: '2s' }}
-        />
+    <div className="max-h-screen overflow-auto bg-[#f8f9fa] text-gray-900">
+      <div className="w-full sticky top-0 z-20 backdrop-blur-xl bg-white/80 border-b border-gray-100">
+        <Navbar />
       </div>
 
-      <div className="relative z-10">
-        {/* Navbar */}
-        <div className="w-full sticky top-0 z-20 backdrop-blur-xl bg-white/80 border-b border-white/20">
-          <Navbar />
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row justify-between items-center mt-6 pb-6 px-8 gap-4">
+        <div>
+          <p className="text-3xl font-light">Analytics</p>
+          <p className="text-xs text-gray-500 mt-1">Last updated: {formatDate(new Date())}</p>
         </div>
 
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mt-6 pb-6 px-7 gap-4">
-          <div className="flex items-center gap-4">
-            <div>
-              <p className="text-4xl font-light mb-1">Analytics</p>
-              <p className="text-xs font-light bg-amber-100 px-2 py-1 rounded">
-                Last updated: {formatDate(new Date())}
-              </p>
-            </div>
-          </div>
-
-          {/* Controls */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <SelectPicker
-                data={dateRanges}
-                value={dateRange}
-                onChange={handleDateRangeChange}
-                cleanable={false}
-                searchable={false}
-                appearance="subtle"
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <SelectPicker
+              data={dateRanges}
+              value={dateRange}
+              onChange={(val) => {
+                setDateRange(val)
+                setCustomDateRange([])
+              }}
+              cleanable={false}
+              searchable={false}
+              appearance="default"
+              className="w-40 !rounded-xl border-gray-200"
+            />
+            {dateRange === 'custom' && (
+              <DateRangePicker
+                format="dd/MM/yyyy"
+                character=" ~ "
                 placeholder="Select Date Range"
-                className="selectPicker border border-gray-200 rounded-sm"
-                container={document.body}
-                menuStyle={{ zIndex: 2000 }}
-                style={{ width: 224 }} // adjust as needed
+                onChange={setCustomDateRange}
+                size="md"
+                className="w-60"
+                placement="bottomEnd"
               />
+            )}
+          </div>
+          <button
+            onClick={handleRefreshData}
+            disabled={loading}
+            className="px-3 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+          >
+            <RefreshCcw size={16} className={`text-gray-600 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button
+            onClick={handleExportData}
+            className="px-3 py-2 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors flex items-center gap-2 text-sm font-medium shadow-sm"
+          >
+            <FileUp size={16} />
+            Export
+          </button>
+        </div>
+      </div>
 
-              {dateRange === 'custom' && (
-                <DateRangePicker
-                  format="dd/MM/yyyy"
-                  character=" ~ "
-                  placeholder="Select Custom Range"
-                  onChange={handleCustomDateRangeChange}
-                  size="md"
-                  className="w-64"
-                  placement="bottomEnd"
-                  showHeader={false}
-                  container={document.body}
-                  menuStyle={{ zIndex: 2000 }}
-                />
-              )}
+      <div className="px-8 pb-10 space-y-6">
+        {/* TOP ROW: KPIs & CHARTS */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* KPI Split Card */}
+          <div className="col-span-12 lg:col-span-3 flex flex-col gap-4">
+            <div className="bg-white rounded-[1.5rem] p-6 border border-gray-50 flex-1 relative overflow-hidden shadow-lg">
+              <div className="flex items-center justify-between mb-3 relative z-10">
+                <div className="flex items-center gap-2 text-gray-500 font-medium">
+                  <div className="w-6 h-6 rounded-full border border-[#ff5b22] flex items-center justify-center text-[#ff5b22]">
+                    <Activity size={12} />
+                  </div>
+                  Total Revenue
+                </div>
+                <span className="text-xs font-bold text-emerald-500 flex items-center">
+                  <TrendingUp size={12} className="mr-1" />{' '}
+                  {analytics.revenue.profitMargin.toFixed(1)}%
+                </span>
+              </div>
+              <div className="text-4xl font-semibold text-gray-900 tracking-tight flex items-center relative z-10">
+                <span className="text-2xl mr-1">₹</span>
+                <AnimatedNumber value={analytics.revenue.total} />
+              </div>
             </div>
 
-            {/* <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-2
-                ${
-                  autoRefresh
-                    ? 'bg-green-100 text-green-700 border border-green-200'
-                    : 'bg-white/60 border border-white/30 text-gray-700'
-                }`}
-            >
-              <RefreshCcw size={16} className={autoRefresh ? 'animate-spin' : ''} />
-              Auto Refresh
-            </button> */}
-
-            <button
-              onClick={handleRefreshData}
-              disabled={loading}
-              className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm transition-all duration-300 text-sm cursor-pointer hover:bg-black hover:text-white"
-            >
-              <RefreshCcw size={16} className={loading ? 'animate-spin' : ''} />
-              Refresh
-            </button>
-
-            <button
-              onClick={handleExportData}
-              className="flex items-center gap-2 border border-gray-300 w-fit p-1.5 px-3 rounded-sm transition-all duration-300 text-sm cursor-pointer hover:bg-black hover:text-white"
-            >
-              <FileUp size={14} />
-              Export
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        {/* <div className="px-7 mb-6">
-          <div className="flex gap-2 bg-white/30 backdrop-blur-sm p-1 rounded-2xl border border-white/30 w-fit">
-            {[
-              { id: 'overview', label: 'Overview', icon: Eye },
-              { id: 'sales', label: 'Sales', icon: TrendingUp },
-              { id: 'financial', label: 'Financial', icon: Wallet },
-              { id: 'operations', label: 'Operations', icon: BarChart3 }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-6 py-2 rounded-xl text-sm font-medium capitalize transition-all duration-200 flex items-center gap-2
-                  ${
-                    activeTab === tab.id
-                      ? 'bg-white text-gray-900 shadow-md'
-                      : 'text-gray-600 hover:text-gray-800 hover:bg-white/50'
-                  }`}
-              >
-                <tab.icon size={16} />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div> */}
-
-        {/* Main Content */}
-        <div className="px-6 pb-8 overflow-auto h-[calc(100vh-200px)]">
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-4 gap-3 mb-8">
-            {kpiCards.map((card, index) => {
-              const Icon = card.icon
-              return (
-                <div
-                  key={index}
-                  className="group relative p-5 bg-white/30 backdrop-blur-xl border h-36 border-black/10 rounded-3xl hover:bg-white/10 hover:scale-[1] transition-all duration-600 shadow hover:shadow-lg overflow-hidden"
-                >
-                  <div
-                    className={`absolute inset-0 bg-gradient-to-br ${card.bgPattern} rounded-4xl opacity-50`}
-                  />
-
-                  <div className="relative z-10">
-                    <div className="flex items-start justify-between mb-4">
-                      <div
-                        className={`w-10 h-10 bg-gradient-to-br ${card.gradient} rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}
-                      >
-                        <Icon size={16} />
-                      </div>
-                      <div
-                        className={`text-sm font-semibold flex items-center gap-1
-                        ${card.trend === 'up' ? 'text-emerald-600' : 'text-red-600'}`}
-                      >
-                        {card.trend === 'up' ? (
-                          <TrendingUp size={14} />
-                        ) : (
-                          <TrendingDown size={14} />
-                        )}
-                        {card.change}
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-sm text-gray-600 font-light mb-1">{card.title}</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {card.value.includes('₹') ? (
-                          <>
-                            ₹<AnimatedNumber value={card.value.replace(/[^\d]/g, '')} />
-                          </>
-                        ) : (
-                          <AnimatedNumber value={card.value.replace(/,/g, '')} />
-                        )}
-                      </p>
-                    </div>
+            <div className="bg-white rounded-[1.5rem] p-6 shadow-lg border border-gray-50 flex-1 relative overflow-hidden">
+              <div className="flex items-center justify-between mb-3 relative z-10">
+                <div className="flex items-center gap-2 text-gray-500 font-medium">
+                  <div className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center text-gray-600">
+                    <Package size={12} />
                   </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Charts and Analytics */}
-          <div className="grid grid-cols-12 gap-6">
-            {/* Monthly Trends Chart */}
-            <div className="col-span-12 lg:col-span-8 bg-white/30 backdrop-blur-xl border border-black/10 rounded-3xl p-8 shadow-md">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <BarChart3 size={20} />
-                  Monthly Performance Trends
-                </h3>
-                <div className="flex gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="bg-emerald-500 p-1 rounded-2xl px-3 text-white text-xs">
-                      Sales
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="bg-red-500 p-1 rounded-2xl px-3 text-white text-xs">
-                      Purchases
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="bg-blue-500 p-1 rounded-2xl px-3 text-white text-xs">
-                      Profit
-                    </span>
-                  </div>
+                  Total Products
                 </div>
               </div>
+              <div className="text-4xl font-semibold text-gray-900 tracking-tight relative z-10">
+                <AnimatedNumber value={analytics.products.total} />
+              </div>
+            </div>
+          </div>
 
-              {analytics.trends.monthly.length > 0 ? (
-                <div className="space-y-4">
-                  <Doughnut
-                    width={300}
-                    height={300}
-                    data={data}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: 'bottom'
+          <div className="col-span-12 lg:col-span-3 flex flex-col gap-4">
+            <div className="bg-white rounded-[1.5rem] p-6 shadow-lg border border-gray-50 flex-1 relative overflow-hidden">
+              <div className="flex items-center justify-between mb-3 relative z-10">
+                <div className="flex items-center gap-2 text-gray-500 font-medium">
+                  <div className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center text-gray-600">
+                    <User size={12} />
+                  </div>
+                  Total Clients
+                </div>
+              </div>
+              <div className="text-4xl font-semibold text-gray-900 tracking-tight relative z-10">
+                <AnimatedNumber value={analytics.clients.total} />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[1.5rem] p-6 shadow-lg border border-gray-50 flex-1 relative overflow-hidden">
+              <div className="flex items-center justify-between mb-3 relative z-10">
+                <div className="flex items-center gap-2 text-gray-500 font-medium">
+                  <div className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center text-gray-600">
+                    <Package size={12} />
+                  </div>
+                  Total Accounts
+                </div>
+              </div>
+              <div className="text-4xl font-semibold text-gray-900 tracking-tight relative z-10">
+                <AnimatedNumber value={analytics.accounts.total} />
+              </div>
+            </div>
+          </div>
+
+          {/* Top Categories (Donut) */}
+          <div className="col-span-12 lg:col-span-6 bg-white rounded-[1.5rem] p-6 shadow-lg border border-gray-50 flex flex-col justify-between">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-light text-gray-800">Product Categories</h3>
+              <button className="text-gray-400 hover:text-gray-600">
+                <MoreVertical size={18} />
+              </button>
+            </div>
+
+            <div className="relative h-40 flex items-end justify-center">
+              <div className="absolute top-0 w-full h-full pb-4 left-0">
+                <Doughnut
+                  data={donutData}
+                  options={{
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { enabled: true } }
+                  }}
+                />
+              </div>
+              <div className="absolute bottom-6 flex flex-col items-center">
+                <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">
+                  Contribution
+                </span>
+                <span className="text-2xl font-semibold text-gray-900">
+                  {formatCurrency(analytics.products.inventoryValue)}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-4 mt-2">
+              {analytics.trends.categories.slice(0, 3).map((cat, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-sm"
+                      style={{ backgroundColor: donutColors[i] }}
+                    ></div>
+                    <span className="text-gray-600 font-medium">{cat.category}</span>
+                  </div>
+                  <span className="font-bold text-gray-800">{cat.percentage.toFixed(0)}%</span>
+                </div>
+              ))}
+            </div>
+
+            <button className="w-full py-3 mt-auto rounded-xl border border-gray-100 text-sm font-bold text-gray-700 hover:bg-gray-50 transition flex justify-center items-center gap-2">
+              View Details <ChevronRight size={16} />
+            </button>
+          </div>
+
+          {/* Product Engagement (Line Chart) */}
+          <div className="col-span-12 lg:col-span-12 bg-white rounded-[1.5rem] p-6 shadow-lg border border-gray-50 flex flex-col justify-between">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h3 className="text-lg font-light text-gray-800">Performance Metrics</h3>
+                <p className="text-xs text-gray-400 font-light">
+                  Monthly active sales metrics shown here.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-xs bg-gray-100 px-2 py-1 rounded-md font-semibold text-gray-600">
+                  {analytics.orders.total} Orders
+                </span>
+                <button className="text-gray-400 hover:text-gray-600">
+                  <MoreVertical size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="h-72 w-full mt-4">
+              <Line
+                data={lineData}
+                options={{
+                  maintainAspectRatio: false,
+                  responsive: true,
+                  interaction: {
+                    mode: 'index',
+                    intersect: false
+                  },
+                  plugins: {
+                    legend: {
+                      display: true,
+                      position: 'top',
+                      labels: {
+                        usePointStyle: true,
+                        pointStyle: 'line',
+                        padding: 20,
+                        color: '#374151',
+                        font: {
+                          size: 13,
+                          weight: '500'
                         }
                       }
-                    }}
-                    plugins={[centerTextPlugin]}
-                    className="drop-shadow-lg"
-                  />
-                </div>
-              ) : (
-                <div className="text-center py-12 text-gray-500">
-                  <BarChart3 size={48} className="mx-auto mb-4 opacity-30" />
-                  <p>No data available for the selected period</p>
-                </div>
-              )}
+                    },
+                    tooltip: {
+                      backgroundColor: '#111827',
+                      padding: 10,
+                      titleFont: { size: 13 },
+                      bodyFont: { size: 12 },
+                      callbacks: {
+                        label: function (context) {
+                          return `${context.dataset.label}: ₹${context.raw.toLocaleString()}`
+                        }
+                      }
+                    }
+                  },
+                  scales: {
+                    x: {
+                      title: {
+                        display: true,
+                        text: 'Day, Month & Year',
+                        color: '#6b7280',
+                        font: { size: 13, weight: '500' }
+                      },
+                      grid: {
+                        display: false
+                      },
+                      ticks: {
+                        color: '#6b7280',
+                        font: { size: 12, weight: '500' }
+                      }
+                    },
+                    y: {
+                      title: {
+                        color: '#6b7280',
+                        font: { size: 12, weight: '500' }
+                      },
+                      grid: {
+                        color: 'rgba(0,0,0,0.05)'
+                      },
+                      ticks: {
+                        color: '#6b7280',
+                        font: { size: 10.5 },
+                        callback: function (value) {
+                          return '₹' + value.toLocaleString()
+                        }
+                      }
+                    }
+                  }
+                }}
+              />
             </div>
 
-            {/* Category Distribution */}
-            <div className="col-span-12 lg:col-span-4 bg-white/30 backdrop-blur-xl border border-black/10 rounded-3xl p-8 shadow-md">
-              <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                <PieChartIcon size={20} />
-                Product Categories
-              </h3>
+            {/* <button className="w-full py-3 mt-6 rounded-xl border border-gray-100 text-sm font-bold text-gray-700 hover:bg-gray-50 transition flex justify-center items-center gap-2">
+              View Details <ChevronRight size={16} />
+            </button> */}
+          </div>
+        </div>
 
-              {analytics.trends.categories.length > 0 ? (
-                <div className="space-y-4">
-                  {analytics.trends.categories.map((category, index) => (
-                    <div key={category.category} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-gray-700">{category.category}</span>
-                        <span className="text-sm text-gray-600">{category.count} products</span>
-                      </div>
-                      <div className="relative h-4 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className="absolute h-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all duration-1000 ease-out"
-                          style={{
-                            width: `${category.percentage}%`,
-                            animationDelay: `${index * 300}ms`
-                          }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-xs text-gray-500">
-                        <span>{formatCurrency(category.value)}</span>
-                        <span>{category.percentage.toFixed(1)}%</span>
-                      </div>
-                    </div>
-                  ))}
+        {/* MIDDLE ROW: Table & Financial Overview */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Clean UI Financial Overview Card */}
+          <div className="col-span-12 lg:col-span-5 bg-white rounded-[1.5rem] p-6 shadow-lg border border-gray-50 flex flex-col justify-between">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-xl font-light text-gray-800 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Wallet size={16} />
                 </div>
-              ) : (
-                <div className="text-center py-12 text-gray-500">
-                  <PieChartIcon size={48} className="mx-auto mb-4 opacity-30" />
-                  <p>No product categories available</p>
-                </div>
-              )}
-            </div>
-
-            {/* Financial Summary */}
-            <div className="col-span-12 lg:col-span-6 bg-white/30 backdrop-blur-xl border border-black/10 rounded-3xl p-8 shadow-md">
-              <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                <Wallet size={20} />
                 Financial Overview
               </h3>
+              <button className="text-gray-400 hover:text-gray-600">
+                <MoreVertical size={18} />
+              </button>
+            </div>
 
-              <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                    <p className="text-sm text-emerald-700 font-medium">Total Sales</p>
-                    <p className="text-2xl font-bold text-emerald-800 mt-1">
-                      {formatCurrency(analytics.revenue.sales)}
-                    </p>
-                  </div>
-                  <div className="text-center p-4 bg-red-50 rounded-2xl border border-red-100">
-                    <p className="text-sm text-red-700 font-medium">Total Purchases</p>
-                    <p className="text-2xl font-bold text-red-800 mt-1">
-                      {formatCurrency(analytics.revenue.purchases)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="text-center p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <p className="text-sm text-blue-700 font-medium">Net Profit</p>
-                  <p className="text-3xl font-bold text-blue-800 mt-1">
-                    {formatCurrency(analytics.revenue.netProfit)}
+            <div className="space-y-4">
+              {/* Sales & Purchases */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-800/50 shadow-sm">
+                  <p className="text-[13px] text-gray-500 font-medium mb-1 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Total Sales
                   </p>
-                  <p className="text-sm text-blue-600 mt-2">
-                    Profit Margin: {analytics.revenue.profitMargin.toFixed(1)}%
+                  <p className="text-lg font-bold text-gray-900">
+                    {formatCurrency(analytics.revenue.sales)}
                   </p>
                 </div>
+                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-800/50 shadow-sm">
+                  <p className="text-[13px] text-gray-500 font-medium mb-1 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span> Total Purchases
+                  </p>
+                  <p className="text-lg font-bold text-gray-900">
+                    {formatCurrency(analytics.revenue.purchases)}
+                  </p>
+                </div>
+              </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm text-center">
-                  <div className="p-3 bg-yellow-50 rounded-xl">
-                    <p className="text-sm text-yellow-700 font-medium">Pending Amount</p>
-                    <p className="text-xl font-bold text-yellow-800">
-                      {formatCurrency(analytics.clients.pendingAmount)}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-indigo-50 rounded-xl">
-                    <p className="text-sm text-indigo-700 font-medium">Paid Amount</p>
-                    <p className="text-xl font-bold text-indigo-800">
-                      {formatCurrency(analytics.clients.paidAmount)}
-                    </p>
-                  </div>
+              {/* Net Profit */}
+              <div className="py-6 px-4 rounded-2xl bg-gradient-to-br from-blue-50/80 to-indigo-50/30 border border-gray-800/50 flex flex-col items-center justify-center text-center shadow-sm">
+                <p className="text-xs text-blue-600 font-bold mb-1 uppercase tracking-wider">
+                  Net Profit
+                </p>
+                <p className="text-4xl font-light text-blue-900 tracking-tight">
+                  {formatCurrency(analytics.revenue.netProfit)}
+                </p>
+                <div className="mt-2.5 inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100/60 text-blue-700 rounded-md text-[11px] font-bold">
+                  <TrendingUp size={12} />
+                  Margin: {analytics.revenue.profitMargin.toFixed(1)}%
+                </div>
+              </div>
+
+              {/* Pending & Paid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-2xl bg-white border border-gray-800/50 shadow-sm flex flex-col items-center justify-center text-center">
+                  <p className="text-[11px] text-gray-400 font-bold mb-0.5 uppercase tracking-wider">
+                    Pending
+                  </p>
+                  <p className="text-lg font-bold text-amber-500">
+                    {formatCurrency(analytics.clients.pendingAmount)}
+                  </p>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-white border border-gray-800/50 shadow-sm flex flex-col items-center justify-center text-center">
+                  <p className="text-[11px] text-gray-400 font-bold mb-0.5 uppercase tracking-wider">
+                    Received
+                  </p>
+                  <p className="text-lg font-bold text-emerald-500">
+                    {formatCurrency(analytics.clients.paidAmount)}
+                  </p>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Quick Actions */}
-            <div className="col-span-12 lg:col-span-6 bg-white/30 backdrop-blur-xl border border-black/10 rounded-3xl p-8 shadow-md">
-              <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                <Building2 size={20} />
-                Quick Navigation
-              </h3>
+          {/* Table (All Products / Transactions) */}
+          <div className="col-span-7 bg-white rounded-3xl p-6 border border-gray-100 shadow-md">
+            <h3 className="text-xl font-semibold text-gray-800 mb-6">Recent Transactions</h3>
 
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  {
-                    name: 'Bank Reports',
-                    icon: Building2,
-                    route: '/bank',
-                    color: 'blue',
-                    count: analytics.trends.monthly.length
-                  },
-                  {
-                    name: 'Ledger Reports',
-                    icon: FileText,
-                    route: '/ledger',
-                    color: 'green',
-                    count: analytics.clients.total
-                  },
-                  {
-                    name: 'Products',
-                    icon: Package,
-                    route: '/products',
-                    color: 'purple',
-                    count: analytics.products.total
-                  },
-                  {
-                    name: 'Clients',
-                    icon: Users,
-                    route: '/clients',
-                    color: 'orange',
-                    count: analytics.clients.total
-                  },
-                  {
-                    name: 'Transactions',
-                    icon: CreditCard,
-                    route: '/sales',
-                    color: 'red',
-                    count: analytics.orders.total
-                  },
-                  {
-                    name: 'Purchase Orders',
-                    icon: ShoppingCart,
-                    route: '/purchase',
-                    color: 'teal',
-                    count: analytics.orders.pending
-                  }
-                ].map((action, index) => {
-                  const Icon = action.icon
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => navigate(action.route)}
-                      className={`p-4 border border-black/10  bg-gradient-to-br from-${action.color}-50 to-${action.color}-100/50 hover:from-${action.color}-300 hover:to-${action.color}-300/50 rounded-2xl transition-all duration-300 hover:shadow-md group text-left cursor-pointer`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div
-                          className={`w-10 h-10 bg-gradient-to-br from-${action.color}-500 to-${action.color}-600 rounded-xl flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-200`}
-                        >
-                          <Icon size={18} />
-                        </div>
-                        <span className={`text-2xl font-bold text-${action.color}-600`}>
-                          {action.count}
-                        </span>
+            <RecentTransactionsBlock filteredData={filteredData} />
+          </div>
+        </div>
+
+        {/* BOTTOM ROW: QUICK NAVIGATION & INSIGHTS */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Quick Navigation Restored */}
+          <div className="col-span-12 lg:col-span-6 bg-white rounded-[1.5rem] p-6 shadow-lg border border-gray-50">
+            <h3 className="text-lg font-light text-gray-800 mb-6 flex items-center gap-2">
+              <Building2 size={20} className="text-[#ff5b22]" /> Quick Navigation
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {[
+                {
+                  name: 'Bank Reports',
+                  icon: Building2,
+                  route: '/bank',
+                  count: analytics.trends.monthly.length
+                },
+                {
+                  name: 'Ledger Reports',
+                  icon: FileText,
+                  route: '/ledger',
+                  count: analytics.clients.total
+                },
+                {
+                  name: 'Products',
+                  icon: Package,
+                  route: '/products',
+                  count: analytics.products.total
+                },
+                { name: 'Clients', icon: Users, route: '/clients', count: analytics.clients.total },
+                {
+                  name: 'Transactions',
+                  icon: CreditCard,
+                  route: '/sales',
+                  count: analytics.orders.total
+                },
+                {
+                  name: 'Purchases',
+                  icon: ShoppingCart,
+                  route: '/purchase',
+                  count: analytics.orders.pending
+                }
+              ].map((action, idx) => {
+                const Icon = action.icon
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => navigate(action.route)}
+                    className="p-4 rounded-2xl border-gray-800/50 cursor-pointer bg-gray-300/50 hover:bg-gray-100 hover:border-gray-200 transition-all text-left group flex flex-col justify-between h-28 shadow-md"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-700 group-hover:text-[#ff5b22] transition-colors">
+                        <Icon size={16} />
                       </div>
-                      <div className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors duration-200">
-                        {action.name}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
+                      <span className="text-lg font-bold text-gray-900">{action.count}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-600 group-hover:text-gray-900">
+                      {action.name}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
+          </div>
 
-            {/* Recent Activity */}
-            <div className="col-span-12 bg-white/30 backdrop-blur-xl border border-black/10 rounded-3xl p-8 shadow-md">
-              <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
-                <Calendar size={20} />
-                Recent Activity & Insights
-              </h3>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Activity Timeline */}
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-4">Latest Transactions</h4>
-                  <div className="space-y-3 max-h-screen overflow-y-auto">
-                    {filteredData.transactions.slice(0, 5).map((transaction) => (
-                      <div
-                        key={transaction.id}
-                        className="flex items-center gap-3 p-3 bg-white/50 backdrop-blur-sm rounded-xl border border-white/30 hover:bg-indigo-50 transition-all duration-200"
-                      >
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold
-                          ${
-                            transaction.transactionType === 'sales'
-                              ? 'bg-gradient-to-br from-emerald-500 to-emerald-600'
-                              : 'bg-gradient-to-br from-red-500 to-red-600'
-                          }`}
-                        >
-                          {transaction.transactionType === 'sales' ? (
-                            <TrendingUp size={14} />
-                          ) : (
-                            <TrendingDown size={14} />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="flex items-center gap-2 mb-1 text-sm font-medium text-gray-800 truncate">
-                            {transaction.transactionType === 'sales' ? 'Sale' : 'Purchase'}
-                            {transaction.transactionType === 'sales' ? (
-                              <span className="bg-indigo-100 px-2 py-0.5 rounded-full text-xs">
-                                {formatCurrency(
-                                  (transaction.sellAmount || 0) * (transaction.quantity || 0)
-                                )}
-                              </span>
-                            ) : (
-                              <span className="bg-indigo-100 px-2 py-0.5 rounded-full text-xs">
-                                {formatCurrency(transaction.purchaseAmount || 0)}
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatDate(transaction.createdAt)} • Qty: {transaction.quantity || 0}
-                          </p>
-                        </div>
-                        <div
-                          className={`px-2 py-1 rounded-full text-xs font-medium
-                          ${
-                            transaction.statusOfTransaction === 'completed'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-yellow-100 text-yellow-500 px-4'
-                          }`}
-                        >
-                          {String(transaction.statusOfTransaction).charAt(0).toUpperCase() +
-                            String(transaction.statusOfTransaction).slice(1)}
-                        </div>
-                      </div>
-                    ))}
-
-                    {filteredData.transactions.length === 0 && (
-                      <div className="text-center py-8 text-gray-500">
-                        <Calendar size={32} className="mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No recent transactions</p>
-                      </div>
-                    )}
-                  </div>
+          {/* Business Insights Restored */}
+          <div className="col-span-12 lg:col-span-6 bg-white rounded-[1.5rem] p-6 shadow-lg border border-gray-50">
+            <h3 className="text-lg font-light text-gray-800 mb-6 flex items-center gap-2">
+              <Star size={20} className="text-yellow-400 fill-yellow-400" /> Business Insights
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-2xl border border-blue-100 bg-blue-50/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users size={16} className="text-blue-600" />
+                  <span className="font-bold text-blue-900 text-sm">Client Activity</span>
                 </div>
+                <p className="text-sm text-blue-800/80 font-medium">
+                  {analytics.clients.active} active clients with{' '}
+                  <span className="font-bold text-blue-600">{analytics.clients.new} new</span>{' '}
+                  additions this period.
+                </p>
+              </div>
 
-                {/* Key Insights */}
-                <div>
-                  <h4 className="font-medium text-gray-700 mb-4">Business Insights</h4>
-                  <div className="space-y-3">
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <TrendingUp size={16} className="text-blue-600" />
-                        <span className="font-medium text-blue-800">Revenue Performance</span>
-                      </div>
-                      <p className="text-sm text-blue-700">
-                        {analytics.revenue.netProfit >= 0
-                          ? `Profitable period with ${analytics.revenue.profitMargin.toFixed(1)}% margin`
-                          : 'Revenue below costs - review pricing strategy'}
-                      </p>
-                    </div>
-
-                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Users size={16} className="text-purple-600" />
-                        <span className="font-medium text-purple-800">Client Activity</span>
-                      </div>
-                      <p className="text-sm text-purple-700">
-                        {analytics.clients.active} active clients with {analytics.clients.new} new
-                        additions
-                      </p>
-                    </div>
-
-                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Package size={16} className="text-orange-600" />
-                        <span className="font-medium text-orange-800">Inventory Status</span>
-                      </div>
-                      <p className="text-sm text-orange-700">
-                        {analytics.products.lowStock > 0
-                          ? `${analytics.products.lowStock} products need restocking`
-                          : 'Inventory levels are healthy'}
-                      </p>
-                    </div>
-
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <DollarSign size={16} className="text-green-600" />
-                        <span className="font-medium text-green-800">Cash Flow</span>
-                      </div>
-                      <p className="text-sm text-green-700">
-                        {formatCurrency(analytics.clients.pendingAmount)} pending collections
-                      </p>
-                    </div>
-                  </div>
+              <div className="p-4 rounded-2xl border border-orange-100 bg-orange-50/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <Package size={16} className="text-[#ff5b22]" />
+                  <span className="font-bold text-orange-900 text-sm">Inventory Status</span>
                 </div>
+                <p className="text-sm text-orange-800/80 font-medium">
+                  {analytics.products.lowStock > 0 ? (
+                    <>
+                      <span className="font-bold text-red-500">
+                        {analytics.products.lowStock} products
+                      </span>{' '}
+                      need immediate restocking.
+                    </>
+                  ) : (
+                    'Inventory levels are completely healthy.'
+                  )}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl border border-emerald-100 bg-emerald-50/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp size={16} className="text-emerald-600" />
+                  <span className="font-bold text-emerald-900 text-sm">Order Fulfillment</span>
+                </div>
+                <p className="text-sm text-emerald-800/80 font-medium">
+                  {analytics.orders.completed} completed orders and{' '}
+                  <span className="font-bold">{analytics.orders.pending} pending</span> processing.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl border border-purple-100 bg-purple-50/50">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign size={16} className="text-purple-600" />
+                  <span className="font-bold text-purple-900 text-sm">Revenue Health</span>
+                </div>
+                <p className="text-sm text-purple-800/80 font-medium">
+                  {analytics.revenue.netProfit >= 0
+                    ? `Profitable operations maintaining a ${analytics.revenue.profitMargin.toFixed(1)}% margin.`
+                    : 'Revenue is operating below cost thresholds.'}
+                </p>
               </div>
             </div>
           </div>
@@ -1085,3 +963,117 @@ const Analytics = () => {
 }
 
 export default Analytics
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function TransactionIcon({ isSale }) {
+  return (
+    <div
+      className={`flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0 ${
+        isSale
+          ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
+          : 'bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20'
+      }`}
+    >
+      {isSale ? (
+        <ArrowUpRight size={18} strokeWidth={2.2} />
+      ) : (
+        <ArrowDownLeft size={18} strokeWidth={2.2} />
+      )}
+    </div>
+  )
+}
+
+function TransactionRow({ t, idx }) {
+  const isSale = t.pageName === 'Sales'
+
+  const formatCurrency = (v) =>
+    new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0
+    }).format(v)
+
+  const toTitleCase = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1).toLowerCase()
+
+  return (
+    <div
+      className="group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 hover:bg-white/5 cursor-default border border-gray-800/50 shadow-sm "
+      style={{ animationDelay: `${idx * 60}ms` }}
+    >
+      {/* Icon */}
+      <TransactionIcon isSale={isSale} />
+
+      {/* Middle — product + bill */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium tracking-wider truncate leading-tight">{toTitleCase(t.productName)}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-xs text-slate-500  tracking-wide">{t.billNo}</span>
+          <span className="w-1 h-1 rounded-full bg-slate-700" />
+          <span className="text-xs text-slate-500">
+            Qty <span className="text-slate-500">{t.quantity}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Right — type badge + amount */}
+      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+        <span
+          className={`text-sm font-bold tabular-nums ${
+            isSale ? 'text-emerald-400' : 'text-rose-400'
+          }`}
+        >
+          {isSale ? '+' : '−'}
+          {formatCurrency(t.totalAmountWithTax)}
+        </span>
+        <span
+          className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full tracking-wide ${
+            isSale ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+          }`}
+        >
+          {isSale ? (
+            <TrendingUp size={9} strokeWidth={2.5} />
+          ) : (
+            <TrendingDown size={9} strokeWidth={2.5} />
+          )}
+          {t.pageName}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main block — paste this into your dashboard ─────────────────────────────
+
+export function RecentTransactionsBlock({ filteredData }) {
+  const transactions = filteredData?.transactions ?? []
+  const shown = transactions.slice(0, 5)
+
+  return (
+    <div className="overflow-auto">
+      {/* List */}
+      <div className="py-2">
+        {shown.length > 0 ? (
+          <ul className="space-y-2">
+            {shown.map((t, idx) => (
+              <li key={`${t.billNo}-${idx}`}>
+                <TransactionRow t={t} idx={idx} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-600">
+              <Receipt size={22} strokeWidth={1.5} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-400">No transactions found</p>
+              <p className="text-xs text-slate-600 mt-0.5">Try adjusting the selected period</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
