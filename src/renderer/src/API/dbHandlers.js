@@ -454,8 +454,6 @@ function updateClientBalances(clientId, tx, mode = 'apply') {
     const pendingFromOurs = Number(tx.pendingFromOurs || 0)
     const paidAmount = Number(tx.paidAmount || 0)
 
-    console.log('PrndingfromOurs', pendingFromOurs)
-
     db.prepare(
       `
     UPDATE clients
@@ -918,12 +916,7 @@ function applySaleEffects(sale, saleId) {
   if (paid > 0) {
     const systemAccount = getOrCreateSystemAccount(paymentMethod)
 
-    console.log('systemAccount', systemAccount)
-    console.log('paid', paid)
-
     const newSystemBalance = Number(systemAccount.closingBalance || 0) + paid
-
-    console.log('newBalance', newSystemBalance)
 
     db.prepare(
       `
@@ -1591,11 +1584,6 @@ ipcMain.handle('getClientLedger', (event, clientId) => {
       )
       .all(numericId)
 
-    const ledgerData = db.prepare(`SELECT * FROM ledger`).all()
-    console.log('ALL LEDGER:', ledgerData)
-
-    console.log('Fetching ledger for client:', clientId)
-
     return { success: true, data: ledger }
   } catch (error) {
     console.error('❌ Error fetching client ledger:', error)
@@ -2185,22 +2173,22 @@ ipcMain.handle('getPendingPayments', () => {
       SELECT 
         p.id,
         p.clientId,
-        c.clientName AS vendorName,
-        p.pendingAmount,
+        c.clientName,
+        p.pendingFromOurs,
         p.totalAmountWithTax,
         p.totalAmountWithoutTax,
         p.paymentMethod,
         p.dueDate,
         p.createdAt
-      FROM purchase p
+      FROM purchases p
       LEFT JOIN clients c ON p.clientId = c.id
-      WHERE p.pendingAmount > 0
+      WHERE p.pendingFromOurs > 0
       ORDER BY p.createdAt DESC
     `
       )
       .all()
 
-    const totalPending = purchases.reduce((sum, p) => sum + (p.pendingAmount || 0), 0)
+    const totalPending = purchases.reduce((sum, p) => sum + (p.pendingFromOurs || 0), 0)
 
     return {
       success: true,

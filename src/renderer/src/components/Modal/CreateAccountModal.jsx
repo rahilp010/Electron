@@ -61,12 +61,7 @@ const CreateAccountModal = ({
 
   const accounts = useSelector((state) => state.electron.account.data)
 
-  const [recentReceipts, setRecentReceipts] = useState([])
-
-  console.log(accounts)
-
   const fetchAccounts = useCallback(async () => {
-    console.log('Fetching accounts...')
     const accounts = await window.api.getAllAccounts()
     dispatch(setAccount(accounts))
   }, [dispatch])

@@ -19,7 +19,6 @@ import {
 const KeyBindingsSection = () => {
   const dispatch = useDispatch()
   const keyBindings = useSelector((state) => state.electron.keyBindings?.data || [])
-  console.log(keyBindings)
   const [isAddingKey, setIsAddingKey] = useState(false)
   const [editingKey, setEditingKey] = useState(null)
   const [keyForm, setKeyForm] = useState({
@@ -425,7 +424,6 @@ const Settings = () => {
 
   const fetchSettings = async () => {
     const response = await window.api.getSettings()
-    console.log(response)
     dispatch(setSettings(response))
   }
 
@@ -455,8 +453,6 @@ const Settings = () => {
 
     const createSettings = await window.api.createSettings(settingsData)
     dispatch(setSettings(createSettings))
-    console.log('Created setting response:', createSettings)
-
     toast.success('Tax added successfully')
     setTaxName('')
     setTaxValue('')
@@ -466,7 +462,6 @@ const Settings = () => {
   const handleDeleteTax = async (id) => {
     const deleteSettings = await window.api.deleteSettings(id)
     dispatch(setSettings(deleteSettings))
-    console.log('Deleted setting response:', deleteSettings)
     toast.success('Tax deleted successfully')
     fetchSettings()
   }

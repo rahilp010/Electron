@@ -136,8 +136,6 @@ const BankLedger = () => {
 
   /* ================= SORT ================= */
 
-  console.log(ledgerData)
-
   const sortedData = useMemo(() => {
     return [...ledgerData].sort((a, b) => new Date(b.date) - new Date(a.date))
   }, [ledgerData])
@@ -251,7 +249,7 @@ const BankLedger = () => {
         </div>
 
         {/* TABLE */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200 mb-10">
           <div className="overflow-x-auto max-h-[600px]">
             <table className="min-w-max border-collapse text-sm w-full">
               <thead className="bg-gradient-to-r from-gray-100 to-gray-200 sticky top-0">

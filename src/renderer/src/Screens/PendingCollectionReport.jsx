@@ -29,7 +29,7 @@ import { IoLogoWhatsapp } from 'react-icons/io5'
 // Constants
 const TABLE_HEADERS = [
   { key: 'date', label: 'Date', width: 'w-[170px]', icon: Calendar },
-  { key: 'bank', label: 'Bank', width: 'w-[200px]', icon: Building2 },
+  // { key: 'bank', label: 'Bank', width: 'w-[200px]', icon: Building2 },
   { key: 'accountName', label: 'Account Name', width: 'w-[250px]', icon: CreditCard },
   { key: 'credit', label: 'Pending', width: 'w-[200px]', icon: TrendingUp },
   { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
@@ -90,12 +90,16 @@ const TransactionRow = memo(({ receipt, index, balance, clientName, selectedType
             <Calendar size={14} className="text-emerald-600" />
           </div>
           <span className="font-medium text-gray-700">
-            {new Date(receipt.date).toLocaleDateString()}
+            {new Date(receipt?.createdAt).toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric'
+            })}
           </span>
         </div>
       </td>
 
-      <td className="px-6 py-4 no-print">
+      {/* <td className="px-6 py-4 no-print">
         <div className="flex items-center gap-2">
           <div className="p-1 rounded-full bg-blue-200">
             <Building2 size={14} className="text-blue-600" />
@@ -104,7 +108,7 @@ const TransactionRow = memo(({ receipt, index, balance, clientName, selectedType
             {receipt.bank ? `${receipt.bank} Bank` : selectedType}
           </span>
         </div>
-      </td>
+      </td> */}
 
       <td>
         <div className="flex items-center gap-3">
@@ -126,7 +130,7 @@ const TransactionRow = memo(({ receipt, index, balance, clientName, selectedType
             <TrendingUp size={14} className="text-emerald-600" />
           </div>
           <span className="font-semibold text-emerald-600 px-3 py-1 rounded-full">
-            {toThousands(receipt.amount)}
+            {toThousands(receipt.pendingAmount)}
           </span>
         </div>
       </td>
@@ -175,49 +179,28 @@ const useAccountOperations = () => {
     }
   }, [dispatch])
 
-  const fetchRecentBankReceipts = useCallback(async () => {
-    try {
-      const receipts = await window.api.getRecentBankReceipts()
-      return receipts.map((r) => ({
-        ...r,
-        clientName: r.party,
-        date: r.date || r.createdAt
-      }))
-    } catch (error) {
-      console.error('Error fetching bank receipts:', error)
-      toast.error('Failed to fetch bank receipts')
+  const loadPendingCollections = useCallback(async () => {
+    const res = await window.api.getPendingCollections()
+
+    if (res.success) {
+      return res.list
+    } else {
+      toast.error(res.message || 'Failed to load pending collections')
       return []
     }
   }, [])
 
-  const fetchRecentCashReceipts = useCallback(async () => {
-    try {
-      const receipts = await window.api.getRecentCashReceipts()
-      return receipts.map((r) => ({
-        ...r,
-        clientName: r.party,
-        date: r.date || r.createdAt
-      }))
-    } catch (error) {
-      console.error('Error fetching cash receipts:', error)
-      toast.error('Failed to fetch cash receipts')
-      return []
-    }
-  }, [])
-
-  return { fetchAllClients, fetchRecentBankReceipts, fetchRecentCashReceipts }
+  return { fetchAllClients, loadPendingCollections }
 }
 
 // Main Component
 const PendingCollectionReport = ({ client, onClose }) => {
-  const { fetchAllClients, fetchRecentBankReceipts, fetchRecentCashReceipts } =
-    useAccountOperations()
+  const { fetchAllClients, loadPendingCollections } = useAccountOperations()
 
   // State management
   const [selectedType, setSelectedType] = useState('Bank')
   const [showLoader, setShowLoader] = useState(false)
-  const [recentBankReceipts, setRecentBankReceipts] = useState([])
-  const [recentCashReceipts, setRecentCashReceipts] = useState([])
+  const [pendingData, setPendingData] = useState([])
   const [showSideBar, setShowSideBar] = useState(false)
   const [sidebarSearch, setSidebarSearch] = useState('')
   const [selectedClient, setSelectedClient] = useState(client || null)
@@ -242,44 +225,48 @@ const PendingCollectionReport = ({ client, onClose }) => {
 
   // Memoized filtered data
   const filteredData = useMemo(() => {
-    const sourceData = selectedType === 'Bank' ? recentBankReceipts : recentCashReceipts
-    const receipts = sourceData.filter(
-      (r) => r.type === 'Receipt' && r.statusOfTransaction === 'pending'
-    )
+    let receipts = pendingData || []
 
-    console.log('🔥 RECEIPTS:', receipts)
-    if (selectedClient?.id) {
-      return receipts.filter(
-        (r) =>
-          String(r.clientId) === String(selectedClient.id) ||
-          r.clientName?.toLowerCase()?.trim() ===
-            getClientName(selectedClient.id)?.toLowerCase()?.trim()
+    if (selectedType) {
+      receipts = receipts.filter(
+        (r) => r.paymentMethod?.toLowerCase() === selectedType.toLowerCase()
       )
     }
 
-    return receipts.sort((a, b) => new Date(b.date) - new Date(a.date))
-  }, [selectedType, recentBankReceipts, recentCashReceipts, selectedClient, getClientName])
+    // Filter by selected client
+    if (selectedClient?.id) {
+      receipts = receipts.filter((r) => String(r.clientId) === String(selectedClient.id))
+    }
+
+    return receipts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  }, [pendingData, selectedClient, selectedType])
 
   // Memoized running balance calculation
   const balances = useMemo(() => {
-    const receipts = [...filteredData]
-    let balance = 0
-    const calculatedBalances = []
-
-    receipts.forEach((receipt, idx) => {
-      const amount = getAmount(receipt.type, receipt.amount)
-      balance += amount
-      calculatedBalances[receipts.length - 1 - idx] = balance
-    })
-
-    return calculatedBalances
+    return filteredData.map((r) => r.pendingAmount)
   }, [filteredData])
 
   const statistics = useMemo(() => {
-    const totalReceipts = filteredData.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-    const transactionCount = filteredData.length
+    const totalPending = filteredData.reduce((sum, r) => sum + (Number(r.pendingAmount) || 0), 0)
 
-    return { totalReceipts, transactionCount }
+    const uniqueClients = new Set(filteredData.map((r) => r.clientId)).size
+
+    const largestOutstanding = Math.max(...filteredData.map((r) => Number(r.pendingAmount) || 0), 0)
+
+    const averagePending = filteredData.length > 0 ? totalPending / filteredData.length : 0
+
+    const overdueCount = filteredData.filter(
+      (r) => r.dueDate && new Date(r.dueDate) < new Date()
+    ).length
+
+    return {
+      totalPending,
+      transactionCount: filteredData.length,
+      uniqueClients,
+      largestOutstanding,
+      averagePending,
+      overdueCount
+    }
   }, [filteredData])
 
   // Event handlers
@@ -308,16 +295,15 @@ const PendingCollectionReport = ({ client, onClose }) => {
     setShowLoader(true)
     try {
       await fetchAllClients()
-      const [bankData, cashData] = await Promise.all([
-        fetchRecentBankReceipts(),
-        fetchRecentCashReceipts()
-      ])
-      setRecentBankReceipts(bankData)
-      setRecentCashReceipts(cashData)
+      const data = await loadPendingCollections()
+
+      setPendingData(data)
+    } catch (err) {
+      console.error(err)
     } finally {
       setShowLoader(false)
     }
-  }, [fetchAllClients, fetchRecentBankReceipts, fetchRecentCashReceipts])
+  }, [fetchAllClients, loadPendingCollections])
 
   // Utility function to generate dynamic print HTML
   const generatePrintHTML = (data, headers, title, totalPending) => {
@@ -531,7 +517,7 @@ const PendingCollectionReport = ({ client, onClose }) => {
         if (!acc[name]) {
           acc[name] = { accountName: name, credit: 0, date: '' }
         }
-        acc[name].credit += Number(row.amount) || 0
+        acc[name].credit += Number(row.pendingAmount) || 0
         return acc
       }, {})
 
@@ -542,7 +528,7 @@ const PendingCollectionReport = ({ client, onClose }) => {
       }))
     } else {
       // Single client: just one row with sum
-      const clientSum = filteredData.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+      const clientSum = filteredData.reduce((sum, row) => sum + (Number(row.pendingAmount) || 0), 0)
       printData = [
         {
           accountName: selectedClient.clientName || '',
@@ -552,7 +538,7 @@ const PendingCollectionReport = ({ client, onClose }) => {
       ]
     }
 
-    totalPending = filteredData.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+    totalPending = filteredData.reduce((sum, row) => sum + (Number(row.pendingAmount) || 0), 0)
 
     const title = `Pending Collection Report <br> ${selectedClient?.clientName || 'All Accounts'} (${selectedType})`
 
@@ -595,11 +581,6 @@ const PendingCollectionReport = ({ client, onClose }) => {
   useEffect(() => {
     loadData()
   }, [loadData])
-
-  // Sync selectedClient with client prop
-  useEffect(() => {
-    setSelectedClient(client || null)
-  }, [client])
 
   // const handleGenerateAndSendPDF = async () => {
   //   try {
@@ -836,6 +817,28 @@ const PendingCollectionReport = ({ client, onClose }) => {
               </div>
             </div>
           </div>
+          <div className="mx-4 border-r w-52 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg">
+                <BarChart3 size={20} className="text-orange-600" />
+              </div>
+              <div>
+                <p className="text-gray-600 text-sm">Largest Due</p>
+                <p className="text-xl font-light">{toThousands(statistics.largestOutstanding)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="mx-4 border-r w-52 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg">
+                <Calendar size={20} className="text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-gray-600 text-sm">Overdue</p>
+                <p className="text-xl font-light">{toThousands(statistics.overdueCount)}</p>
+              </div>
+            </div>
+          </div>
           {selectedClient && (
             <div
               className="w-52 flex flex-shrink-0 items-center justify-center transition-all duration-200 transform hover:scale-105 cursor-pointer"
@@ -845,8 +848,6 @@ const PendingCollectionReport = ({ client, onClose }) => {
                   const amount = toThousands(Number(selectedClient?.pendingAmount).toFixed(0))
 
                   const message = `Hello ${clientName},\n\n!!! just a reminder that the ${amount} amount is still pending till ${new Date().toLocaleDateString('en-US', { month: 'long' })}.\n\nPlease make the payment as soon as possible.\nThank you for your business!`
-
-                  console.log(selectedClient)
 
                   if (
                     selectedClient.phoneNo === '' ||

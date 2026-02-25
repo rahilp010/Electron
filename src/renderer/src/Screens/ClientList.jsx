@@ -137,10 +137,6 @@ const ClientRow = memo(({ client, index, onDelete, onEdit, setClientHistory, set
 
       const transactions = [...purchaseData.data, ...saleData.data]
 
-      console.log('transaction', transactions)
-      // const filteredResponse = response.filter((transaction) => transaction.clientId === id)
-      // const filteredTransactions = transactions.filter((receipt) => receipt.clientId === id)
-      // const combinedHistory = [...filteredTransactions]
       setClientHistory(transactions)
     } catch (error) {
       toast.error('Failed to fetch client details: ' + error.message)
@@ -552,7 +548,6 @@ const ClientList = () => {
   }, [fetchClients])
   const getTransactionDetails = (id) => {
     const transaction = clientHistory.filter((history) => history.pageName === 'Purchase')
-    console.log(transaction)
 
     return transaction
   }

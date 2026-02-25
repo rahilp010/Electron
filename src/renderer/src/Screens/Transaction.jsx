@@ -459,7 +459,6 @@ const useTransactionOperations = () => {
 
   const handleUpdatePaymentStatus = useCallback(
     async (transactionId, newStatus) => {
-      console.log('Updating Transaction:', transactionId, newStatus)
       try {
         // Call API (assuming your backend supports update)
         const response = await window.api.updateSales({

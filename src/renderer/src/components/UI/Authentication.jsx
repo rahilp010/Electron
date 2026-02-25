@@ -24,8 +24,6 @@ const Authentication = () => {
     setMounted(true)
   }, [])
 
-  console.log('path', location.pathname)
-
   // ---- UUID / Challenge Generator ----
   const generateChallenge = () => {
     const newChallenge =

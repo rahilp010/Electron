@@ -32,29 +32,13 @@ const TransferAmount = () => {
   const loadAccountsAndReceipts = useCallback(async () => {
     try {
       const accs = (await window.api.getAllAccounts()) || []
-      const bankReceipts = (await window.api.getRecentBankReceipts()) || []
-      const cashReceipts = (await window.api.getRecentCashReceipts()) || []
 
-      const receipts = [...bankReceipts, ...cashReceipts].map((r) => ({
-        ...r,
-        date: r.date || r.createdAt || new Date().toISOString()
-      }))
 
       const enriched = accs.map((acc) => {
-        const matching = receipts.filter((r) => {
-          if (r.transactionAccount && String(r.transactionAccount) === String(acc.id)) return true
-          if (r.sendTo && String(r.sendTo).toLowerCase() === String(acc.accountName).toLowerCase())
-            return true
-          return false
-        })
 
         let credits = 0
         let debits = 0
-        matching.forEach((r) => {
-          if (r.type === 'Receipt') credits += Number(r.amount || 0)
-          else if (r.type === 'Payment') debits += Number(r.amount || 0)
-        })
-
+      
         const base = Number(acc.closingBalance || acc.openingBalance || 0)
         const computed = base + credits - debits
 

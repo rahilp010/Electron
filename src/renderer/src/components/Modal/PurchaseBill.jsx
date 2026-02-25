@@ -203,8 +203,6 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     const fetchNextBillId = async () => {
       const next = await window.api.generateBillNo('Purchase')
 
-      console.log(next)
-
       setNextBillId(next)
 
       if (!isUpdateExpense) {
@@ -340,8 +338,6 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     }))
   }
   const productRowTotals = useMemo(() => {
-    console.log('purchasebill', purchaseBill)
-
     return purchaseBill.products.map((p) => {
       const price = Number(p.productPrice || 0)
       const qty = Number(p.productQuantity || 0)
@@ -671,7 +667,11 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
               ? Math.max(0, Math.round((purchaseAmount - itemPaid) * 100) / 100)
               : purchaseAmount
         const pendingFromOurs =
-          purchaseBill.statusOfTransaction === 'completed' ? 0 : row.totalAmountWithTax
+          purchaseBill.paymentType === 'full' && purchaseBill.statusOfTransaction === 'completed'
+            ? 0
+            : purchaseBill.paymentType === 'partial'
+              ? Math.max(0, Math.round((purchaseAmount - itemPaid) * 100) / 100)
+              : row.totalAmountWithTax
 
         const purchaseData = {
           clientId: purchaseBill.clientId,
@@ -712,11 +712,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           isMultiProduct: rowsDetailed.length > 1 ? 1 : 0
         }
 
-        console.log('Sending to IPC:', purchaseData)
-
         const createdTransaction = await window.api.createPurchase(purchaseData)
-
-        console.log('IPC response:', createdTransaction)
 
         createdTransactionIds.push(createdTransaction.id)
       }

@@ -26,8 +26,8 @@ import { IoLogoWhatsapp } from 'react-icons/io5'
 
 // Constants
 const TABLE_HEADERS = [
-  { key: 'date', label: 'Date', width: 'w-[150px]', icon: Calendar },
-  { key: 'bank', label: 'Bank', width: 'w-[150px]', icon: Building2 },
+  { key: 'date', label: 'Date', width: 'w-[170px]', icon: Calendar },
+  // { key: 'bank', label: 'Bank', width: 'w-[150px]', icon: Building2 },
   { key: 'accountName', label: 'Account Name', width: 'w-[250px]', icon: CreditCard },
   { key: 'credit', label: 'Pending', width: 'w-[200px]', icon: ClockArrowDown },
   { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
@@ -70,18 +70,8 @@ const getInitials = (name) => {
 }
 
 // Memoized Transaction Row Component
-const TransactionRow = memo(({ receipt, index, selectedType, clients, balance }) => {
+const TransactionRow = memo(({ receipt, index, selectedType, clientName, balance }) => {
   const isEven = index % 2 === 0
-  const LedgerIcon = selectedType === 'Bank' ? Building2 : Banknote
-
-  const getClientName = (clientId, clients) => {
-    if (!clientId) return 'Unknown Client'
-
-    // Handle both direct ID and nested object structure
-    const id = typeof clientId === 'object' ? clientId.id : clientId
-    const client = clients.find((c) => String(c?.id) === String(id))
-    return client ? client.clientName : 'Unknown Client'
-  }
 
   return (
     <tr
@@ -96,12 +86,16 @@ const TransactionRow = memo(({ receipt, index, selectedType, clients, balance })
             <Calendar size={14} className="text-red-600" />
           </div>
           <span className="font-medium text-gray-700">
-            {new Date(receipt.date).toLocaleDateString()}
+            {new Date(receipt?.createdAt).toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric'
+            })}
           </span>
         </div>
       </td>
 
-      <td className="px-6 py-4 no-print">
+      {/* <td className="px-6 py-4 no-print">
         <div className="flex items-center gap-2">
           <div className="p-1 rounded-full bg-blue-200">
             <LedgerIcon size={14} className="text-blue-600" />
@@ -110,18 +104,18 @@ const TransactionRow = memo(({ receipt, index, selectedType, clients, balance })
             {receipt.bank ? `${receipt.bank} Bank` : selectedType}
           </span>
         </div>
-      </td>
+      </td> */}
 
       <td>
         <div className="flex items-center gap-3">
           <div className="relative group">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
-              {getInitials(getClientName(receipt.clientId, clients))}
+              {getInitials(clientName)}
             </div>
             <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl blur opacity-0 group-hover:opacity-40 transition-opacity duration-300"></div>
           </div>
           <span className="font-medium text-gray-700 transition-colors duration-200 group-hover:text-indigo-600">
-            {getClientName(receipt.clientId, clients)}
+            {clientName.toUpperCase()}
           </span>
         </div>
       </td>
@@ -132,7 +126,7 @@ const TransactionRow = memo(({ receipt, index, selectedType, clients, balance })
             <ClockArrowDown size={14} className="text-red-600" />
           </div>
           <span className="font-semibold text-red-600 px-3 py-1 rounded-full">
-            {toThousands(receipt.amount)}
+            {toThousands(receipt.pendingFromOurs)}
           </span>
         </div>
       </td>
@@ -181,88 +175,42 @@ const useAccountOperations = () => {
     }
   }, [dispatch])
 
-  const fetchAllTransactions = useCallback(async () => {
-    try {
-      const response = await transactionApi.getAllTransactions()
-      dispatch(setTransactions(response))
-    } catch (error) {
-      console.error('Error fetching transactions:', error)
-      toast.error('Failed to fetch transactions')
-    }
-  }, [dispatch])
+  const loadPendingPayments = useCallback(async () => {
+    const res = await window.api.getPendingPayments()
 
-  const fetchRecentBankReceipts = useCallback(async () => {
-    try {
-      const receipts = await window.api.getRecentBankReceipts()
-      return receipts.map((r) => ({
-        ...r,
-        clientName: r.party,
-        date: r.date || r.createdAt
-      }))
-    } catch (error) {
-      console.error('Error fetching bank receipts:', error)
-      toast.error('Failed to fetch bank receipts')
+    if (res.success) {
+      return res.list
+    } else {
+      toast.error(res.message || 'Failed to load pending Payments')
       return []
     }
   }, [])
 
-  const fetchRecentCashReceipts = useCallback(async () => {
-    try {
-      const receipts = await window.api.getRecentCashReceipts()
-      return receipts.map((r) => ({
-        ...r,
-        clientName: r.party,
-        date: r.date || r.createdAt
-      }))
-    } catch (error) {
-      console.error('Error fetching cash receipts:', error)
-      toast.error('Failed to fetch cash receipts')
-      return []
-    }
-  }, [])
-
-  return { fetchAllClients, fetchAllTransactions, fetchRecentBankReceipts, fetchRecentCashReceipts }
+  return { fetchAllClients, loadPendingPayments }
 }
 
 // Main Component
 const PendingPaymentsReport = ({ client, onClose }) => {
-  const {
-    fetchAllClients,
-    fetchAllTransactions,
-    fetchRecentBankReceipts,
-    fetchRecentCashReceipts
-  } = useAccountOperations()
+  const { fetchAllClients, loadPendingPayments } = useAccountOperations()
 
   // State management
   const [selectedType, setSelectedType] = useState('Bank')
   const [showLoader, setShowLoader] = useState(false)
-  const [recentBankReceipts, setRecentBankReceipts] = useState([])
-  const [recentCashReceipts, setRecentCashReceipts] = useState([])
+  const [pendingData, setPendingData] = useState([])
   const [showSideBar, setShowSideBar] = useState(false)
   const [sidebarSearch, setSidebarSearch] = useState('')
   const [selectedClient, setSelectedClient] = useState(client || null)
 
   const clients = useSelector((state) => state.electron.clients?.data || [])
-  const transaction = useSelector((state) => state.electron.transaction?.data || [])
 
   // Get client name helper
+
   const getClientName = useCallback(
     (id) => {
       const foundClient = clients.find((c) => c?.id === Number(id))
       return foundClient ? foundClient.clientName : 'Unknown Client'
     },
     [clients]
-  )
-
-  // Memoized table headers
-  const tableHeaders = useMemo(
-    () =>
-      TABLE_HEADERS.map((header) =>
-        header.key === 'bank'
-          ? { ...header, label: selectedType, icon: selectedType === 'Bank' ? Building2 : Banknote }
-          : header
-      ),
-    [selectedType]
   )
 
   // Memoized filtered sidebar clients
@@ -274,47 +222,51 @@ const PendingPaymentsReport = ({ client, onClose }) => {
 
   // Memoized filtered data
   const filteredData = useMemo(() => {
-    const sourceData = selectedType === 'Bank' ? recentBankReceipts : recentCashReceipts
+    let receipts = pendingData || []
 
-    const receipts = sourceData.filter(
-      (r) => r.type === 'Payment' && r.statusOfTransaction === 'pending'
-    )
-
-    if (selectedClient?.id) {
-      return receipts.filter(
-        (r) =>
-          String(r.clientId) === String(selectedClient.id) ||
-          r.clientName?.toLowerCase()?.trim() ===
-            getClientName(selectedClient.id)?.toLowerCase()?.trim()
+    if (selectedType) {
+      receipts = receipts.filter(
+        (r) => r.paymentMethod?.toLowerCase() === selectedType.toLowerCase()
       )
     }
 
-    return receipts.sort(
-      (a, b) => new Date(b?.date || b?.createdAt || 0) - new Date(a?.date || a?.createdAt || 0)
-    )
-  }, [selectedType, recentBankReceipts, recentCashReceipts, selectedClient, getClientName])
+    if (selectedClient?.id) {
+      receipts = receipts.filter((r) => String(r.clientId) === String(selectedClient.id))
+    }
+
+    return [...receipts].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  }, [pendingData, selectedClient, selectedType])
 
   // Memoized running balance calculation
   const balances = useMemo(() => {
-    const receipts = [...filteredData].reverse()
-    let balance = 0
-    const calculatedBalances = []
-
-    receipts.forEach((receipt, idx) => {
-      const amount = getAmount(receipt.type, receipt.amount)
-      balance += amount
-      calculatedBalances[receipts.length - 1 - idx] = balance
-    })
-
-    return calculatedBalances
+    return filteredData.map((r) => r.pendingFromOurs)
   }, [filteredData])
 
   // Memoized statistics
   const statistics = useMemo(() => {
-    const totalPending = filteredData.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-    const transactionCount = filteredData.length
+    const totalPending = filteredData.reduce((sum, r) => sum + (Number(r.pendingFromOurs) || 0), 0)
 
-    return { totalPending, transactionCount }
+    const uniqueClients = new Set(filteredData.map((r) => r.clientId)).size
+
+    const largestOutstanding = Math.max(
+      ...filteredData.map((r) => Number(r.pendingFromOurs) || 0),
+      0
+    )
+
+    const averagePending = filteredData.length > 0 ? totalPending / filteredData.length : 0
+
+    const overdueCount = filteredData.filter(
+      (r) => r.dueDate && new Date(r.dueDate) < new Date()
+    ).length
+
+    return {
+      totalPending,
+      transactionCount: filteredData.length,
+      uniqueClients,
+      largestOutstanding,
+      averagePending,
+      overdueCount
+    }
   }, [filteredData])
 
   // Event handlers
@@ -337,19 +289,15 @@ const PendingPaymentsReport = ({ client, onClose }) => {
     setShowLoader(true)
     try {
       await fetchAllClients()
-      await fetchAllTransactions()
-      const [bankData, cashData] = await Promise.all([
-        fetchRecentBankReceipts(),
-        fetchRecentCashReceipts()
-      ])
-      setRecentBankReceipts(bankData)
-      setRecentCashReceipts(cashData)
+      const data = await loadPendingPayments()
+
+      setPendingData(data)
+    } catch (err) {
+      console.error(err)
     } finally {
       setShowLoader(false)
     }
-  }, [fetchAllClients, fetchAllTransactions, fetchRecentBankReceipts, fetchRecentCashReceipts])
-
-  console.log('receipt', recentBankReceipts)
+  }, [fetchAllClients, loadPendingPayments])
 
   // Utility function to generate dynamic print HTML
   const generatePrintHTML = (data, headers, title, totalPending) => {
@@ -552,18 +500,18 @@ const PendingPaymentsReport = ({ client, onClose }) => {
 
   // Updated handler for printing PDF using iframe to avoid popup blockers
   const handlePrintPDF = useCallback(() => {
-    // Aggregate by accountName if no specific client selected
     let printData = []
     let totalPending = 0
 
     if (!selectedClient) {
-      // Group by clientName and sum
       const grouped = filteredData.reduce((acc, row) => {
-        const name = row.clientName
+        const name = row.clientName || getClientName(row.clientId)
+
         if (!acc[name]) {
           acc[name] = { accountName: name, credit: 0, date: '' }
         }
-        acc[name].credit += Number(row.amount) || 0
+
+        acc[name].credit += Number(row.pendingFromOurs) || 0
         return acc
       }, {})
 
@@ -573,8 +521,11 @@ const PendingPaymentsReport = ({ client, onClose }) => {
         date: ''
       }))
     } else {
-      // Single client: just one row with sum
-      const clientSum = filteredData.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+      const clientSum = filteredData.reduce(
+        (sum, row) => sum + (Number(row.pendingFromOurs) || 0),
+        0
+      )
+
       printData = [
         {
           accountName: selectedClient.clientName || '',
@@ -584,44 +535,31 @@ const PendingPaymentsReport = ({ client, onClose }) => {
       ]
     }
 
-    totalPending = filteredData.reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+    totalPending = filteredData.reduce((sum, row) => sum + (Number(row.pendingFromOurs) || 0), 0)
 
-    const title = `Pending Payment Report <br> ${selectedClient?.clientName || 'All Accounts'} (${selectedType})`
+    const title = `Pending Payment Report - ${
+      selectedClient?.clientName || 'All Accounts'
+    } (${selectedType})`
 
     const printHTML = generatePrintHTML(printData, TABLE_HEADERS_PRINT, title, totalPending)
 
-    // Create iframe for printing
-    try {
-      const printFrame = document.createElement('iframe')
-      printFrame.style.position = 'absolute'
-      printFrame.style.left = '-9999px'
-      printFrame.style.width = '0'
-      printFrame.style.height = '0'
-      printFrame.style.border = '0'
-      document.body.appendChild(printFrame)
+    const printFrame = document.createElement('iframe')
+    printFrame.style.position = 'absolute'
+    printFrame.style.left = '-9999px'
+    document.body.appendChild(printFrame)
 
-      const printDoc = printFrame.contentDocument || printFrame.contentWindow.document
-      printDoc.open()
-      printDoc.write(printHTML)
-      printDoc.close()
+    const printDoc = printFrame.contentDocument || printFrame.contentWindow.document
+    printDoc.open()
+    printDoc.write(printHTML)
+    printDoc.close()
 
-      // Wait a bit for content to load
+    setTimeout(() => {
+      printFrame.contentWindow.print()
       setTimeout(() => {
-        printFrame.contentWindow.focus()
-        printFrame.contentWindow.print()
-
-        // Cleanup after print
-        setTimeout(() => {
-          document.body.removeChild(printFrame)
-        }, 1000)
-      }, 500)
-
-      toast.success('Print dialog opened. Choose "Save as PDF" to generate PDF.')
-    } catch (error) {
-      console.error('Error initiating print:', error)
-      toast.error('Failed to initiate print: ' + error.message)
-    }
-  }, [filteredData, selectedClient, selectedType])
+        document.body.removeChild(printFrame)
+      }, 1000)
+    }, 500)
+  }, [filteredData, selectedClient, selectedType, getClientName])
 
   // Effects
   useEffect(() => {
@@ -865,7 +803,7 @@ const PendingPaymentsReport = ({ client, onClose }) => {
             <table className="min-w-max border-collapse text-sm w-full">
               <thead className="bg-gradient-to-r from-gray-100 to-gray-200 sticky top-0 z-10">
                 <tr className="text-gray-700">
-                  {tableHeaders.map((header) => {
+                  {TABLE_HEADERS.map((header) => {
                     const Icon = header.icon
                     return (
                       <th
@@ -906,7 +844,7 @@ const PendingPaymentsReport = ({ client, onClose }) => {
                       index={index}
                       balance={balances[index]}
                       selectedType={selectedType}
-                      clients={clients}
+                      clientName={getClientName(receipt.clientId)}
                     />
                   ))
                 )}

@@ -178,11 +178,8 @@ const ProductModal = ({
           pageName: 'Product'
         }
 
-        console.log('Submitting product:', productData)
-
         if (!isUpdateExpense) {
           const response = await window.api.createProduct(productData)
-          console.log('Product created:', response)
           dispatch(setProducts(response))
           toast.success('Product added successfully')
         } else {

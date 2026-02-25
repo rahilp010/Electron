@@ -326,8 +326,6 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
     }))
   }
   const productRowTotals = useMemo(() => {
-    console.log('salesBill', salesBill)
-
     return salesBill.products.map((p) => {
       const price = Number(p.productPrice || 0)
       const qty = Number(p.productQuantity || 0)
@@ -654,7 +652,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         const itemPaid = Number(paidDistribution[i] || 0)
         const saleAmount = row.price
         const pendingAmount =
-          salesBill.paymentType === 'full'
+          salesBill.paymentType === 'full' && salesBill.statusOfTransaction === 'completed'
             ? 0
             : salesBill.paymentType === 'partial'
               ? Math.max(0, Math.round((saleAmount - itemPaid) * 100) / 100)
@@ -699,11 +697,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           isMultiProduct: rowsDetailed.length > 1 ? 1 : 0
         }
 
-        console.log('Sending to IPC:', salesData)
-
         const createdTransaction = await window.api.createSales(salesData)
-
-        console.log('IPC response:', createdTransaction)
 
         createdTransactionIds.push(createdTransaction.id)
       }

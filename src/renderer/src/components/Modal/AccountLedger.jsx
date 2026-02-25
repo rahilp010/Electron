@@ -127,8 +127,6 @@ const AccountLedger = forwardRef(({ client }, ref) => {
   const [ledgerData, setLedgerData] = useState([])
   const [showLoader, setShowLoader] = useState(false)
 
-  console.log('ledgerData', ledgerData)
-
   // ======================
   // FETCH CLIENTS
   // ======================

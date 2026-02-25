@@ -311,7 +311,6 @@ const Bank = () => {
     try {
       const response = await transactionApi.getAllTransactions()
       dispatch(setTransactions(response))
-      console.log(response.filter((m)=> m.paymentMethod === 'bank'))
     } catch (error) {
       console.error('Error fetching transactions:', error)
       toast.error('Failed to fetch transactions')

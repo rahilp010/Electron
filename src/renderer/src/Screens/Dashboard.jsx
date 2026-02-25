@@ -33,8 +33,8 @@ const Dashboard = () => {
     fetchKeyBindings()
   }, [])
 
-  const lastBackup = localStorage.getItem('lastBackupDate')
-  const nextBackup = localStorage.getItem('nextBackupDate')
+  const lastBackup = localStorage.getItem('lastBackupDateTime')
+  const nextBackup = localStorage.getItem('nextBackupDateTime')
   const backupTakenToday = localStorage.getItem('backupTakenToday')
 
   const [systemInfo, setSystemInfo] = useState({

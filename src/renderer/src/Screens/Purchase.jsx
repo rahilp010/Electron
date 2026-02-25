@@ -462,7 +462,6 @@ const usePurchaseOperations = () => {
 
   const handleUpdatePaymentStatus = useCallback(
     async (transactionId, newStatus) => {
-      console.log('Updating Transaction:', transactionId, newStatus)
       try {
         // Call API (assuming your backend supports update)
         const response = await window.api.updatePurchase(transactionId, {
@@ -1072,8 +1071,6 @@ const Purchase = () => {
     const totalPaidCount = purchaseTransactions.filter(
       (item) => item.statusOfTransaction === 'completed'
     ).length
-
-    console.log('putchaseTransaction', purchaseTransactions)
 
     return { totalPurchases, totalProducts, totalPendingAmount, totalPendingCount, totalPaidCount }
   }, [transactions])
