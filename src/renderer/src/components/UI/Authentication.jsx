@@ -1,129 +1,20 @@
 /* eslint-disable prettier/prettier */
 import { useRef, useState, useEffect } from 'react'
-import QRCodeStyling from 'qr-code-styling'
 import { toast } from 'react-toastify'
-import { Scan, Lock, X, CheckCircle2 } from 'lucide-react'
-import { useLocation, useNavigate } from 'react-router-dom'
-
-const trustedPublicKeyBase64 = '' // 🔑 Put your trusted device's public key (spki DER, base64-encoded)
+import { Lock, X, CheckCircle2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 const Authentication = () => {
-  const [showQRCode, setShowQRCode] = useState(false)
   const [showPasscode, setShowPasscode] = useState(false)
-  const [challenge, setChallenge] = useState('')
-  const [qrCode, setQrCode] = useState(null)
   const [mounted, setMounted] = useState(false)
   const [passcode, setPasscode] = useState(['', '', '', '', '', ''])
   const [isVerifying, setIsVerifying] = useState(false)
-  const qrRef = useRef(null)
   const inputRefs = useRef([])
   const navigate = useNavigate()
-  const location = useLocation()
 
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  // ---- UUID / Challenge Generator ----
-  const generateChallenge = () => {
-    const newChallenge =
-      self.crypto.randomUUID?.() ||
-      ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, (c) =>
-        (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
-      )
-
-    setChallenge(newChallenge)
-    setShowQRCode(true)
-  }
-
-  // ---- Init QR when challenge changes ----
-  useEffect(() => {
-    if (challenge) {
-      const qr = new QRCodeStyling({
-        width: 220,
-        height: 220,
-        data: JSON.stringify({ challenge }),
-        dotsOptions: {
-          color: '#1f2937',
-          type: 'rounded'
-        },
-        cornersSquareOptions: {
-          color: '#374151',
-          type: 'extra-rounded'
-        },
-        cornersDotOptions: {
-          color: '#4b5563',
-          type: 'dot'
-        },
-        imageOptions: {
-          margin: 6,
-          imageSize: 0.4
-        }
-      })
-      setQrCode(qr)
-    }
-  }, [challenge])
-
-  // ---- Render QR into DOM ----
-  useEffect(() => {
-    if (qrCode && qrRef.current) {
-      qrRef.current.innerHTML = ''
-      qrCode.append(qrRef.current)
-    }
-  }, [qrCode])
-
-  // ---- Helper: base64 → ArrayBuffer ----
-  function base64ToArrayBuffer(base64) {
-    const binaryString = atob(base64)
-    const len = binaryString.length
-    const bytes = new Uint8Array(len)
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i)
-    }
-    return bytes.buffer
-  }
-
-  // ---- Verify response from trusted device ----
-  const verifyResponse = async (response) => {
-    try {
-      const parsed = JSON.parse(response)
-      const { challenge: respChallenge, signature } = parsed
-
-      if (respChallenge !== challenge) {
-        toast.error('Challenge mismatch ❌')
-        return
-      }
-
-      const keyBuffer = base64ToArrayBuffer(trustedPublicKeyBase64)
-      const publicKey = await crypto.subtle.importKey(
-        'spki',
-        keyBuffer,
-        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-        false,
-        ['verify']
-      )
-
-      const encoder = new TextEncoder()
-      const signatureBytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0))
-
-      const isValid = await crypto.subtle.verify(
-        { name: 'RSASSA-PKCS1-v1_5' },
-        publicKey,
-        signatureBytes,
-        encoder.encode(respChallenge)
-      )
-
-      if (isValid) {
-        toast.success('Device authenticated ✅')
-        setShowQRCode(false)
-      } else {
-        toast.error('Invalid signature ❌')
-      }
-    } catch (err) {
-      console.error(err)
-      toast.error('Invalid QR format ❌')
-    }
-  }
 
   // Passcode handling
   const handlePasscodeChange = (index, value) => {
@@ -173,11 +64,6 @@ const Authentication = () => {
         navigate('/dashboard')
       }, 1000)
     }
-  }
-
-  const closeQR = () => {
-    setShowQRCode(false)
-    setChallenge('')
   }
 
   const closePasscode = () => {

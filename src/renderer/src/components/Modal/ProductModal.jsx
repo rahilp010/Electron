@@ -141,6 +141,8 @@ const ProductModal = ({
     async (e) => {
       e.preventDefault()
 
+      debugger
+
       if (isSubmittingProduct) return
       setIsSubmittingProduct(true)
 
@@ -166,7 +168,8 @@ const ProductModal = ({
           parts: JSON.stringify(
             selectedParts.map((p) => ({
               partId: p.partId,
-              quantity: quantities[p.partId] || 1
+              productQuantity: quantities[p.partId] || 1,
+              partsTotalAMount: 0
             }))
           ),
           saleHSN: product.saleHSN,
@@ -528,6 +531,7 @@ const ProductModal = ({
                       height: '100px',
                       zIndex: 999
                     }}
+                    searchable={true}
                     value={selectedParts.map((p) => p.partId)}
                     onChange={(values) => {
                       setSelectedParts(
@@ -543,25 +547,39 @@ const ProductModal = ({
                     virtualized={true}
                     renderMenuItem={(label, item) => {
                       const partProduct = products.find((p) => p.id === item.value)
+
+                      const availableStock = partProduct?.productQuantity || 0
+
                       const requiredQty =
                         product.assetsType === 'Finished Goods' && product.addParts === 1
                           ? (baseQuantities[item.value] || 0) *
                             (Number(product.productQuantity) || 1)
                           : quantities[item.value] || 0
-                      const hasEnoughStock =
-                        partProduct && partProduct.productQuantity >= requiredQty
+
+                      const remainingStock = availableStock - requiredQty
+                      const isOutOfStock = remainingStock <= 0
+                      const hasEnoughStock = remainingStock >= 0
 
                       return (
                         <div className="flex items-center justify-between w-full">
                           <div className="flex flex-col">
-                            <span className={!hasEnoughStock ? 'text-red-500' : ''}>{label}</span>
+                            {/* 🔹 Product Name + Live Remaining Qty */}
+                            <span className={`${isOutOfStock ? 'text-red-500 font-semibold' : ''}`}>
+                              {label}{' '}
+                              <span className="text-xs text-gray-500">
+                                Qty: {availableStock >= 0 ? availableStock : 0}
+                              </span>
+                            </span>
+
+                            {/* 🔹 Show warning if insufficient */}
                             {!hasEnoughStock && (
                               <span className="text-xs text-red-500">
-                                Stock: {partProduct?.productQuantity || 0} (Need: {requiredQty})
+                                Stock: {availableStock} (Need: {requiredQty})
                               </span>
                             )}
                           </div>
-                          <InputGroup size="xs" style={{ width: 120, zIndex: 999 }}>
+
+                          <InputGroup size="xs" style={{ width: 120 }}>
                             <IconButton
                               size="xs"
                               icon={<MinusIcon />}
@@ -569,17 +587,16 @@ const ProductModal = ({
                                 e.stopPropagation()
                                 handleQuantityChange(item.value, -1)
                               }}
-                              style={{ zIndex: 999 }}
                             />
+
                             <input
                               readOnly
                               value={
                                 product.assetsType === 'Finished Goods' && product.addParts === 1
-                                  ? `${baseQuantities[item.value] || 0} × ${product.productQuantity || 1}`
+                                  ? `${baseQuantities[item.value] || 0} × ${Number(product.productQuantity) || 0}`
                                   : quantities[item.value] || 0
                               }
                               style={{
-                                zIndex: 999,
                                 width: 60,
                                 textAlign: 'center',
                                 border: 'none',
@@ -587,6 +604,7 @@ const ProductModal = ({
                                 fontSize: '11px'
                               }}
                             />
+
                             <IconButton
                               size="xs"
                               icon={<PlusIcon />}
@@ -594,7 +612,6 @@ const ProductModal = ({
                                 e.stopPropagation()
                                 handleQuantityChange(item.value, 1)
                               }}
-                              style={{ zIndex: 999 }}
                             />
                           </InputGroup>
                         </div>

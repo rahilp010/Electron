@@ -177,12 +177,13 @@ const useProductOperations = () => {
       try {
         await window.api.deleteProduct(id)
         dispatch(deleteProduct(id))
+        fetchProducts()
         toast.success('Product deleted successfully')
       } catch (error) {
         toast.error('Failed to delete product: ' + error.message)
       }
     },
-    [dispatch]
+    [dispatch, fetchProducts]
   )
 
   const handleEditProduct = useCallback(
@@ -361,7 +362,11 @@ const Products = () => {
   const handleImportExcel = useCallback(
     async (filePath) => {
       try {
+        console.log('filepath', filePath)
+
         const result = await window.api.importExcel(filePath, 'products')
+
+        console.log('result', result)
 
         if (result.success) {
           toast.success(`Imported ${result.count} products successfully`)

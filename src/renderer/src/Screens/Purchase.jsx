@@ -42,7 +42,7 @@ import { toast } from 'react-toastify'
 import HistoryToggleOffIcon from '@mui/icons-material/HistoryToggleOff'
 import CreditScoreIcon from '@mui/icons-material/CreditScore'
 import Navbar from '../components/UI/Navbar'
-import PurchaseModal from '../components/Modal/PurchaseModal'
+// import PurchaseModal from '../components/Modal/PurchaseModal'
 import PurchaseBill from '../components/Modal/PurchaseBill'
 import ImportExcel from '../components/UI/ImportExcel'
 import * as XLSX from 'xlsx'
@@ -1632,14 +1632,14 @@ const Purchase = () => {
       </div>
 
       {/* Modal */}
-      {showModal && (
+      {/* {showModal && (
         <PurchaseModal
           setShowModal={setShowModal}
           existingTransaction={selectedTransaction}
           isUpdateExpense={isUpdateExpense}
           type="transaction"
         />
-      )}
+      )} */}
       {showPurchaseBillModal && (
         <PurchaseBill
           setShowPurchaseBillModal={setShowPurchaseBillModal}

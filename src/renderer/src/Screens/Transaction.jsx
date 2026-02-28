@@ -35,7 +35,7 @@ import {
 } from '../app/features/electronSlice'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
-import TransactionModal from '../components/Modal/TransactionModal'
+// import TransactionModal from '../components/Modal/TransactionModal'
 import HistoryToggleOffIcon from '@mui/icons-material/HistoryToggleOff'
 import CreditScoreIcon from '@mui/icons-material/CreditScore'
 import Navbar from '../components/UI/Navbar'
@@ -1649,14 +1649,14 @@ const Transaction = () => {
       </div>
 
       {/* Modal */}
-      {showModal && (
+      {/* {showModal && (
         <TransactionModal
           setShowModal={setShowModal}
           existingTransaction={selectedTransaction}
           isUpdateExpense={isUpdateExpense}
           type="transaction"
         />
-      )}
+      )} */}
       {showSalesBillModal && (
         <SalesBill
           setShowSalesBillModal={setShowSalesBillModal}
