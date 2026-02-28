@@ -119,7 +119,7 @@ ipcMain.handle('createProduct', (event, product = {}) => {
       )
       .run(
         productName,
-        finalPrice,
+        productPrice,
         productQuantity,
         clientId,
         assetsType,
@@ -161,6 +161,20 @@ ipcMain.handle('updateProduct', (event, product) => {
 
   // Get old product
   const oldProduct = db.prepare(`SELECT * FROM products WHERE id = ?`).get(id)
+
+  // let finalPrice = productPrice
+
+  // if (assetsType === 'Finished Goods' && addParts === 1) {
+  //   finalPrice = 0
+  //   const parsedParts = JSON.parse(parts || '[]')
+
+  //   for (const part of parsedParts) {
+  //     const partRow = db.prepare(`SELECT * FROM products WHERE id = ?`).get(part.partId)
+  //     if (partRow) {
+  //       finalPrice += partRow.productPrice * part.productQuantity
+  //     }
+  //   }
+  // }
 
   // Update product info
   const result = db
@@ -227,26 +241,28 @@ ipcMain.handle('updateProduct', (event, product) => {
 })
 
 ipcMain.handle('deleteProduct', (event, id) => {
-  const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(id)
+  const tx = db.transaction(() => {
+    const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(id)
+    if (!product) return
 
-  if (!product) return
+    if (product.assetsType === 'Finished Goods' && product.addParts === 1) {
+      const parsedParts = JSON.parse(product.parts || '[]')
 
-  // If it was a Finished Goods, restore stock
-  if (product.assetsType === 'Finished Goods' && product.addParts === 1) {
-    const parsedParts = JSON.parse(product.parts || '[]')
-    parsedParts.forEach((part) => {
-      db.prepare(
-        `
+      for (const part of parsedParts) {
+        db.prepare(
+          `
           UPDATE products
           SET productQuantity = productQuantity + ?
           WHERE id = ?
         `
-      ).run(part.productQuantity, part.partId)
-    })
-  }
+        ).run(part.productQuantity, part.partId)
+      }
+    }
 
-  // Delete the product itself
-  return db.prepare(`DELETE FROM products WHERE id = ?`).run(id)
+    return db.prepare(`DELETE FROM products WHERE id = ?`).run(id)
+  })
+
+  return tx()
 })
 
 ipcMain.handle('getProductById', (event, id) => {
@@ -475,7 +491,7 @@ function applyPurchaseEffects(purchase, purchaseId) {
     quantity,
     totalAmountWithTax,
     paidAmount = 0,
-    paymentMethod,
+    payments,
     billNo
   } = purchase
 
@@ -520,30 +536,66 @@ function applyPurchaseEffects(purchase, purchaseId) {
 
   /* ---------- SYSTEM ACCOUNT DEBIT (ONLY PAID) ---------- */
   if (paid > 0) {
-    const systemAccount = getOrCreateSystemAccount(paymentMethod)
+    const parsedPayments = typeof payments === 'string' ? JSON.parse(payments) : payments || []
 
-    const newSystemBalance = Number(systemAccount.closingBalance || 0) - paid
+    const isSplit = parsedPayments.length > 1
 
-    db.prepare(
+    parsedPayments.forEach((payment) => {
+      const splitAmount = Number(payment.amount || 0)
+      if (splitAmount <= 0) return
+
+      let accountToUse = null
+
+      switch (payment.method) {
+        case 'bank':
+        case 'cheque':
+          accountToUse = getOrCreateSystemAccount('bank')
+          break
+
+        case 'cash':
+          accountToUse = getOrCreateSystemAccount('cash')
+          break
+
+        case 'googlepay':
+          accountToUse = db
+            .prepare(
+              `
+              SELECT * FROM accounts 
+              WHERE id = ? AND accounterType = 'GPay'
+            `
+            )
+            .get(Number(payment.accountId))
+
+          if (!accountToUse) throw new Error('Invalid GPay account selected')
+          break
+
+        default:
+          return
+      }
+
+      const newBalance = Number(accountToUse.closingBalance || 0) - splitAmount
+
+      const narration = isSplit
+        ? `Split Payment ${splitAmount} via ${payment.method} to ${client.clientName}
+           for ${qty} × ${product.productName} (Bill ${billNo || '-'})`
+        : `Make Payment of ${paid} to ${client.clientName}
+           for ${qty} × ${product.productName} (Bill ${billNo || '-'})`
+
+      db.prepare(
+        `
+        INSERT INTO ledger (
+          accountId, entryType, amount, balanceAfter,
+          referenceType, referenceId, narration
+        )
+        VALUES (?, 'debit', ?, ?, 'Payment', ?, ?)
       `
-      INSERT INTO ledger (
-        accountId, entryType, amount, balanceAfter,
-        referenceType, referenceId, narration
-      )
-      VALUES (?, 'debit', ?, ?, 'Payment', ?, ?)
-    `
-    ).run(
-      systemAccount.id,
-      paid,
-      newSystemBalance,
-      purchaseId,
-      `Make Payment of ${paid} to ${client.clientName} for ${qty} × ${product.productName} (Bill ${billNo || '-'}`
-    )
+      ).run(accountToUse.id, splitAmount, newBalance, purchaseId, narration)
 
-    db.prepare(`UPDATE accounts SET closingBalance = ? WHERE id = ?`).run(
-      newSystemBalance,
-      systemAccount.id
-    )
+      db.prepare(`UPDATE accounts SET closingBalance = ? WHERE id = ?`).run(
+        newBalance,
+        accountToUse.id
+      )
+    })
   }
 }
 
@@ -555,7 +607,7 @@ function rollbackPurchaseEffects(oldPurchase) {
     quantity,
     totalAmountWithTax,
     paidAmount = 0,
-    paymentMethod,
+    payments,
     billNo
   } = oldPurchase
 
@@ -596,32 +648,66 @@ function rollbackPurchaseEffects(oldPurchase) {
     clientAccount.id
   )
 
-  /* ---------- SYSTEM ACCOUNT CREDIT ---------- */
+  /* ---------- SYSTEM ACCOUNT CREDIT (SPLIT SAFE) ---------- */
   if (paid > 0) {
-    const systemAccount = getOrCreateSystemAccount(paymentMethod)
+    const parsedPayments = typeof payments === 'string' ? JSON.parse(payments) : payments || []
 
-    const newSystemBalance = Number(systemAccount.closingBalance || 0) + paid
+    const isSplit = parsedPayments.length > 1
 
-    db.prepare(
+    parsedPayments.forEach((payment) => {
+      const splitAmount = Number(payment.amount || 0)
+      if (splitAmount <= 0) return
+
+      let accountToUse = null
+
+      switch (payment.method) {
+        case 'bank':
+        case 'cheque':
+          accountToUse = getOrCreateSystemAccount('bank')
+          break
+
+        case 'cash':
+          accountToUse = getOrCreateSystemAccount('cash')
+          break
+
+        case 'googlepay':
+          accountToUse = db
+            .prepare(
+              `
+              SELECT * FROM accounts 
+              WHERE id = ? AND accounterType = 'GPay'
+            `
+            )
+            .get(Number(payment.accountId))
+          if (!accountToUse) throw new Error('Invalid GPay account selected')
+          break
+
+        default:
+          return
+      }
+
+      const newBalance = Number(accountToUse.closingBalance || 0) + splitAmount
+
+      const narration = isSplit
+        ? `Split Adjustment ${splitAmount} via ${payment.method}
+           for Bill ${billNo || '-'}`
+        : `Adjustment Purchase Payment Bill ${billNo || '-'}`
+
+      db.prepare(
+        `
+        INSERT INTO ledger (
+          accountId, entryType, amount, balanceAfter,
+          referenceType, referenceId, narration
+        )
+        VALUES (?, 'credit', ?, ?, 'Adjustment', ?, ?)
       `
-      INSERT INTO ledger (
-        accountId, entryType, amount, balanceAfter,
-        referenceType, referenceId, narration
-      )
-      VALUES (?, 'credit', ?, ?, 'Adjustment', ?, ?)
-    `
-    ).run(
-      systemAccount.id,
-      paid,
-      newSystemBalance,
-      id,
-      `Adjustment Purchase Payment Bill ${billNo || '-'}`
-    )
+      ).run(accountToUse.id, splitAmount, newBalance, id, narration)
 
-    db.prepare(`UPDATE accounts SET closingBalance = ? WHERE id = ?`).run(
-      newSystemBalance,
-      systemAccount.id
-    )
+      db.prepare(`UPDATE accounts SET closingBalance = ? WHERE id = ?`).run(
+        newBalance,
+        accountToUse.id
+      )
+    })
   }
 }
 
@@ -752,24 +838,24 @@ ipcMain.handle('createPurchase', (event, data) => {
       `
         )
         .run(
-          clientId,
-          productId,
+          Number(clientId),
+          Number(productId),
           qty,
-          purchaseAmount,
+          Number(purchaseAmount),
           paid,
           pendingAmount,
-          pendingFromOurs,
+          Number(pendingFromOurs || 0),
           paymentMethod,
           paymentType,
-          finalStatus,
+          finalStatus || 'pending',
           billNo,
           description || '',
-          date,
-          dueDate,
-          methodType,
+          date ? new Date(date).toISOString() : null,
+          dueDate ? new Date(dueDate).toISOString() : null,
+          methodType || 'Payment',
           JSON.stringify(taxAmount || []),
-          totalAmountWithTax,
-          totalAmountWithoutTax,
+          Number(totalAmountWithTax || 0),
+          Number(totalAmountWithoutTax || 0),
           JSON.stringify(payments || [])
         )
 
@@ -871,12 +957,15 @@ function applySaleEffects(sale, saleId) {
     totalAmountWithTax,
     paidAmount = 0,
     paymentMethod,
+    payments,
     billNo
   } = sale
 
   const qty = Number(quantity)
   const total = Number(totalAmountWithTax || 0)
   const paid = Number(paidAmount || 0)
+
+  const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(productId)
 
   /* ---------- STOCK DEDUCTION ---------- */
   adjustProductStock(productId, -qty)
@@ -886,7 +975,6 @@ function applySaleEffects(sale, saleId) {
   if (!client?.accountId) throw new Error('Client account missing')
 
   const clientAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(client.accountId)
-  const product = db.prepare(`SELECT * FROM products WHERE id = ?`).get(productId)
 
   const newClientBalance = Number(clientAccount.closingBalance || 0) - total
 
@@ -914,30 +1002,65 @@ function applySaleEffects(sale, saleId) {
 
   /* ---------- SYSTEM ACCOUNT CREDIT (ONLY PAID) ---------- */
   if (paid > 0) {
-    const systemAccount = getOrCreateSystemAccount(paymentMethod)
+    const parsedPayments = typeof payments === 'string' ? JSON.parse(payments) : payments || []
 
-    const newSystemBalance = Number(systemAccount.closingBalance || 0) + paid
+    const isSplit = parsedPayments.length > 1
 
-    db.prepare(
-      `
+    parsedPayments.forEach((payment) => {
+      const splitAmount = Number(payment.amount || 0)
+      if (splitAmount <= 0) return
+
+      let accountToUse = null
+
+      switch (payment.method) {
+        case 'bank':
+        case 'cheque':
+          accountToUse = getOrCreateSystemAccount('bank')
+          break
+
+        case 'cash':
+          accountToUse = getOrCreateSystemAccount('cash')
+          break
+
+        case 'googlepay':
+          accountToUse = db
+            .prepare(
+              `
+              SELECT * FROM accounts 
+              WHERE id = ? AND accounterType = 'GPay'
+            `
+            )
+            .get(Number(payment.accountId))
+
+          if (!accountToUse) throw new Error('Invalid GPay account selected')
+          break
+
+        default:
+          return
+      }
+
+      const newBalance = Number(accountToUse.closingBalance || 0) + splitAmount
+
+      const narration = isSplit
+        ? `Split Payment ${splitAmount} via ${payment.method} to ${client.clientName}
+           for ${qty} × ${product.productName} (Bill ${billNo || '-'})`
+        : `Sold ${qty} × ${product.productName} to ${client.clientName} (Bill ${billNo || '-'})`
+
+      db.prepare(
+        `
       INSERT INTO ledger (
         accountId, entryType, amount, balanceAfter,
         referenceType, referenceId, narration
       )
       VALUES (?, 'credit', ?, ?, 'Payment', ?, ?)
     `
-    ).run(
-      systemAccount.id,
-      paid,
-      newSystemBalance,
-      saleId,
-      `Sold ${qty} × ${product.productName} to ${client.clientName} (Bill ${billNo || '-'})`
-    )
+      ).run(accountToUse.id, splitAmount, newBalance, saleId, narration)
 
-    db.prepare(`UPDATE accounts SET closingBalance = ? WHERE id = ?`).run(
-      newSystemBalance,
-      systemAccount.id
-    )
+      db.prepare(`UPDATE accounts SET closingBalance = ? WHERE id = ?`).run(
+        newBalance,
+        accountToUse.id
+      )
+    })
   }
 }
 
@@ -949,6 +1072,7 @@ function rollbackSaleEffects(oldSale) {
     quantity,
     totalAmountWithTax,
     paidAmount = 0,
+    payments,
     paymentMethod,
     billNo
   } = oldSale
@@ -992,30 +1116,64 @@ function rollbackSaleEffects(oldSale) {
 
   /* ---------- SYSTEM ACCOUNT DEBIT ---------- */
   if (paid > 0) {
-    const systemAccount = getOrCreateSystemAccount(paymentMethod)
+    const parsedPayments = typeof payments === 'string' ? JSON.parse(payments) : payments || []
 
-    const newSystemBalance = Number(systemAccount.closingBalance || 0) - paid
+    const isSplit = parsedPayments.length > 1
 
-    db.prepare(
-      `
+    parsedPayments.forEach((payment) => {
+      const splitAmount = Number(payment.amount || 0)
+      if (splitAmount <= 0) return
+
+      let accountToUse = null
+
+      switch (payment.method) {
+        case 'bank':
+        case 'cheque':
+          accountToUse = getOrCreateSystemAccount('bank')
+          break
+
+        case 'cash':
+          accountToUse = getOrCreateSystemAccount('cash')
+          break
+
+        case 'googlepay':
+          accountToUse = db
+            .prepare(
+              `
+              SELECT * FROM accounts 
+              WHERE id = ? AND accounterType = 'GPay'
+            `
+            )
+            .get(Number(payment.accountId))
+          if (!accountToUse) throw new Error('Invalid GPay account selected')
+          break
+
+        default:
+          return
+      }
+
+      const newBalance = Number(accountToUse.closingBalance || 0) - splitAmount
+
+      const narration = isSplit
+        ? `Split Adjustment ${splitAmount} via ${payment.method}
+           for Bill ${billNo || '-'}`
+        : `Adjustment Sale Payment Bill ${billNo || '-'}`
+
+      db.prepare(
+        `
       INSERT INTO ledger (
         accountId, entryType, amount, balanceAfter,
         referenceType, referenceId, narration
       )
       VALUES (?, 'debit', ?, ?, 'Adjustment', ?, ?)
     `
-    ).run(
-      systemAccount.id,
-      paid,
-      newSystemBalance,
-      id,
-      `Adjustment Sale Payment Bill ${billNo || '-'}`
-    )
+      ).run(accountToUse.id, splitAmount, newBalance, id, narration)
 
-    db.prepare(`UPDATE accounts SET closingBalance = ? WHERE id = ?`).run(
-      newSystemBalance,
-      systemAccount.id
-    )
+      db.prepare(`UPDATE accounts SET closingBalance = ? WHERE id = ?`).run(
+        newBalance,
+        accountToUse.id
+      )
+    })
   }
 }
 
@@ -1258,20 +1416,58 @@ ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
       insertMany(rows)
     } else if (tableName === 'products') {
       stmt = db.prepare(`
-        INSERT INTO products (name, quantity, price)
-        VALUES (@name, @quantity, @price)
-      `)
-
+    INSERT INTO products (
+      productName,
+      productQuantity,
+      productPrice,
+      taxRate,
+      taxAmount,
+      totalAmountWithoutTax,
+      totalAmountWithTax,
+      assetsType,
+      saleHSN,
+      purchaseHSN
+    )
+    VALUES (
+      @productName,
+      @productQuantity,
+      @productPrice,
+      @taxRate,
+      @taxAmount,
+      @totalAmountWithoutTax,
+      @totalAmountWithTax,
+      @assetsType,
+      @saleHSN,
+      @purchaseHSN
+    )
+  `)
       const insertMany = db.transaction((rows) => {
         for (const row of rows) {
+          const quantity = Number(row.productQuantity) || 0
+          const price = Number(row.productPrice) || 0
+          const taxRate = Number(row.taxRate) || 0
+
+          const totalWithoutTax = quantity * price
+          const taxAmount = totalWithoutTax * (taxRate / 100)
+          const totalWithTax = totalWithoutTax + taxAmount
+
           stmt.run({
-            name: row.name || '',
-            quantity: row.quantity || 0,
-            price: row.price || 0
+            productName: row.productName || '',
+            productQuantity: quantity,
+            productPrice: price,
+            taxRate: taxRate,
+            taxAmount: taxAmount,
+            totalAmountWithoutTax: totalWithoutTax,
+            totalAmountWithTax: totalWithTax,
+            assetsType: row.assetsType || 'Raw Material',
+            saleHSN: row.saleHSN || null,
+            purchaseHSN: row.purchaseHSN || null
           })
+
           count++
         }
       })
+
       insertMany(rows)
     } else if (tableName === 'transactions') {
       stmt = db.prepare(`
@@ -1444,6 +1640,8 @@ ipcMain.handle('getAccountLedger', (event, accountId) => {
 
 ipcMain.handle('getAccountLedgerByType', (event, accountType) => {
   try {
+    console.log(accountType)
+
     const data = db
       .prepare(
         `
@@ -1796,6 +1994,18 @@ ipcMain.handle('createAccount', (event, accountData) => {
       return { success: false, message: 'Account name already exists' }
     }
 
+    let newAccountType = ''
+
+    switch (accounterType) {
+      case 'GPay':
+        newAccountType = 'GPay'
+        break
+
+      default:
+        newAccountType = accountType
+        break
+    }
+
     const stmt = db.prepare(`
       INSERT INTO accounts
       (clientId, accountName, accountType, openingBalance, closingBalance, status, accounterType, createdAt, updatedAt)
@@ -1805,7 +2015,7 @@ ipcMain.handle('createAccount', (event, accountData) => {
     const info = stmt.run(
       clientId,
       accountName.trim(),
-      accountType,
+      newAccountType,
       openingBalance,
       openingBalance,
       status,

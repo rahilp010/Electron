@@ -1,13 +1,12 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join, dirname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { fileURLToPath } from 'url'
 import icon from '../../resources/icon.png?asset'
 import '../renderer/src/API/dbHandlers.js'
 import { autoBackupOncePerDay } from './autoBackup.js'
-import checkForUpdate from './version.js'
+import { checkForUpdate } from './updater.js'
 
-// Get directory name in ES module
 const currentFilename = fileURLToPath(import.meta.url)
 const currentDirname = dirname(currentFilename)
 
@@ -46,22 +45,19 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  // checkForUpdate()
   electronApp.setAppUserModelId('com.electron')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  ipcMain.on('ping', () => console.log('pong'))
-
   const mainWindow = createWindow()
 
   mainWindow.webContents.on('did-finish-load', () => {
-    console.log('✅ Renderer fully loaded')
-
     autoBackupOncePerDay(mainWindow)
   })
+
+  // checkForUpdate()
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) {

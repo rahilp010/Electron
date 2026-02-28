@@ -220,31 +220,56 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
   useEffect(() => {
     if (!existingTransaction || !isUpdateExpense) return
 
-    const init = existingTransaction
+    const fetchRelated = async () => {
+      try {
+        const response = await window.api.getAllPurchases()
+        const allTx = response?.data || []
 
-    const productsList = [
-      {
-        productId: init.productId,
-        productQuantity: init.quantity || 1, // FIXED
-        productPrice: init.purchaseAmount || 0, // FIXED
-        taxAmount: Array.isArray(init.taxAmount) ? init.taxAmount : [],
-        description: init.description || ''
+        let relatedTx = allTx.filter(
+          (tx) =>
+            tx.billNo === existingTransaction.billNo &&
+            tx.clientId === existingTransaction.clientId &&
+            tx.pageName === 'Purchase'
+        )
+
+        if (relatedTx.length === 0) {
+          relatedTx = [existingTransaction]
+        }
+
+        const productsList = relatedTx.map((init) => ({
+          id: init.id,
+          productId: init.productId,
+          productQuantity: init.quantity || 1, // FIXED
+          productPrice: init.purchaseAmount || 0, // FIXED
+          taxAmount: Array.isArray(init.taxAmount) ? init.taxAmount : [],
+          description: init.description || ''
+        }))
+
+        // Use the first one for shared info
+        const baseTx = relatedTx[0]
+
+        setPurchaseBill((prev) => ({
+          ...prev,
+          clientId: baseTx.clientId || '',
+          billNumber: baseTx.billNo || '',
+          billDate: baseTx.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+          paymentType: baseTx.paymentType || 'full',
+          paymentMethod: baseTx.paymentMethod || 'bank',
+          statusOfTransaction: baseTx.statusOfTransaction || 'pending',
+          paidAmount:
+            baseTx.paymentType === 'partial'
+              ? relatedTx.reduce((sum, tx) => sum + Number(tx.paidAmount || 0), 0)
+              : 0,
+          freightCharges: baseTx.freightCharges || 0,
+          freightTaxAmount: Array.isArray(baseTx.freightTaxAmount) ? baseTx.freightTaxAmount : [],
+          products: productsList
+        }))
+      } catch (err) {
+        console.error('Failed to fetch related transactions:', err)
       }
-    ]
+    }
 
-    setPurchaseBill((prev) => ({
-      ...prev,
-      clientId: init.clientId || '',
-      billNumber: init.billNo || '',
-      billDate: init.date?.split('T')[0] || new Date().toISOString().split('T')[0],
-      paymentType: init.paymentType || 'full',
-      paymentMethod: init.paymentMethod || 'bank',
-      statusOfTransaction: init.statusOfTransaction || 'pending',
-      paidAmount: init.paidAmount || 0,
-      freightCharges: init.freightCharges || 0,
-      freightTaxAmount: Array.isArray(init.freightTaxAmount) ? init.freightTaxAmount : [],
-      products: productsList
-    }))
+    fetchRelated()
   }, [existingTransaction, isUpdateExpense, products])
 
   /* ========= Fetch Data ========= */
@@ -551,6 +576,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
  `
     return html
   }, [purchaseBill, products, clients, billSubTotal, billFreight, grandTotal, billFreightTax])
+
   /* ========= Submit Handler ========= */
   const handleSubmit = async (paymentData) => {
     try {
@@ -614,10 +640,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
 
       const txStatus = purchaseBill.statusOfTransaction
 
-      const currentMethod =
-        paymentData.paymentMethod === 'split'
-          ? paymentData.splits.map((m) => m)
-          : paymentData.paymentMethod
+      const isSplit = paymentData.paymentMethod === 'split'
 
       if (txStatus !== 'completed') {
         paidDistribution = rowsDetailed.map(() => 0)
@@ -679,8 +702,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           date: new Date().toISOString(),
           quantity: Number(row.productQuantity),
           purchaseAmount,
-          paymentMethod:
-            currentMethod === 'googlepay' || currentMethod === 'cheque' ? 'bank' : currentMethod,
+          paymentMethod: isSplit ? 'split' : paymentData.paymentMethod,
           statusOfTransaction: txStatus,
           paymentType: purchaseBill.paymentType,
           paidAmount: itemPaid,
@@ -697,17 +719,30 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           description: purchaseBill?.description || '',
           methodType: 'Payment',
           pageName: 'Purchase',
-          payments: [
-            {
-              method:
-                currentMethod === 'googlepay' || currentMethod === 'cheque'
-                  ? 'bank'
-                  : currentMethod,
-              amount: itemPaid,
-              chequeNo: null,
-              accountId: currentMethod === 'cash' ? CASH_ACCOUNT_ID : BANK_ACCOUNT_ID
-            }
-          ],
+          payments: isSplit
+            ? paymentData.splits.map((s) => ({
+                method: s.method,
+                amount: s.amount,
+                chequeNo: null,
+                accountId: s.accountId ? Number(s.accountId) : null
+              }))
+            : [
+                {
+                  method:
+                    paymentData.paymentMethod === 'bank' || paymentData.paymentMethod === 'cheque'
+                      ? 'bank'
+                      : paymentData.paymentMethod,
+                  amount: itemPaid,
+                  chequeNo: null,
+                  accountId:
+                    paymentData.paymentMethod === 'cash'
+                      ? CASH_ACCOUNT_ID
+                      : paymentData.paymentMethod === 'bank' ||
+                          paymentData.paymentMethod === 'cheque'
+                        ? BANK_ACCOUNT_ID
+                        : paymentData?.accountId
+                }
+              ],
           multipleProducts: rowsDetailed,
           isMultiProduct: rowsDetailed.length > 1 ? 1 : 0
         }
@@ -762,6 +797,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
 
       const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
       let totalBillAmount = totalBase
+      const isSplit = paymentData.paymentMethod === 'split'
 
       // Re-apply freight proportionally
       if (billFreight > 0 && totalBase > 0) {
@@ -799,9 +835,24 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           tx.pageName === 'Purchase'
       )
 
+      // Find deleted transactions and remove them
+      const updatedIds = rowsDetailed.map((r) => r.id)
+      const toDelete = relatedTransactions.filter((tx) => !updatedIds.includes(tx.id))
+      for (const tx of toDelete) {
+        await window.api.deletePurchase(tx.id)
+      }
+
       // Update each transaction with new data
       for (let i = 0; i < rowsDetailed.length; i++) {
         const row = rowsDetailed[i]
+        const existingRow = relatedTransactions.find((tx) => tx.id === row.id)
+        console.log(
+          'Updating ID:',
+          existingRow ? existingRow.id : 'New',
+          'with product:',
+          row.productId
+        )
+
         const itemTotal = row.totalAmountWithTax
         const itemPaid =
           purchaseBill.paymentType === 'full'
@@ -812,13 +863,10 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
 
         const pending = Math.max(0, itemTotal - itemPaid)
 
-        let targetTx = relatedTransactions[i]
-
         const updatedTxData = {
-          id: targetTx?.id || existingTransaction.id,
+          id: existingRow ? existingRow.id : undefined,
           clientId: purchaseBill.clientId,
           productId: row.productId,
-          multipleProducts: rowsDetailed,
           quantity: row.productQuantity,
           purchaseAmount: row.price,
           paymentType: purchaseBill.paymentType,
@@ -838,18 +886,34 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           description: purchaseBill?.description || '',
           methodType: 'Payment',
           pageName: 'Purchase',
-          payments: [
-            {
-              method: currentMethod,
-              amount: itemPaid,
-              chequeNo: null,
-              accountId: currentMethod === 'cash' ? CASH_ACCOUNT_ID : BANK_ACCOUNT_ID
-            }
-          ],
+          payments: isSplit
+            ? paymentData.splits.map((s) => ({
+                method: s.method,
+                amount: s.amount,
+                chequeNo: null,
+                accountId: s.accountId ? Number(s.accountId) : null
+              }))
+            : [
+                {
+                  method:
+                    paymentData.paymentMethod === 'bank' || paymentData.paymentMethod === 'cheque'
+                      ? 'bank'
+                      : paymentData.paymentMethod,
+                  amount: itemPaid,
+                  chequeNo: null,
+                  accountId:
+                    paymentData.paymentMethod === 'cash'
+                      ? CASH_ACCOUNT_ID
+                      : paymentData.paymentMethod === 'bank' ||
+                          paymentData.paymentMethod === 'cheque'
+                        ? BANK_ACCOUNT_ID
+                        : paymentData?.accountId
+                }
+              ],
           isMultiProduct: rowsDetailed.length > 1 ? 1 : 0
         }
 
-        if (targetTx) {
+        if (existingRow) {
           await window.api.updatePurchase(updatedTxData)
         } else {
           // If somehow missing, recreate
@@ -880,8 +944,8 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     }
     fetchAccounts()
   }, [])
-  const cashAccount = accounts.find((acc) => acc.accountName.toUpperCase() === 'CASH ACCOUNT')
-  const bankAccount = accounts.find((acc) => acc.accountName.toUpperCase() === 'BANK ACCOUNT')
+  const cashAccount = accounts.find((acc) => acc.accountType === 'Cash')
+  const bankAccount = accounts.find((acc) => acc.accountType === 'Bank')
   const CASH_ACCOUNT_ID = cashAccount?.id
   const BANK_ACCOUNT_ID = bankAccount?.id
 
@@ -958,33 +1022,33 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
     exit: { opacity: 0, transition: { duration: 0.1 } }
   }
 
-  useEffect(() => {
-    if (isUpdateExpense && existingTransaction && showPaymentModal) {
-      // Fetch existing receipt to get sendTo, etc.
-      const fetchExistingReceipt = async () => {
-        try {
-          let existingReceipt
-          if (existingTransaction.paymentMethod === 'cash') {
-            existingReceipt = await window.api.getCashReceiptByTransactionId(existingTransaction.id)
-          } else {
-            existingReceipt = await window.api.getBankReceiptByTransactionId(existingTransaction.id)
-          }
-          if (existingReceipt) {
-            // Set local state or pass to modal (e.g., via props or context)
-            setPurchaseBill((prev) => ({
-              ...prev,
-              sendTo: existingReceipt.sendTo || ''
-              // Add other fields like chequeNumber if needed
-            }))
-            // If modal has internal state, you may need to expose a prop like initialSendTo
-          }
-        } catch (err) {
-          console.error('Failed to fetch existing receipt:', err)
-        }
-      }
-      fetchExistingReceipt()
-    }
-  }, [isUpdateExpense, existingTransaction, showPaymentModal])
+  // useEffect(() => {
+  //   if (isUpdateExpense && existingTransaction && showPaymentModal) {
+  //     // Fetch existing receipt to get sendTo, etc.
+  //     const fetchExistingReceipt = async () => {
+  //       try {
+  //         let existingReceipt
+  //         if (existingTransaction.paymentMethod === 'cash') {
+  //           existingReceipt = await window.api.getCashReceiptByTransactionId(existingTransaction.id)
+  //         } else {
+  //           existingReceipt = await window.api.getBankReceiptByTransactionId(existingTransaction.id)
+  //         }
+  //         if (existingReceipt) {
+  //           // Set local state or pass to modal (e.g., via props or context)
+  //           setPurchaseBill((prev) => ({
+  //             ...prev,
+  //             sendTo: existingReceipt.sendTo || ''
+  //             // Add other fields like chequeNumber if needed
+  //           }))
+  //           // If modal has internal state, you may need to expose a prop like initialSendTo
+  //         }
+  //       } catch (err) {
+  //         console.error('Failed to fetch existing receipt:', err)
+  //       }
+  //     }
+  //     fetchExistingReceipt()
+  //   }
+  // }, [isUpdateExpense, existingTransaction, showPaymentModal])
 
   return (
     <AnimatePresence>
@@ -1042,7 +1106,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
                   </div>
                   <div className="flex items-center gap-2 bg-white/40 text-indigo-700 font-medium p-2 text-sm rounded-full px-3 ring-1 ring-indigo-200">
                     <FileText size={16} />
-                    {nextBillId}
+                    {isUpdateExpense ? purchaseBill.billNumber : nextBillId}
                   </div>
                 </div>
                 <button
@@ -1212,7 +1276,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
                       >
                         Partial Payment
                       </Checkbox>
-                      <Checkbox
+                      {/* <Checkbox
                         checked={purchaseBill.paymentMethod === 'cash'}
                         onChange={(_, checked) =>
                           setPurchaseBill((prev) => ({
@@ -1223,7 +1287,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
                         className="text-sm font-medium"
                       >
                         Cash Payment
-                      </Checkbox>
+                      </Checkbox> */}
                     </div>
                     <Animation.Collapse in={purchaseBill.paymentType === 'partial'}>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-white/70 rounded-xl border border-gray-200 shadow-inner">

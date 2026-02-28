@@ -1483,7 +1483,7 @@ const Purchase = () => {
                         })
                         const totalQty = items.reduce((sum, i) => sum + (i.quantity || 0), 0)
                         const totalAmount = items.reduce(
-                          (sum, i) => sum + (i.purchaseAmount || 0),
+                          (sum, i) => sum + (i.totalAmountWithTax || 0),
                           0
                         )
                         const totalPending = items.reduce((sum, i) => {
@@ -1492,7 +1492,7 @@ const Purchase = () => {
                               sum +
                               (i.paymentType === 'partial'
                                 ? i.pendingAmount || 0
-                                : i.purchaseAmount || 0)
+                                : i.totalAmountWithTax || 0)
                             )
                           }
                           return sum

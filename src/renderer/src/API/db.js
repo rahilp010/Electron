@@ -15,7 +15,6 @@ const db = new Database(dbPath)
 // db.pragma('foreign_keys = ON')
 
 // const columns = [`accounterType TEXT CHECK (accounterType IN ('Main', 'GPay', 'Client'))`]
-
 // columns.forEach((col) => {
 //   db.prepare(`ALTER TABLE accounts ADD COLUMN ${col}`).run()
 // })
@@ -57,7 +56,7 @@ db.prepare(
     clientId INTEGER DEFAULT NULL,
     accountName TEXT NOT NULL,
     accountType TEXT NOT NULL 
-      CHECK (accountType IN ('Creditor', 'Debtor', 'Bank', 'Cash', 'Employee')),
+      CHECK (accountType IN ('Creditor', 'Debtor', 'Bank', 'Cash', 'Employee', 'GPay')),
     accounterType TEXT CHECK (accounterType IN ('Main', 'GPay', 'Client')),
     openingBalance REAL DEFAULT 0,
     closingBalance REAL DEFAULT 0,
@@ -122,7 +121,7 @@ db.prepare(
     multipleProducts TEXT DEFAULT '[]',
     isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1)),
     paymentMethod TEXT DEFAULT 'bank'
-      CHECK (paymentMethod IN ('cash','bank')),
+      CHECK (paymentMethod IN ('cash','bank','googlepay', 'split','pending')),
     statusOfTransaction TEXT DEFAULT 'pending'
       CHECK (statusOfTransaction IN ('completed','pending','partial')),
     paymentType TEXT DEFAULT 'full'
@@ -173,7 +172,7 @@ db.prepare(
     multipleProducts TEXT DEFAULT '[]',
     isMultiProduct INTEGER DEFAULT 0 CHECK (isMultiProduct IN (0,1)),
     paymentMethod TEXT DEFAULT 'bank'
-      CHECK (paymentMethod IN ('cash','bank')),
+      CHECK (paymentMethod IN ('cash','bank','googlepay','split','pending')),
     statusOfTransaction TEXT DEFAULT 'pending'
       CHECK (statusOfTransaction IN ('completed','pending','partial')),
     paymentType TEXT DEFAULT 'full'

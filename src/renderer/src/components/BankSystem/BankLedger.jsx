@@ -1,5 +1,4 @@
 /* eslint-disable prettier/prettier */
-/* eslint-disable react/no-unknown-property */
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/display-name */
 /* eslint-disable react/prop-types */
@@ -118,6 +117,7 @@ const BankLedger = () => {
       const response = await window.api.getAccountLedgerByType(selectedType)
 
       if (response?.success) {
+        console.log(response)
         setLedgerData(response.data || [])
       } else {
         setLedgerData([])

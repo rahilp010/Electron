@@ -11,3 +11,4 @@ build
 backups
 .wwebjs_auth
 *.db
+*.csv
