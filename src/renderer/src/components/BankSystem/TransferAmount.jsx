@@ -1,6 +1,14 @@
 /* eslint-disable prettier/prettier */
 import { useEffect, useState, useCallback } from 'react'
-import { CheckCircle, ArrowRightLeft, History, Wallet, Send } from 'lucide-react'
+import {
+  CheckCircle,
+  ArrowRightLeft,
+  History,
+  Wallet,
+  Send,
+  Hash,
+  CalendarDays
+} from 'lucide-react'
 import Navbar from '../UI/Navbar'
 import { useDispatch } from 'react-redux'
 import { setAccount } from '../../app/features/electronSlice'
@@ -33,12 +41,10 @@ const TransferAmount = () => {
     try {
       const accs = (await window.api.getAllAccounts()) || []
 
-
       const enriched = accs.map((acc) => {
-
         let credits = 0
         let debits = 0
-      
+
         const base = Number(acc.closingBalance || acc.openingBalance || 0)
         const computed = base + credits - debits
 
@@ -55,9 +61,24 @@ const TransferAmount = () => {
     }
   }, [dispatch])
 
+  const getTransferHistory = async () => {
+    try {
+      const response = await window.api.getTransferHistory()
+      if (response.success) {
+        setTransactions(response.data)
+      }
+    } catch (err) {
+      console.error('getTransferHistory error', err)
+      toast.error('Failed to load transfer history')
+    }
+  }
+
   useEffect(() => {
     loadAccountsAndReceipts()
-  }, [loadAccountsAndReceipts])
+    if (activeView === 'history') {
+      getTransferHistory()
+    }
+  }, [loadAccountsAndReceipts, activeView])
 
   const getAccountById = (id) => accounts.find((a) => String(a.id) === String(id))
 
@@ -99,7 +120,7 @@ const TransferAmount = () => {
         fromAccountId: selectedFrom,
         toAccountId: selectedTo,
         amount: amt,
-        narration: description || `Transfer to ${getAccountById(selectedTo)?.accountName}`
+        narration: description
       }
 
       const res = await window.api.transferAmount(payload)
@@ -121,7 +142,7 @@ const TransferAmount = () => {
           fromAccountId: selectedFrom,
           toAccountId: selectedTo,
           amount: amt,
-          description: payload.narration,
+          narration: payload.narration,
           date: new Date().toISOString(),
           status: 'completed'
         }
@@ -133,7 +154,6 @@ const TransferAmount = () => {
         setSuccess(true)
         setAmount('')
         setDescription('')
-        // Optional: Reset selection or keep for next transfer
         setTimeout(() => setSuccess(false), 3000)
       } else {
         toast.error(res?.message || 'Transfer failed')
@@ -145,29 +165,43 @@ const TransferAmount = () => {
     }
   }
 
-  // Generate RSuite compatible options
+  // --- Helpers for History View ---
+  const formatTime = (iso) => {
+    try {
+      return new Date(iso).toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      })
+    } catch {
+      return ''
+    }
+  }
+
+  const groupTransactionsByDate = (txns) => {
+    const groups = {}
+    txns.forEach((t) => {
+      const d = new Date(t.date)
+      const isToday = new Date().toDateString() === d.toDateString()
+      const dateKey = isToday
+        ? 'Today'
+        : d.toLocaleDateString('en-IN', { month: 'short', day: '2-digit', year: 'numeric' })
+
+      if (!groups[dateKey]) groups[dateKey] = []
+      groups[dateKey].push(t)
+    })
+    return groups
+  }
+
   const accountOptions = accounts.map((acc) => ({
     label: acc.accountName,
     value: acc.id,
     balance: acc.computedBalance
   }))
 
-  const formatDate = (iso) => {
-    try {
-      return new Date(iso).toLocaleString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    } catch {
-      return iso
-    }
-  }
+  const groupedHistory = groupTransactionsByDate(transactions)
 
   // --- SUB-COMPONENTS ---
-
-  // The Card Component that shows the selected account details
   const AccountCard = ({ type, selectedId, onSelect, placeholder }) => {
     const acc = getAccountById(selectedId)
     const isDebit = type === 'from'
@@ -177,8 +211,6 @@ const TransferAmount = () => {
         <label className="text-xs font-bold uppercase tracking-wider text-gray-500 ml-1">
           {isDebit ? 'Debit From' : 'Credit To'}
         </label>
-
-        {/* Account Selector */}
         <SelectPicker
           data={accountOptions}
           value={selectedId}
@@ -193,14 +225,11 @@ const TransferAmount = () => {
             </div>
           )}
         />
-
-        {/* Visual Card */}
         <div
           className={`
           relative overflow-hidden rounded-2xl p-6 h-40 transition-all duration-300 shadow-lg border border-opacity-20
           ${!acc ? 'bg-gray-50 border-gray-300 flex items-center justify-center' : ''}
-          ${acc && isDebit ? 'bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-slate-200' : ''}
-          ${acc && !isDebit ? 'bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-slate-200' : ''}
+          ${acc ? 'bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-slate-200' : ''}
         `}
         >
           {!acc ? (
@@ -215,15 +244,13 @@ const TransferAmount = () => {
                   <p className="text-sm opacity-70 mb-1">{acc.accountType || 'Savings'}</p>
                   <p className="font-semibold text-lg tracking-wide">{acc.accountName}</p>
                 </div>
-                {isDebit ? (
-                  <div className="p-2 bg-white/10 rounded-lg">
+                <div className="p-2 bg-white/10 rounded-lg">
+                  {isDebit ? (
                     <Send className="w-5 h-5 rotate-180" />
-                  </div>
-                ) : (
-                  <div className="p-2 bg-white/10 rounded-lg">
+                  ) : (
                     <Wallet className="w-5 h-5" />
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
               <div>
                 <p className="text-xs opacity-60">Available Balance</p>
@@ -231,7 +258,6 @@ const TransferAmount = () => {
               </div>
             </div>
           )}
-          {/* Decorator Circles */}
           {acc && (
             <>
               <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
@@ -253,12 +279,12 @@ const TransferAmount = () => {
         <div className="max-w-5xl mx-auto">
           {/* Header & Toggle */}
           <div className="flex flex-col md:flex-row justify-between items-center mb-8">
-            <p className="text-3xl font-light">Transfer Amount</p>
+            <p className="text-3xl font-light text-gray-800">Transfer Amount</p>
 
-            <div className="flex bg-gray-200/50 p-1 rounded-xl">
+            <div className="flex bg-gray-200/50 p-1 rounded-full mt-4 md:mt-0">
               <button
                 onClick={() => setActiveView('transfer')}
-                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                   activeView === 'transfer'
                     ? 'bg-white shadow-sm text-indigo-600'
                     : 'text-gray-500 hover:text-gray-700'
@@ -268,7 +294,7 @@ const TransferAmount = () => {
               </button>
               <button
                 onClick={() => setActiveView('history')}
-                className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                   activeView === 'history'
                     ? 'bg-white shadow-sm text-indigo-600'
                     : 'text-gray-500 hover:text-gray-700'
@@ -280,10 +306,9 @@ const TransferAmount = () => {
           </div>
 
           {activeView === 'transfer' ? (
-            <div className="bg-white rounded-3xl shadow-2xl shadow-slate-200 p-6 md:p-10 relative border border-gray-500">
+            <div className="bg-white rounded-3xl shadow-2xl shadow-slate-200 p-6 md:p-10 relative border border-gray-200">
               {/* --- Transfer Layout --- */}
               <div className="flex flex-col md:grid md:grid-cols-[1fr_auto_1fr] gap-6 items-center">
-                {/* From Section */}
                 <AccountCard
                   type="from"
                   selectedId={selectedFrom}
@@ -291,21 +316,19 @@ const TransferAmount = () => {
                   placeholder="Select Sender..."
                 />
 
-                {/* Swap Button (Center) */}
                 <div className="relative pt-8 md:pt-0 top-8">
                   <div className="absolute inset-0 flex items-center justify-center md:hidden">
                     <div className="h-full w-px bg-gray-200"></div>
                   </div>
                   <button
                     onClick={handleSwap}
-                    className="relative z-10 p-3 bg-white border border-gray-700 shadow-md rounded-full text-gray-500 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-lg transition-all active:scale-95 group"
+                    className="relative z-10 p-3 bg-white border border-gray-200 shadow-md rounded-full text-gray-500 hover:text-indigo-600 hover:border-indigo-200 hover:shadow-lg transition-all active:scale-95 group"
                     title="Swap Accounts"
                   >
                     <ArrowRightLeft className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" />
                   </button>
                 </div>
 
-                {/* To Section */}
                 <AccountCard
                   type="to"
                   selectedId={selectedTo}
@@ -316,24 +339,20 @@ const TransferAmount = () => {
 
               {/* Input Section */}
               <div className="mt-10 max-w-lg mx-auto space-y-6">
-                {/* Amount Input */}
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-gray-600 block text-center">
                     Amount to Transfer
                   </label>
-                  <div className="relative">
-                    <InputNumber
-                      value={amount}
-                      onChange={setAmount}
-                      placeholder="0.00"
-                      size="lg"
-                      prefix="₹"
-                      className="!w-full !text-center !text-3xl !font-bold !py-2 !h-auto focus-within:!border-indigo-500"
-                    />
-                  </div>
+                  <InputNumber
+                    value={amount}
+                    onChange={setAmount}
+                    placeholder="0.00"
+                    size="lg"
+                    prefix="₹"
+                    className="!w-full !text-center !text-3xl !font-bold !py-2 !h-auto focus-within:!border-indigo-500"
+                  />
                 </div>
 
-                {/* Description Input */}
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-gray-500 block ml-1">
                     Description (Optional)
@@ -346,20 +365,17 @@ const TransferAmount = () => {
                   />
                 </div>
 
-                {/* Feedback Messages */}
                 {error && (
-                  <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center border border-red-100 animate-pulse">
+                  <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center border border-red-100">
                     {error}
                   </div>
                 )}
-
                 {success && (
                   <div className="p-3 bg-green-50 text-green-600 text-sm rounded-lg text-center border border-green-100 flex items-center justify-center gap-2">
                     <CheckCircle className="w-4 h-4" /> Transfer Successful!
                   </div>
                 )}
 
-                {/* Action Button */}
                 <button
                   onClick={handleTransfer}
                   disabled={!selectedFrom || !selectedTo || !amount}
@@ -370,46 +386,107 @@ const TransferAmount = () => {
               </div>
             </div>
           ) : (
-            // --- History View ---
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-6 border-b border-gray-100">
-                <h3 className="font-semibold text-gray-800">Transaction History</h3>
+            // --- Refined History View ---
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              {/* History Header */}
+              <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                <div>
+                  <p className="text-2xl font-light text-gray-900">Recent Transfers</p>
+                </div>
+                <div className="bg-indigo-50 text-indigo-700 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide uppercase border border-indigo-100 flex items-center gap-2 w-max">
+                  <History className="w-3.5 h-3.5" />
+                  {transactions.length} Records
+                </div>
               </div>
-              <div className="divide-y divide-gray-100">
+
+              {/* History List */}
+              <div className="bg-gray-50/50">
                 {transactions.length === 0 ? (
-                  <div className="p-10 text-center text-gray-400 flex flex-col items-center">
-                    <History className="w-10 h-10 mb-3 opacity-20" />
-                    <p>No recent transfers in this session.</p>
+                  <div className="p-16 text-center text-gray-400 flex flex-col items-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                      <History className="w-8 h-8 opacity-40" />
+                    </div>
+                    <p className="text-gray-600 font-medium">No recent transfers</p>
+                    <p className="text-sm mt-1">Transfers you make will appear here.</p>
                   </div>
                 ) : (
-                  transactions.map((t, i) => {
-                    const from = getAccountById(t.fromAccountId)?.accountName || 'Unknown'
-                    const to = getAccountById(t.toAccountId)?.accountName || 'Unknown'
-                    return (
-                      <div
-                        key={i}
-                        className="p-5 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
-                            <ArrowRightLeft className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {from} <span className="text-gray-400 mx-1">→</span> {to}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {t.description || 'Fund Transfer'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-gray-900">{toINR(t.amount)}</p>
-                          <p className="text-xs text-gray-400">{formatDate(t.date)}</p>
-                        </div>
+                  Object.entries(groupedHistory).map(([dateLabel, txns], groupIdx) => (
+                    <div key={dateLabel}>
+                      {/* Date Separator */}
+                      <div className="px-6 py-2.5 bg-gray-100/80 border-y border-gray-200 flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-widest">
+                        <CalendarDays className="w-3.5 h-3.5" /> {dateLabel}
                       </div>
-                    )
-                  })
+
+                      {/* Transactions for Date */}
+                      <div className="divide-y divide-gray-100 bg-white">
+                        {txns.map((t, i) => {
+                          const fromAcc = getAccountById(t.fromAccountId)
+                          const toAcc = getAccountById(t.toAccountId)
+                          const fromName = fromAcc?.accountName || 'Unknown'
+                          const toName = toAcc?.accountName || 'Unknown'
+                          const isSuccess = t.status !== 'failed' // Assuming standard is complete
+
+                          return (
+                            <div
+                              key={i}
+                              className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-gray-50/80 transition-colors gap-4"
+                            >
+                              <div className="flex items-start gap-4">
+                                {/* Icon Pill */}
+                                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 border border-indigo-100 mt-1 sm:mt-0">
+                                  <ArrowRightLeft className="w-4 h-4" />
+                                </div>
+
+                                {/* Main Detail */}
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-light text-gray-900 text-sm sm:text-base">
+                                      {fromName}{' '}
+                                      <span className="text-gray-600 font-normal mx-1">→</span>{' '}
+                                      {toName}
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">
+                                    <p className="text-xs text-gray-500 flex items-center gap-1 font-mono bg-gray-100 px-1.5 py-0.5 rounded">
+                                      <Hash className="w-3 h-3 text-gray-400" />
+                                      {t.id || `TXN-${Math.floor(1000 + Math.random() * 9000)}`}
+                                    </p>
+                                    <span className="w-1 h-1 bg-gray-300 rounded-full hidden sm:block"></span>
+                                    <p className="text-xs text-gray-500 truncate max-w-[200px] sm:max-w-xs font-medium">
+                                      {t.narration || 'Internal Transfer'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Amount & Time */}
+                              <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-center ml-14 sm:ml-0">
+                                <p className="font-bold text-gray-900 text-base">
+                                  {toINR(t.amount)}
+                                </p>
+
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <span className="text-xs text-gray-400 font-medium">
+                                    {formatTime(t.date)}
+                                  </span>
+                                  <span className="w-1 h-1 bg-gray-300 rounded-full hidden sm:block"></span>
+                                  {isSuccess ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-50 text-green-700 text-[10px] font-bold uppercase tracking-wider border border-green-200">
+                                      <CheckCircle className="w-3 h-3" /> Done
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-700 text-[10px] font-bold uppercase tracking-wider border border-red-200">
+                                      Failed
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>

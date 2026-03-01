@@ -15,8 +15,11 @@ import {
   Banknote,
   Landmark,
   TrendingDown,
-  TrendingUp
+  TrendingUp,
+  Search,
+  Wallet
 } from 'lucide-react'
+import { Input } from 'rsuite'
 import Navbar from '../../components/UI/Navbar'
 
 const TABLE_HEADERS = [
@@ -108,13 +111,43 @@ const BankLedger = () => {
   const [selectedType, setSelectedType] = useState('Bank')
   const [showLoader, setShowLoader] = useState(false)
 
+  const [gpayAccounts, setGpayAccounts] = useState([])
+  const [selectedGpayAccount, setSelectedGpayAccount] = useState(null)
+  const [showSideBar, setShowSideBar] = useState(true)
+  const [sidebarSearch, setSidebarSearch] = useState('')
+
+  useEffect(() => {
+    const fetchGpayAccounts = async () => {
+      try {
+        const response = await window.api.getAllAccounts()
+        const gAccounts = response.filter((acc) => acc.accounterType === 'GPay')
+        setGpayAccounts(gAccounts)
+        if (gAccounts.length > 0) {
+          setSelectedGpayAccount(gAccounts[0])
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    fetchGpayAccounts()
+  }, [])
+
   /* ================= FETCH LEDGER ================= */
 
   const loadLedger = useCallback(async () => {
     setShowLoader(true)
 
     try {
-      const response = await window.api.getAccountLedgerByType(selectedType)
+      let response
+      if (selectedType === 'GPay') {
+        if (selectedGpayAccount) {
+          response = await window.api.getAccountLedger(selectedGpayAccount.id)
+        } else {
+          response = { success: true, data: [] }
+        }
+      } else {
+        response = await window.api.getAccountLedgerByType(selectedType)
+      }
 
       if (response?.success) {
         console.log(response)
@@ -128,7 +161,7 @@ const BankLedger = () => {
     }
 
     setShowLoader(false)
-  }, [selectedType])
+  }, [selectedType, selectedGpayAccount])
 
   useEffect(() => {
     loadLedger()
@@ -170,15 +203,117 @@ const BankLedger = () => {
     window.print()
   }
 
+  const filteredSidebarGpays = useMemo(() => {
+    if (!sidebarSearch) return gpayAccounts
+    const query = sidebarSearch.toLowerCase()
+    return gpayAccounts.filter((acc) => acc.accountName?.toLowerCase().includes(query))
+  }, [gpayAccounts, sidebarSearch])
+
+  const getInitials = (name) => {
+    if (!name) return 'GP'
+    return name.substring(0, 2).toUpperCase()
+  }
+
+  const showGpaySidebar = selectedType === 'GPay' && gpayAccounts.length > 1
+
   /* ================= RENDER ================= */
 
   return (
-    <div className="select-none h-screen overflow-auto customScrollbar">
-      <div className="w-full sticky top-0 z-10">
+    <div className="select-none h-screen overflow-x-auto min-w-[720px] customScrollbar overflow-auto relative">
+      <div className="w-full sticky top-0 z-50">
         <Navbar />
       </div>
 
-      <div className="mx-7 mt-8 space-y-6">
+      {showGpaySidebar && (
+        <div
+          className={`fixed left-0 top-0 h-screen z-40 shadow-2xl transition-all duration-500 ease-out overflow-hidden
+            ${showSideBar ? 'w-80' : 'w-4'}`}
+          style={{ backdropFilter: 'blur(10px)' }}
+        >
+          {/* Sidebar Toggle Button */}
+          <div
+            className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-gray-500 text-white text-xs px-1 py-10 rounded-r cursor-pointer hover:bg-gray-500 font-extrabold z-50"
+            onClick={() => setShowSideBar(!showSideBar)}
+          >
+            {showSideBar ? '<' : '>'}
+          </div>
+
+          {/* Sidebar Content */}
+          <div
+            className={`h-full flex flex-col transition-all duration-500 ease-out bg-white/80
+              ${showSideBar ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}`}
+          >
+            <div className="p-4 mt-18">
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Search GPay..."
+                  value={sidebarSearch}
+                  onChange={(value) => setSidebarSearch(value)}
+                  className="w-full pl-8 pr-4 py-2 focus:outline-none text-sm shadow-2xl"
+                />
+                <Search size={16} className="absolute right-3 top-2.5 text-gray-400" />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto customScrollbar p-2">
+              <div className="space-y-1">
+                {filteredSidebarGpays.map((acc, index) => (
+                  <div
+                    key={acc.id}
+                    className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-200 mx-2
+                      ${
+                        selectedGpayAccount?.id === acc.id
+                          ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 transform scale-[1.02]'
+                          : 'hover:bg-white/60 hover:shadow-sm'
+                      }`}
+                    onClick={() => setSelectedGpayAccount(acc)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-light transition-all duration-200
+                          ${
+                            selectedGpayAccount?.id === acc.id
+                              ? 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white shadow-md backdrop-blur-sm'
+                              : 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600'
+                          }`}
+                      >
+                        {getInitials(acc.accountName)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-light truncate text-sm text-gray-800">
+                          {acc.accountName}
+                        </p>
+                        <p className="text-xs truncate font-light text-gray-500">
+                          Balance: {toThousands(acc.closingBalance || 0)}
+                        </p>
+                      </div>
+                    </div>
+                    {selectedGpayAccount?.id === acc.id && (
+                      <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {filteredSidebarGpays.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <Wallet size={32} className="mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No GPay found</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={`transition-all duration-500 ease-out mx-7 mt-8 space-y-6 ${
+          showGpaySidebar && showSideBar ? 'ml-[340px]' : ''
+        }`}
+      >
         {/* HEADER */}
         <div className="flex justify-between items-center">
           <p className="text-3xl font-light">Account Ledger</p>
@@ -219,6 +354,19 @@ const BankLedger = () => {
           >
             <Banknote size={18} />
             Cash
+          </button>
+
+          <button
+            onClick={() => setSelectedType('GPay')}
+            className={`flex items-center gap-2 px-6 py-2 rounded-xl font-medium transition
+              ${
+                selectedType === 'GPay'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+              }`}
+          >
+            <CreditCard size={18} />
+            GPay
           </button>
         </div>
 

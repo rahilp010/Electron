@@ -48,7 +48,7 @@ contextBridge.exposeInMainWorld('api', {
   transferAmount: (data) => ipcRenderer.invoke('transferAmount', data),
 
   addLedgerEntry: () => ipcRenderer.invoke('addLedgerEntry'),
-  getTransferHistory: () => ipcRenderer.invoke('getTransferHistory'),
+  getTransferHistory: (id) => ipcRenderer.invoke('getTransferHistory', id),
   getClientLedger: (id) => ipcRenderer.invoke('getClientLedger', id),
   deleteLedgerEntry: (id) => ipcRenderer.invoke('deleteLedgerEntry', id),
   getAccountLedger: (id) => ipcRenderer.invoke('getAccountLedger', id),

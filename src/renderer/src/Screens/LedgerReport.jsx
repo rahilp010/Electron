@@ -66,7 +66,7 @@ const AccountRow = memo(({ client, onOpenLedger }) => {
     <tr className="transition-colors hover:bg-blue-50 cursor-pointer group">
       <td className="px-6 py-3 font-medium" onClick={() => onOpenLedger(client)}>
         <div className="flex items-center gap-3 font-bold">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-xs font-medium text-white shadow-md transition-transform group-hover:scale-110">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
             {getInitials(client.clientName)}
           </div>
           <span className="text-gray-700 ml-5 group-hover:text-blue-600 transition-colors">
@@ -329,6 +329,7 @@ const LedgerReport = () => {
       setSidebarSearch('')
 
       const ledger = await fetchClientLedger(client.id)
+
       setLedgerData(ledger)
     },
     [fetchClientLedger]
@@ -339,7 +340,6 @@ const LedgerReport = () => {
     setShowLoader(true)
     try {
       await fetchAllClients()
-      await fetchAllTransactions()
     } finally {
       setShowLoader(false)
     }
@@ -399,7 +399,7 @@ const LedgerReport = () => {
                     className={`group relative p-3 rounded-lg cursor-pointer transition-all duration-200 mx-2
                       ${
                         openLedgerClient?.id === client.id
-                          ? 'bg-gray-200 shadow-md transform scale-[1.02]'
+                          ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300'
                           : 'hover:bg-white/60 hover:shadow-sm'
                       }
                       ${index % 2 === 0 ? 'animate-fadeInUp' : 'animate-fadeInUp'}
@@ -409,7 +409,7 @@ const LedgerReport = () => {
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-light transition-all duration-200
                           ${
                             openLedgerClient?.id === client.id
                               ? 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600 backdrop-blur-sm'
@@ -421,14 +421,14 @@ const LedgerReport = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p
-                          className={`font-medium truncate text-sm
+                          className={`font-light truncate text-sm
                             ${openLedgerClient?.id === client.id ? 'text-black' : 'text-gray-800'}
                           `}
                         >
                           {client.clientName}
                         </p>
                         <p
-                          className={`text-xs truncate
+                          className={`text-xs truncate font-light
                             ${openLedgerClient?.id === client.id ? 'text-gray-500' : 'text-gray-500'}
                           `}
                         >
@@ -474,8 +474,8 @@ const LedgerReport = () => {
               >
                 Ledger Report
               </p>
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-full shadow-lg">
-                <span className="font-semibold text-sm">{openLedgerClient.clientName}</span>
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-full flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
+                {openLedgerClient.clientName}
               </div>
             </div>
           ) : (

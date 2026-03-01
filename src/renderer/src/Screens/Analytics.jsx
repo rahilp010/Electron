@@ -452,7 +452,7 @@ const Analytics = () => {
         borderColor: '#6366f1',
         backgroundColor: 'rgba(99,102,241,0.2)',
         borderWidth: 3,
-        tension: 0.5, // 🔥 smooth curve
+        tension: 0.4, // 🔥 smooth curve
         fill: true,
         pointRadius: 4,
         pointHoverRadius: 6,
@@ -466,7 +466,7 @@ const Analytics = () => {
         borderColor: '#f59e0b',
         backgroundColor: 'rgba(245,158,11,0.2)',
         borderWidth: 3,
-        tension: 0.5,
+        tension: 0.4,
         fill: true,
         pointRadius: 4,
         pointHoverRadius: 6,
@@ -1050,7 +1050,7 @@ export function RecentTransactionsBlock({ filteredData }) {
   const shown = transactions.slice(0, 5)
 
   return (
-    <div className="overflow-auto">
+    <div className="overflow-auto max-h-80 ">
       {/* List */}
       <div className="py-2">
         {shown.length > 0 ? (

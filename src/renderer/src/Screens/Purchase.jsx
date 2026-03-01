@@ -810,8 +810,8 @@ const generatePrintHTML = (
                 </tr>
               </table>
             </div>
-
-          </div> <div class="footer-section">
+          </div> 
+          <div class="footer-section">
             <div class="flex justify-between items-end">
               <div style="width: 60%;">
                 <p style="font-size:11px; font-weight:bold; margin-bottom:4px;">Terms & Conditions:</p>

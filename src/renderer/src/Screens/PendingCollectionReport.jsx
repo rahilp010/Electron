@@ -74,7 +74,7 @@ const getInitials = (name) => {
 }
 
 // Memoized Transaction Row Component
-const TransactionRow = memo(({ receipt, index, balance, clientName, selectedType }) => {
+const TransactionRow = memo(({ receipt, index, balance, clientName }) => {
   const isEven = index % 2 === 0
 
   return (
@@ -198,7 +198,6 @@ const PendingCollectionReport = ({ client, onClose }) => {
   const { fetchAllClients, loadPendingCollections } = useAccountOperations()
 
   // State management
-  const [selectedType, setSelectedType] = useState('Bank')
   const [showLoader, setShowLoader] = useState(false)
   const [pendingData, setPendingData] = useState([])
   const [showSideBar, setShowSideBar] = useState(false)
@@ -227,19 +226,13 @@ const PendingCollectionReport = ({ client, onClose }) => {
   const filteredData = useMemo(() => {
     let receipts = pendingData || []
 
-    if (selectedType) {
-      receipts = receipts.filter(
-        (r) => r.paymentMethod?.toLowerCase() === selectedType.toLowerCase()
-      )
-    }
-
     // Filter by selected client
     if (selectedClient?.id) {
       receipts = receipts.filter((r) => String(r.clientId) === String(selectedClient.id))
     }
 
     return receipts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  }, [pendingData, selectedClient, selectedType])
+  }, [pendingData, selectedClient?.id])
 
   // Memoized running balance calculation
   const balances = useMemo(() => {
@@ -268,11 +261,6 @@ const PendingCollectionReport = ({ client, onClose }) => {
       overdueCount
     }
   }, [filteredData])
-
-  // Event handlers
-  const handleTypeChange = useCallback((type) => {
-    setSelectedType(type)
-  }, [])
 
   const handleSidebarSearchChange = useCallback((value) => {
     setSidebarSearch(value)
@@ -306,203 +294,353 @@ const PendingCollectionReport = ({ client, onClose }) => {
   }, [fetchAllClients, loadPendingCollections])
 
   // Utility function to generate dynamic print HTML
-  const generatePrintHTML = (data, headers, title, totalPending) => {
+
+  const generatePrintHTML = (data, headers, title, totalPending = 0) => {
+    const toThousands = (num) =>
+      Number(num || 0)
+        .toString()
+        .replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
     const getCellValue = (row, headerKey) => {
+      console.log('row', row)
+      console.log('headerKey', headerKey)
+
       switch (headerKey) {
         case 'date':
-          return new Date(row.date).toLocaleDateString('en-IN')
+          return row.date
+            ? new Date(row.date).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+              })
+            : '-'
         case 'accountName':
-          return row.accountName || ''
+          return `<div class="text-wrap-cell">${row.accountName || ''}</div>`
         case 'credit':
-          return row.credit || ''
+          return `₹ ${toThousands(row.credit || 0)}`
         default:
-          return ''
+          return row[headerKey] || ''
       }
     }
 
-    const tableHeaders = headers.map((h) => `<th class="border px-4 py-2">${h.label}</th>`).join('')
+    const tableHeaders = headers
+      .map((h) => {
+        let align = 'text-left'
+        if (h.key === 'credit') align = 'text-right'
+        return `<th class="${align}">${h.label}</th>`
+      })
+      .join('')
+
     const tableRows = data
       .map((row) => {
         const cells = headers
-          .map((h) => `<td class="border px-4 py-2 text-left">${getCellValue(row, h.key)}</td>`)
+          .map((h) => {
+            let align = 'text-left'
+            if (h.key === 'credit') align = 'text-right'
+            return `<td class="${align}">${getCellValue(row, h.key)}</td>`
+          })
           .join('')
         return `<tr>${cells}</tr>`
       })
       .join('')
 
-    const totalsRow = `
-      <tr class="totals-row">
-        <td colspan="2" class="border px-4 py-2 font-bold text-right">Total Pending Amount:</td>
-        <td class="border px-4 py-2 font-bold text-right">${toThousands(totalPending)}</td>
-      </tr>
-    `
+    const companyInfo = {
+      name: 'Electron by Envy',
+      city: 'Surat, Gujarat - 395006',
+      phone: '+91 9316080624',
+      email: 'admin@envy.com'
+    }
 
     return `
-      <!DOCTYPE html>
-  <html>
-    <head>
-      <title>${title}</title>
-      <style>
-        body {
-          font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-          margin: 20px;
-          color: #1e293b;
-          background: #fff;
-        }
-  
-        /* ===== HEADER BAR ===== */
-        .header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 25px;
-          padding-bottom: 15px;
-          border-bottom: 2px solid #e5e7eb;
-        }
-  
-        .header-left {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-        }
-  
-        .header-left h1 {
-          font-size: 28px;
-          font-weight: 600;
-          margin: 0;
-          color: #111827;
-        }
-  
-        .generated-label {
-          font-size: 12px;
-          color: #64748b;
-          background: #f1f5f9;
-          border: 1px solid #e5e7eb;
-          padding: 2px 8px;
-          border-radius: 6px;
-          margin-bottom: 6px;
-        }
-  
-        .header-right {
-          font-size: 14px;
-          color: #374151;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 5px;
-        }
-  
-        .record-count {
-          font-weight: bold;
-          background: #f3f4f6;
-          border: 1px solid #e2e8f0;
-          padding: 3px 8px;
-          border-radius: 6px;
-          font-size: 13px;
-          color: #1e40af;
-        }
-  
-        /* ===== TABLE ===== */
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 20px;
-          font-size: 14px;
-        }
-  
-        thead th {
-          background: #e5e7eb;
-          color: #111827;
-          padding: 12px 14px;
-          border: 1px solid #e2e8f0;
-          font-weight: 600;
-          text-transform: capitalize;
-          font-size: 15px;
-          text-align: left;
-        }
-  
-        tbody td {
-          padding: 10px 14px;
-          border: 1px solid #e2e8f0;
-          font-size: 14px;
-          color: #374151;
-        }
-  
-        tbody tr:nth-child(even) {
-          background: #f9fafb;
-        }
-  
-        tbody tr:hover {
-          background: #f1f5f9;
-        }
-  
-        .totals-row {
-          font-weight: bold;
-          background: #f3f4f6;
-        }
-  
-        /* ===== FOOTER ===== */
-        .footer {
-          margin-top: 25px;
-          text-align: center;
-          font-size: 12px;
-          color: #64748b;
-          border-top: 1px solid #e2e8f0;
-          padding-top: 10px;
-        }
-  
-        .footer strong {
-          font-size: 15px;
-          color: #1e40af;
-        }
-  
-        @media print {
-          body {
-            margin: 0.8cm;
-          }
-          .footer {
-            position: fixed;
-            bottom: 10px;
-            width: 100%;
-          }
-        }
-      </style>
-    </head>
-    <body onload="window.print(); setTimeout(() => { window.close(); }, 1000);">
-  
-      <!-- ===== HEADER SECTION ===== -->
-      <div class="header">
-        <div class="header-left">
-          <h1>${title}</h1>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>${title}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+    :root {
+      --primary: #1e293b;
+      --secondary: #64748b;
+      --border: #e2e8f0;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: #334155;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .page-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .content {
+      flex: 1;
+    }
+
+    /* Layout helpers */
+    .flex { display: flex; }
+    .justify-between { justify-content: space-between; }
+    .items-start { align-items: flex-start; }
+    .text-right { text-align: right; }
+    .text-left { text-align: left; }
+    .font-bold { font-weight: 700; }
+
+    /* Header */
+    .header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid var(--primary);
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+
+    .left-header {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .logo-placeholder {
+      width: 70px;
+      height: 65px;
+      background: var(--primary);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+
+    .company-branding h1 {
+      margin: 0;
+      font-size: 24px;
+      color: var(--primary);
+      text-transform: uppercase;
+    }
+
+    .company-details {
+      font-size: 12px;
+      color: var(--secondary);
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
+    .right-header {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      text-align: right;
+    }
+
+    .report-title {
+      font-size: 28px;
+      font-weight: 800;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      margin: 0;
+    }
+
+    .meta-table {
+      margin-top: 10px;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .meta-table td {
+      padding: 3px 8px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .meta-label {
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    /* Table */
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    table.data-table th {
+      background: var(--primary);
+      color: white;
+      padding: 10px;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    table.data-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    table.data-table tr:nth-child(even) {
+      background: #f8fafc;
+    }
+
+    /* Totals */
+    .totals-container {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 25px;
+    }
+
+    .totals-table {
+      width: 40%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .totals-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .totals-table .label {
+      font-weight: 600;
+      color: var(--secondary);
+    }
+
+    .totals-table .value {
+      text-align: right;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .grand-total-row {
+      background-color: var(--primary);
+      color: white;
+    }
+    .text-center { text-align: center; }
+
+    .grand-total-row .label,
+    .grand-total-row .value {
+      color: white;
+      font-weight: 700;
+      border: none;
+    }
+
+    /* Footer pinned */
+    .footer {
+margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
+    }
+
+    .signature-area { width: 200px; text-align: center; }
+    .signature-line { border-top: 1px solid #334155; margin-bottom: 5px; }
+
+    @media print {
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+
+<body onload="window.print(); setTimeout(() => { window.close(); }, 1000);">
+
+  <div class="page-wrapper">
+    
+    <div class="content">
+
+      <div class="header-container">
+        <div class="left-header">
+          <div class="logo-placeholder">Envy</div>
+          <div class="company-branding">
+            <h1>${companyInfo.name}</h1>
+            <div class="company-details">
+              ${companyInfo.city}<br/>
+              ${companyInfo.phone} | ${companyInfo.email}
+            </div>
+          </div>
         </div>
-        <div class="header-right">
-        <div class="record-count">Total Records: ${data.length}</div>
-        <div>Generated on: ${new Date().toLocaleString()}</div>
+
+        <div class="right-header">
+          <h2 class="report-title">${title}</h2>
+          <table class="meta-table">
+            <tr>
+              <td class="meta-label">Date:</td>
+              <td>${new Date().toLocaleDateString('en-IN')}</td>
+            </tr>
+            <tr>
+              <td class="meta-label">Records:</td>
+              <td>${data.length}</td>
+            </tr>
+          </table>
         </div>
       </div>
-  
-      <!-- ===== TABLE ===== -->
-      <table>
+
+      <table class="data-table">
         <thead>
-          <tr>
-            ${tableHeaders}
-          </tr>
+          <tr>${tableHeaders}</tr>
         </thead>
         <tbody>
           ${tableRows}
-          ${totalsRow}
         </tbody>
       </table>
-  
-      <!-- ===== FOOTER ===== -->
-      <div class="footer">
-        <p>This is a computer-generated report. No signature is required.</p>
-        <p><strong>Powered by Electron</strong></p>
+
+      <div class="totals-container">
+        <table class="totals-table">
+          <tr>
+            <td class="label">Total Records</td>
+            <td class="value">${data.length}</td>
+          </tr>
+          <tr class="grand-total-row">
+            <td class="label">Total Pending Amount</td>
+            <td class="value">₹ ${toThousands(totalPending)}</td>
+          </tr>
+        </table>
       </div>
-    </body>
-  </html>  
-    `
+
+    </div>
+  </div>
+
+  <div class="footer">
+<div class="flex justify-between items-end">
+              <div style="width: 60%;">
+                <p style="font-size:11px; font-weight:bold; margin-bottom:4px;">Terms & Conditions:</p>
+                <p style="font-size:10px; color:#64748b; margin:0; line-height:1.4;">
+                  1. Goods once sold will not be taken back.<br>
+                  2. Interest @18% p.a. will be charged if payment is delayed.<br>
+                  3. Subject to Surat Jurisdiction.
+                </p>
+              </div>
+              <div class="signature-area">
+                <div style="height: 50px;"></div> <div class="signature-line"></div>
+                <div class="font-bold" style="font-size:12px;">Authorized Signatory</div>
+                <div style="font-size:10px;">For, ${companyInfo.name}</div>
+              </div>
+            </div>
+            <div class="text-center" style="margin-top:20px; font-size:9px; color:#94a3b8;">
+              This is a computer-generated document. | Powered by Electron by Envy
+            </div>
+  </div>
+
+</body>
+</html>
+`
   }
+
 
   // Updated handler for printing PDF using iframe to avoid popup blockers
   const handlePrintPDF = useCallback(() => {
@@ -515,7 +653,7 @@ const PendingCollectionReport = ({ client, onClose }) => {
       const grouped = filteredData.reduce((acc, row) => {
         const name = row.clientName
         if (!acc[name]) {
-          acc[name] = { accountName: name, credit: 0, date: '' }
+          acc[name] = { accountName: name, credit: 0, date: row.createdAt }
         }
         acc[name].credit += Number(row.pendingAmount) || 0
         return acc
@@ -523,24 +661,27 @@ const PendingCollectionReport = ({ client, onClose }) => {
 
       printData = Object.values(grouped).map((item) => ({
         ...item,
-        credit: toThousands(item.credit),
-        date: ''
+        credit: item.credit,
+        date: item.date
       }))
     } else {
       // Single client: just one row with sum
       const clientSum = filteredData.reduce((sum, row) => sum + (Number(row.pendingAmount) || 0), 0)
+
       printData = [
         {
           accountName: selectedClient.clientName || '',
-          credit: toThousands(clientSum),
-          date: ''
+          credit: clientSum,
+          date:
+            selectedClient.createdAt ||
+            (filteredData.length > 0 ? filteredData[0].createdAt : new Date())
         }
       ]
     }
 
     totalPending = filteredData.reduce((sum, row) => sum + (Number(row.pendingAmount) || 0), 0)
 
-    const title = `Pending Collection Report <br> ${selectedClient?.clientName || 'All Accounts'} (${selectedType})`
+    const title = `Pending Collection Report <br> ${selectedClient?.clientName || 'All Accounts'} `
 
     const printHTML = generatePrintHTML(printData, TABLE_HEADERS_PRINT, title, totalPending)
 
@@ -575,66 +716,12 @@ const PendingCollectionReport = ({ client, onClose }) => {
       console.error('Error initiating print:', error)
       toast.error('Failed to initiate print: ' + error.message)
     }
-  }, [filteredData, selectedClient, selectedType])
+  }, [filteredData, selectedClient])
 
   // Effects
   useEffect(() => {
     loadData()
   }, [loadData])
-
-  // const handleGenerateAndSendPDF = async () => {
-  //   try {
-  //     if (!selectedClient) {
-  //       toast.warn('Select a client first')
-  //       return
-  //     }
-
-  //     const receipts = filteredData.filter((r) => r.clientName === selectedClient.clientName)
-  //     if (receipts.length === 0) {
-  //       toast.info('No pending receipts for this client')
-  //       return
-  //     }
-
-  //     if (!selectedClient.phoneNo || selectedClient.phoneNo.trim() === '') {
-  //       toast.error('Client phone number is missing')
-  //       return
-  //     }
-
-  //     const printData = receipts.map((r) => ({
-  //       accountName: r.clientName,
-  //       credit: toThousands(r.amount),
-  //       date: new Date(r.date).toLocaleDateString('en-IN')
-  //     }))
-
-  //     const totalPending = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-  //     const title = `Pending Collection Report - ${selectedClient.clientName} (${selectedType})`
-  //     const printHTML = generatePrintHTML(printData, TABLE_HEADERS_PRINT, title, totalPending)
-
-  //     toast.info('Generating PDF...')
-
-  //     // Generate PDF as ArrayBuffer directly
-  //     const pdfArrayBuffer = await html2pdf().from(printHTML).toPdf().output('arraybuffer')
-
-  //     toast.info('Sending to WhatsApp...')
-
-  //     const result = await window.api.saveAndSendWhatsAppPDF(
-  //       selectedClient.phoneNo,
-  //       pdfArrayBuffer,
-  //       `${selectedClient.clientName}_Pending.pdf`,
-  //       `Hello ${selectedClient.clientName}, here is your pending payment report.`
-  //     )
-
-  //     if (result.success) {
-  //       toast.success('✅ WhatsApp message sent successfully!')
-  //       console.log('PDF saved at:', result.filePath)
-  //     } else {
-  //       toast.error(`Failed to send: ${result.error || 'Unknown error'}`)
-  //     }
-  //   } catch (err) {
-  //     console.error('Error generating/sending PDF:', err)
-  //     toast.error(`Error: ${err.message || 'Failed to generate or send PDF'}`)
-  //   }
-  // }
 
   return (
     <div className="select-none gap-10 h-screen overflow-x-auto min-w-[720px] overflow-auto customScrollbar relative">
@@ -762,26 +849,6 @@ const PendingCollectionReport = ({ client, onClose }) => {
 
           {/* Type Selector */}
           <div className="flex items-center gap-2">
-            {LEDGER_TYPES.map((type) => {
-              const Icon = type.icon
-              return (
-                <button
-                  key={type.value}
-                  onClick={() => handleTypeChange(type.value)}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-xl font-medium transition-all duration-200 transform hover:scale-105
-                    ${
-                      selectedType === type.value
-                        ? `bg-gradient-to-r from-${type.color}-500 to-${type.color}-600 text-white shadow-lg`
-                        : `bg-white border border-${type.color}-200 text-${type.color}-600 hover:bg-${type.color}-50`
-                    }
-                  `}
-                  aria-label={`Select ${type.label} transactions`}
-                >
-                  <Icon size={18} />
-                  {type.label}
-                </button>
-              )
-            })}
             <button
               className={`flex items-center gap-2 px-4 py-1.5 rounded-xl font-medium transition-all duration-200 transform hover:scale-105 hover:bg-gradient-to-r from-blue-400 to-blue-600 hover:text-white hover:shadow-lg bg-white border border-blue-200 text-blue-600 hover:bg-blue-50`}
               onClick={handlePrintPDF}
@@ -913,7 +980,7 @@ const PendingCollectionReport = ({ client, onClose }) => {
                         <div className="text-center">
                           <p className="text-xl font-medium text-gray-500">No transactions found</p>
                           <p className="text-gray-400 mt-1">
-                            No {selectedType.toLowerCase()} receipts available for this account
+                            No pending collections available for this account
                           </p>
                         </div>
                       </div>
@@ -925,7 +992,6 @@ const PendingCollectionReport = ({ client, onClose }) => {
                       key={`${receipt.id || receipt.transactionId}-${index}`}
                       receipt={receipt}
                       index={index}
-                      selectedType={selectedType}
                       balance={balances[index]}
                       clientName={getClientName(receipt.clientId)}
                     />

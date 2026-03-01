@@ -152,6 +152,7 @@ const AccountLedger = forwardRef(({ client }, ref) => {
       const response = await window.api.getClientLedger(client.id)
 
       if (response.success) {
+        console.log(response.data)
         setLedgerData(response.data)
       }
       setShowLoader(false)

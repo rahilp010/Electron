@@ -1740,30 +1740,30 @@ ipcMain.handle('addLedgerEntry', (event, data) => {
   }
 })
 
-ipcMain.handle('getTransferHistory', (event, accountId) => {
+ipcMain.handle('getTransferHistory', () => {
   try {
-    let query = `
-      SELECT l.*, a.accountName
-      FROM ledger l
-      LEFT JOIN accounts a ON l.accountId = a.id
+    const history = db
+      .prepare(
+        `
+      SELECT 
+        referenceId,
+        MAX(createdAt) as date,
+        SUM(CASE WHEN entryType = 'debit' THEN amount ELSE 0 END) as amount,
+        MAX(CASE WHEN entryType = 'debit' THEN accountId END) as fromAccountId,
+        MAX(CASE WHEN entryType = 'credit' THEN accountId END) as toAccountId,
+        MAX(narration) as narration
+      FROM ledger
       WHERE referenceType = 'Transfer'
+      GROUP BY COALESCE(referenceId, createdAt)
+      ORDER BY date DESC
     `
-
-    const params = []
-
-    if (accountId) {
-      query += ` AND l.accountId = ?`
-      params.push(accountId)
-    }
-
-    query += ` ORDER BY l.date DESC, l.createdAt DESC`
-
-    const history = db.prepare(query).all(...params)
+      )
+      .all()
 
     return { success: true, data: history }
   } catch (error) {
     console.error('❌ Error fetching transfer history:', error)
-    return { success: false, message: 'Failed to fetch transfer history' }
+    return { success: false, error: error.message }
   }
 })
 
@@ -1893,7 +1893,6 @@ ipcMain.handle('transferAmount', (event, data) => {
 
   try {
     const transfer = db.transaction(() => {
-      // 1️⃣ Fetch Accounts
       const fromAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(fromAccountId)
 
       const toAccount = db.prepare(`SELECT * FROM accounts WHERE id = ?`).get(toAccountId)
@@ -1902,13 +1901,19 @@ ipcMain.handle('transferAmount', (event, data) => {
         throw new Error('Account not found')
       }
 
-      if (fromAccount.closingBalance < amount) {
+      if (Number(fromAccount.closingBalance) < Number(amount)) {
         throw new Error('Insufficient balance')
       }
 
-      // 2️⃣ Debit From Account
-      const newFromBalance = fromAccount.closingBalance - amount
+      const amt = Number(amount)
 
+      // 🔥 Generate one unique transfer ID
+      const transferId = `TR-${Date.now()}`
+
+      const newFromBalance = Number(fromAccount.closingBalance) - amt
+      const newToBalance = Number(toAccount.closingBalance) + amt
+
+      // 1️⃣ Update From Account
       db.prepare(
         `
         UPDATE accounts 
@@ -1917,25 +1922,25 @@ ipcMain.handle('transferAmount', (event, data) => {
       `
       ).run(newFromBalance, fromAccountId)
 
+      // 2️⃣ Insert Debit Entry
       db.prepare(
         `
         INSERT INTO ledger
-        (accountId, clientId, entryType, amount, balanceAfter, referenceType, narration)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (accountId, clientId, entryType, amount, balanceAfter, referenceType, referenceId, narration)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `
       ).run(
         fromAccountId,
-        fromAccount.clientId,
+        fromAccount.clientId || null,
         'debit',
-        amount,
+        amt,
         newFromBalance,
         'Transfer',
-        `To ${toAccount.accountName}`
+        transferId,
+        narration || `To ${toAccount.accountName}`
       )
 
-      // 3️⃣ Credit To Account
-      const newToBalance = toAccount.closingBalance + amount
-
+      // 3️⃣ Update To Account
       db.prepare(
         `
         UPDATE accounts 
@@ -1944,23 +1949,25 @@ ipcMain.handle('transferAmount', (event, data) => {
       `
       ).run(newToBalance, toAccountId)
 
+      // 4️⃣ Insert Credit Entry
       db.prepare(
         `
         INSERT INTO ledger
-        (accountId, clientId, entryType, amount, balanceAfter, referenceType, narration)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (accountId, clientId, entryType, amount, balanceAfter, referenceType, referenceId, narration)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `
       ).run(
         toAccountId,
-        toAccount.clientId,
+        toAccount.clientId || null,
         'credit',
-        amount,
+        amt,
         newToBalance,
         'Transfer',
-        `From ${fromAccount.accountName}`
+        transferId,
+        narration || `From ${fromAccount.accountName}`
       )
 
-      return { success: true }
+      return { success: true, transferId }
     })
 
     return transfer()
