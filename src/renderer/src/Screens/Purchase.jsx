@@ -132,7 +132,7 @@ const getPaymentStatusComponent = (transaction) => {
     )
   }
 
-  if (statusOfTransaction === 'pending' && transaction.paymentType === 'partial') {
+  if (statusOfTransaction === 'partial' && transaction.paymentType === 'partial') {
     return (
       <span className={`${baseStyle} bg-indigo-50 text-indigo-600 ring-indigo-200`}>
         <span className="h-2 w-2 rounded-full bg-indigo-500"></span>
@@ -187,7 +187,7 @@ const PurchaseRow = React.memo(
             placement="rightStart"
             speaker={<Tooltip>{toThousands(transaction?.pendingFromOurs)}</Tooltip>}
           >
-            <span>₹ {toThousands(Number(transaction?.pendingFromOurs).toFixed(0))}</span>
+            <span>₹ {toThousands(Number(transaction?.pendingFromOurs).toFixed(2))}</span>
           </Whisper>
         )
       }
@@ -207,7 +207,7 @@ const PurchaseRow = React.memo(
             placement="rightStart"
             speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
           >
-            <span>₹ {toThousands(Number(transaction?.paidAmount).toFixed(0))}</span>
+            <span>₹ {toThousands(Number(transaction?.paidAmount).toFixed(2))}</span>
           </Whisper>
         )
       }
@@ -251,7 +251,7 @@ const PurchaseRow = React.memo(
         </td>
         <td className={`px-4 py-3 font-semibold `}>
           <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
-            {'₹ ' + toThousands(Number(transaction?.totalAmountWithTax).toFixed(0))}
+            {'₹ ' + toThousands(Number(transaction?.totalAmountWithTax).toFixed(2))}
           </div>
         </td>
         <td className={`px-4 py-3 `}>{renderPendingAmount()}</td>

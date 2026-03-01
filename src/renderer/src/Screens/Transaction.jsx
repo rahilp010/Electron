@@ -184,7 +184,7 @@ const TransactionRow = memo(
             placement="rightStart"
             speaker={<Tooltip>{toThousands(transaction?.pendingAmount)}</Tooltip>}
           >
-            <span>₹ {toThousands(Number(transaction?.pendingAmount).toFixed(0))}</span>
+            <span>₹ {toThousands(Number(transaction?.pendingAmount).toFixed(2))}</span>
           </Whisper>
         )
       }
@@ -204,7 +204,7 @@ const TransactionRow = memo(
             placement="rightStart"
             speaker={<Tooltip>{toThousands(transaction?.paidAmount)}</Tooltip>}
           >
-            <span>₹ {toThousands(Number(transaction?.paidAmount).toFixed(0))}</span>
+            <span>₹ {toThousands(Number(transaction?.paidAmount).toFixed(2))}</span>
           </Whisper>
         )
       }
@@ -248,7 +248,7 @@ const TransactionRow = memo(
         </td>
         <td className={`px-4 py-3 font-semibold `}>
           <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-slate-50 to-gray-100 text-gray-700 border border-gray-300 w-full py-1.5 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-300">
-            ₹ {toThousands(Number(transaction?.totalAmountWithTax).toFixed(0))}
+            ₹ {toThousands(Number(transaction?.totalAmountWithTax).toFixed(2))}
           </div>
         </td>
         <td className={`px-4 py-3 `}>{renderPendingAmount()}</td>
@@ -288,7 +288,7 @@ const TransactionRow = memo(
               onClick={() => {
                 const clientName = getClientName(transaction?.clientId, clients)
                 const productName = getProductName(transaction?.productId, products)
-                const amount = toThousands(Number(transaction?.saleAmount).toFixed(0))
+                const amount = toThousands(Number(transaction?.saleAmount).toFixed(2))
 
                 const message = `Hello ${clientName},\n\nHere are your transaction details:\n📦 Product: ${productName}\n💰 Amount: ₹${amount}\n📅 Date: ${new Date(
                   transaction?.createdAt

@@ -90,6 +90,12 @@ ipcMain.handle('createProduct', (event, product = {}) => {
     assetsType = '',
     addParts = 0,
     parts = '[]',
+    saleHSN = '',
+    purchaseHSN = '',
+    taxRate = 0,
+    taxAmount = 0,
+    totalAmountWithTax = 0,
+    totalAmountWithoutTax = 0,
     pageName = ''
   } = product
 
@@ -113,18 +119,25 @@ ipcMain.handle('createProduct', (event, product = {}) => {
     const res = db
       .prepare(
         `
-        INSERT INTO products (productName, productPrice, productQuantity, clientId, assetsType, addParts, parts,pageName)
-        VALUES (?, ?, ?, ?, ?, ?, ?,?)
-      `
+    INSERT INTO products 
+    (productName, productPrice, productQuantity, clientId, assetsType, addParts, parts, saleHSN, purchaseHSN, taxRate, taxAmount, totalAmountWithTax, totalAmountWithoutTax, pageName)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `
       )
       .run(
         productName,
-        productPrice,
+        finalPrice,
         productQuantity,
         clientId,
         assetsType,
         addParts,
         partsStr,
+        saleHSN,
+        purchaseHSN,
+        JSON.stringify(taxRate || []),
+        taxAmount,
+        totalAmountWithTax,
+        totalAmountWithoutTax,
         pageName
       )
 
@@ -162,28 +175,28 @@ ipcMain.handle('updateProduct', (event, product) => {
   // Get old product
   const oldProduct = db.prepare(`SELECT * FROM products WHERE id = ?`).get(id)
 
-  // let finalPrice = productPrice
-
-  // if (assetsType === 'Finished Goods' && addParts === 1) {
-  //   finalPrice = 0
-  //   const parsedParts = JSON.parse(parts || '[]')
-
-  //   for (const part of parsedParts) {
-  //     const partRow = db.prepare(`SELECT * FROM products WHERE id = ?`).get(part.partId)
-  //     if (partRow) {
-  //       finalPrice += partRow.productPrice * part.productQuantity
-  //     }
-  //   }
-  // }
-
-  // Update product info
   const result = db
     .prepare(
       `
-      UPDATE products
-      SET productName = ?, productPrice = ?, productQuantity = ?, clientId = ?, assetsType = ?, addParts = ?, parts = ?, pageName = ?
-      WHERE id = ?
-    `
+    UPDATE products
+    SET 
+      productName = ?, 
+      productPrice = ?, 
+      productQuantity = ?, 
+      clientId = ?, 
+      assetsType = ?, 
+      addParts = ?, 
+      parts = ?, 
+      saleHSN = ?, 
+      purchaseHSN = ?, 
+      taxRate = ?, 
+      taxAmount = ?, 
+      totalAmountWithTax = ?, 
+      totalAmountWithoutTax = ?, 
+      pageName = ?,
+      updatedAt = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `
     )
     .run(
       productName,
@@ -193,6 +206,12 @@ ipcMain.handle('updateProduct', (event, product) => {
       assetsType,
       addParts,
       parts,
+      product.saleHSN,
+      product.purchaseHSN,
+      JSON.stringify(product.taxRate || []), // 🔥 important
+      product.taxAmount,
+      product.totalAmountWithTax,
+      product.totalAmountWithoutTax,
       pageName,
       id
     )
@@ -794,6 +813,8 @@ ipcMain.handle('createPurchase', (event, data) => {
         dueDate = null,
         payments,
         taxAmount,
+        freightCharges = 0,
+        freightTaxAmount = 0,
         totalAmountWithTax,
         totalAmountWithoutTax,
         methodType = 'Payment'
@@ -832,9 +853,10 @@ ipcMain.handle('createPurchase', (event, data) => {
           paidAmount, pendingAmount, pendingFromOurs,
           paymentMethod, paymentType, statusOfTransaction,
           billNo, description, date, dueDate, methodType,
-          taxAmount, totalAmountWithTax, totalAmountWithoutTax, payments
+          taxAmount, freightCharges, freightTaxAmount, 
+          totalAmountWithTax, totalAmountWithoutTax, payments
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
         )
         .run(
@@ -854,6 +876,8 @@ ipcMain.handle('createPurchase', (event, data) => {
           dueDate ? new Date(dueDate).toISOString() : null,
           methodType || 'Payment',
           JSON.stringify(taxAmount || []),
+          Number(freightCharges || 0),
+          JSON.stringify(freightTaxAmount || []),
           Number(totalAmountWithTax || 0),
           Number(totalAmountWithoutTax || 0),
           JSON.stringify(payments || [])
@@ -889,7 +913,7 @@ ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
           clientId=?, productId=?, quantity=?, purchaseAmount=?,
           paidAmount=?, pendingAmount=?, pendingFromOurs=?,
           paymentMethod=?, paymentType=?, statusOfTransaction=?,
-          billNo=?, description=?, taxAmount=?,
+          billNo=?, description=?, taxAmount=?, freightCharges=?, freightTaxAmount=?,
           totalAmountWithTax=?, totalAmountWithoutTax=?,
           date=?, dueDate=?, methodType=?, payments=?,
           updatedAt=CURRENT_TIMESTAMP
@@ -909,6 +933,8 @@ ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
         data.billNo,
         data.description,
         JSON.stringify(data.taxAmount || []),
+        data.freightCharges || 0,
+        JSON.stringify(data.freightTaxAmount || []),
         data.totalAmountWithTax,
         data.totalAmountWithoutTax,
         data.date,
@@ -961,7 +987,6 @@ function applySaleEffects(sale, saleId) {
     quantity,
     totalAmountWithTax,
     paidAmount = 0,
-    paymentMethod,
     payments,
     billNo
   } = sale
@@ -1233,6 +1258,8 @@ ipcMain.handle('createSales', (event, data) => {
         dueDate = null,
         payments,
         taxAmount,
+        freightCharges = 0,
+        freightTaxAmount = 0,
         totalAmountWithTax,
         totalAmountWithoutTax,
         methodType = 'Receipt'
@@ -1273,9 +1300,9 @@ ipcMain.handle('createSales', (event, data) => {
           paidAmount, pendingAmount, pendingFromOurs,
           paymentMethod, paymentType, statusOfTransaction,
           billNo, description, date, dueDate, methodType,
-          taxAmount, totalAmountWithTax, totalAmountWithoutTax, payments
+          taxAmount, freightCharges, freightTaxAmount, totalAmountWithTax, totalAmountWithoutTax, payments
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
         )
         .run(
@@ -1295,6 +1322,8 @@ ipcMain.handle('createSales', (event, data) => {
           dueDate,
           methodType,
           JSON.stringify(taxAmount || []),
+          Number(freightCharges || 0),
+          JSON.stringify(freightTaxAmount || []),
           totalAmountWithTax,
           totalAmountWithoutTax,
           JSON.stringify(payments || [])
@@ -1330,7 +1359,7 @@ ipcMain.handle('updateSales', (event, { id, ...data }) => {
           clientId=?, productId=?, quantity=?, saleAmount=?,
           paidAmount=?, pendingAmount=?, pendingFromOurs=?,
           paymentMethod=?, paymentType=?, statusOfTransaction=?,
-          billNo=?, description=?, taxAmount=?,
+          billNo=?, description=?, taxAmount=?, freightCharges=?, freightTaxAmount=?,
           totalAmountWithTax=?, totalAmountWithoutTax=?,
           date=?, dueDate=?, methodType=?, payments=?,
           updatedAt=CURRENT_TIMESTAMP
@@ -1350,6 +1379,8 @@ ipcMain.handle('updateSales', (event, { id, ...data }) => {
         data.billNo,
         data.description,
         JSON.stringify(data.taxAmount || []),
+        data.freightCharges || 0,
+        JSON.stringify(data.freightTaxAmount || []),
         data.totalAmountWithTax,
         data.totalAmountWithoutTax,
         data.date,
@@ -2189,7 +2220,6 @@ ipcMain.handle('updateSettings', async (event, settings) => {
 ipcMain.handle('deleteSettings', async (event, id) => {
   db.prepare(`DELETE FROM settings WHERE id = ?`).run(id)
 })
-
 
 // --- Restore Backup ---
 ipcMain.handle('restoreBackup', async (_, backupFilePath) => {

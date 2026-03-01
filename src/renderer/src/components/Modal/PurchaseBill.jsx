@@ -127,7 +127,11 @@ const ProductRow = ({ index, row, products, settings, onChange, onRemove, toThou
       <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
         <CheckPicker
           data={taxOptions}
-          value={Array.isArray(row.taxAmount) ? row.taxAmount.map((t) => t.code) : []}
+          value={
+            Array.isArray(row.taxAmount)
+              ? row.taxAmount.filter((t) => t.code !== 'freightCharges').map((t) => t.code)
+              : []
+          }
           placeholder="Select Taxes"
           virtualized={true}
           container={() => document.getElementById('purchase-bill-container')}
@@ -212,6 +216,8 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         }))
       }
     }
+
+    fetchNextBillId()
   }, [])
 
   /* ========= Prefill for Update ========= */
@@ -239,7 +245,12 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           productId: init.productId,
           productQuantity: init.quantity || 1, // FIXED
           productPrice: init.purchaseAmount || 0, // FIXED
-          taxAmount: Array.isArray(init.taxAmount) ? init.taxAmount : [],
+          taxAmount: (typeof init.taxAmount === 'string'
+            ? JSON.parse(init.taxAmount)
+            : Array.isArray(init.taxAmount)
+              ? init.taxAmount
+              : []
+          ).filter((t) => t.code !== 'freightCharges'),
           description: init.description || ''
         }))
 
@@ -259,7 +270,12 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
               ? relatedTx.reduce((sum, tx) => sum + Number(tx.paidAmount || 0), 0)
               : 0,
           freightCharges: baseTx.freightCharges || 0,
-          freightTaxAmount: Array.isArray(baseTx.freightTaxAmount) ? baseTx.freightTaxAmount : [],
+          freightTaxAmount:
+            typeof baseTx.freightTaxAmount === 'string'
+              ? JSON.parse(baseTx.freightTaxAmount)
+              : Array.isArray(baseTx.freightTaxAmount)
+                ? baseTx.freightTaxAmount
+                : [],
           products: productsList
         }))
       } catch (err) {
@@ -425,8 +441,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
       month: '2-digit',
       year: 'numeric'
     })
-    const invoiceNumber = `PB-${billDateObj.getFullYear()}${String(billDateObj.getMonth() + 1).padStart(2, '0')}${String(billDateObj.getDate()).padStart(2, '0')}-${number}`
-    number++
+    const invoiceNumber = purchaseBill.billNumber
     const validProducts = purchaseBill.products.filter((p) => p.productId && p.productQuantity > 0)
     if (!validProducts.length) return ''
 
@@ -470,108 +485,269 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         : [{ id: '', productName: '', quantity: 1, price: 0, taxesCharges: 0, total: 0 }]
     const subTotalToShow = aggregatedItems.length > 0 ? billSubTotal : 0
     const grandTotalToShow = aggregatedItems.length > 0 ? grandTotal : 0
-    const html = `<!DOCTYPE html>
+    const html = `
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Purchase Invoice</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #fff; padding: 24px; color: #333; }
-    .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px; border: 1px solid #eee; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 2px solid #111; }
-    .invoice-title { font-size: 28px; font-weight: 800; letter-spacing: .5px; color: #111; }
-    .invoice-meta { font-size: 13px; margin: 4px 0; color: #333; }
-    .info-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-    .info-box { border: 1px solid #ddd; border-radius: 12px; padding: 20px; background: linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-    .table-container { margin: 20px 0; overflow-x: auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; background: white; }
-    thead { background: linear-gradient(135deg, #111 0%, #333 100%); color: white; }
-    th { padding: 12px 10px; text-align: left; font-weight: 700; font-size: 11px; letter-spacing: .6px; }
-    td { padding: 12px 10px; border-bottom: 1px solid #eee; }
-    .footer-section { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-top: 28px; }
-    .notes-section { background: linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%); padding: 20px; border-radius: 12px; border-left: 4px solid #111; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-    .totals-section { background: linear-gradient(135deg, #111 0%, #333 100%); color: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .total-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.15); font-size: 14px; }
-    .total-row:last-child { border-bottom: none; margin-top: 8px; padding-top: 14px; border-top: 2px solid rgba(255,255,255,.35); font-weight: 800; font-size: 16px; }
-    @media print { body { padding: 0; } .container { border: none; padding: 20px; box-shadow: none; } }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Purchase Invoice</title>
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #fff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Main Container */
+.container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 30px;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #111;
+}
+
+.invoice-title {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: .5px;
+}
+
+.invoice-meta {
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+/* Info Boxes */
+.info-boxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.info-box {
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 18px;
+  background: #fafafa;
+}
+
+/* Table */
+.table-container {
+  margin: 20px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #ddd;
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+thead {
+  background: #111;
+  color: white;
+}
+
+th {
+  padding: 12px 10px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: .5px;
+}
+
+td {
+  padding: 12px 10px;
+  border-top: 1px solid #eee;
+}
+
+/* Footer Section */
+.footer-section {
+  margin-top: auto; /* 🔥 pushes footer to bottom */
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 20px;
+  padding-top: 20px;
+}
+
+.notes-section {
+  background: #fafafa;
+  padding: 18px;
+  border-radius: 12px;
+  border-left: 4px solid #111;
+}
+
+.totals-section {
+  background: #111;
+  color: #fff;
+  padding: 18px;
+  border-radius: 12px;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,.15);
+  font-size: 14px;
+}
+
+.total-row:last-child {
+  border-bottom: none;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 2px solid rgba(255,255,255,.4);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* PRINT MODE */
+@media print {
+
+  body {
+    margin: 0;
+  }
+
+  .container {
+    min-height: 100vh;
+  }
+
+  .footer-section {
+    position: fixed;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    width: 900px;
+    margin: 0 auto;
+  }
+}
+</style>
 </head>
+
 <body>
-  <div class="container">
-    <div class="header">
-      <div></div>
-      <div>
-        <div class="invoice-title">PURCHASE INVOICE</div>
-        <div class="invoice-meta"><strong>Invoice No:</strong> ${invoiceNumber}</div>
-        <div class="invoice-meta"><strong>Date:</strong> ${invoiceDate}</div>
+
+<div class="container">
+
+  <div class="header">
+    <div></div>
+    <div>
+      <div class="invoice-title">PURCHASE INVOICE</div>
+      <div class="invoice-meta"><strong>Invoice No:</strong> ${invoiceNumber}</div>
+      <div class="invoice-meta"><strong>Date:</strong> ${invoiceDate}</div>
+    </div>
+  </div>
+
+  <div class="info-boxes">
+    <div class="info-box">
+      <div style="font-weight:600;margin-bottom:8px;">Bill To</div>
+      <div style="font-size:13px;line-height:1.6">
+        <strong>${selectedClient.clientName}</strong><br>
+        Address: ${selectedClient.address || '-'}<br>
+        GSTIN: ${selectedClient.gstin || '-'}<br>
+        Phone: ${selectedClient.phone || '-'}
       </div>
     </div>
-    <div class="info-boxes">
-      <div class="info-box">
-        <div style="font-weight:800;margin-bottom:8px;">Bill To</div>
-        <div style="font-size:13px;line-height:1.6">
-          <strong>${selectedClient.clientName}</strong><br>
-          Address: ${selectedClient.address || '-'}<br>
-          GSTIN: ${selectedClient.gstin || '-'}<br>
-          Phone: ${selectedClient.phone || '-'}
-        </div>
-      </div>
-      <div class="info-box">
-        <div style="font-weight:800;margin-bottom:8px;">Payment Details</div>
-        <div style="font-size:13px;line-height:1.6">
-          <div><strong>Payment Method:</strong> ${purchaseBill.paymentMethod === 'bank' ? 'Bank Transfer' : 'Cash'}</div>
-          <div><strong>Status:</strong> ${purchaseBill.statusOfTransaction}</div>
-          <div><strong>Reference No:</strong> ${purchaseBill.referenceNo || '-'}</div>
-        </div>
-      </div>
-    </div>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Product</th>
-            <th>Qty</th>
-            <th>Unit Price (₹)</th>
-            <th>Tax/Charges (₹)</th>
-            <th>Line Total (₹)</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${finalItems
-            .map(
-              (it) => `
-          <tr>
-            <td>${it.id}</td>
-            <td>${it.productName}</td>
-            <td>${it.productQuantity}</td>
-            <td>${(it.productPrice || 0).toFixed(2)}</td>
-            <td>${(it.taxesCharges || 0).toFixed(2)}</td>
-            <td>${(it.total || 0).toFixed(2)}</td>
-          </tr>
-          `
-            )
-            .join('')}
-        </tbody>
-      </table>
-    </div>
-    <div class="footer-section">
-      <div class="notes-section">
-        <div style="font-weight:800;margin-bottom:6px;">Notes & Terms</div>
-        <div style="font-size:12px;line-height:1.7;color:#444;">Thank you for your business! Payment terms are Net 14 days from the invoice date. Please include the invoice number with your payment. For any queries, contact accounts.</div>
-      </div>
-      <div class="totals-section">
-        <div class="total-row"><span>Subtotal:</span><span>₹ ${subTotalToShow.toFixed(2)}</span></div>
-        <div class="total-row"><span>Freight:</span><span>₹ ${(billFreight || 0).toFixed(2)}</span></div>
-        <div class="total-row"><span>Grand Total:</span><span>₹ ${grandTotalToShow.toFixed(2)}</span></div>
+
+    <div class="info-box">
+      <div style="font-weight:600;margin-bottom:8px;">Payment Details</div>
+      <div style="font-size:13px;line-height:1.6">
+        <div><strong>Payment Method:</strong> ${purchaseBill.paymentMethod === 'bank' ? 'Bank Transfer' : 'Cash'}</div>
+        <div><strong>Status:</strong> ${purchaseBill.statusOfTransaction}</div>
+        <div><strong>Reference No:</strong> ${purchaseBill.referenceNo || '-'}</div>
       </div>
     </div>
   </div>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Product</th>
+          <th>Qty</th>
+          <th>Unit Price (₹)</th>
+          <th>Tax/Charges (₹)</th>
+          <th>Line Total (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${finalItems
+          .map(
+            (it) => `
+        <tr>
+          <td>${it.id}</td>
+          <td>${it.productName}</td>
+          <td>${it.productQuantity}</td>
+          <td>${(it.productPrice || 0).toFixed(2)}</td>
+          <td>${(it.taxesCharges || 0).toFixed(2)}</td>
+          <td>${(it.total || 0).toFixed(2)}</td>
+        </tr>
+        `
+          )
+          .join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer-section">
+    <div class="notes-section">
+      <div style="font-weight:600;margin-bottom:6px;">Notes & Terms</div>
+      <div style="font-size:12px;line-height:1.7;color:#444;">
+        Thank you for your business! Payment terms are Net 14 days from the invoice date.
+        Please include the invoice number with your payment.
+        For any queries, contact accounts.
+      </div>
+    </div>
+
+    <div class="totals-section">
+      <div class="total-row">
+        <span>Subtotal:</span>
+        <span>₹ ${subTotalToShow.toFixed(2)}</span>
+      </div>
+      <div class="total-row">
+        <span>Freight:</span>
+        <span>₹ ${(billFreight || 0).toFixed(2)}</span>
+      </div>
+      <div class="total-row">
+        <span>Grand Total:</span>
+        <span>₹ ${grandTotalToShow.toFixed(2)}</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
 </body>
 </html>
- `
+`
     return html
   }, [purchaseBill, products, clients, billSubTotal, billFreight, grandTotal, billFreightTax])
 
@@ -607,30 +783,62 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         return { ...r, price, base, taxes, taxTotal, totalAmountWithTax, totalAmountWithoutTax }
       })
       const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
-      if (billFreight > 0 && totalBase > 0) {
+      if ((billFreight > 0 || billFreightTax > 0) && totalBase > 0) {
         rowsDetailed.forEach((r) => {
           const share = r.base / totalBase
-          const allocated = Math.round(billFreight * share * 100) / 100
-          r.taxes.push({
-            code: 'freightCharges',
-            name: 'Freight Charges',
-            percentage: 0,
-            value: allocated
-          })
-          r.totalAmountWithTax = r.totalAmountWithTax + allocated
-          r.taxTotal = r.taxTotal + allocated
+          const allocatedF = Math.round(billFreight * share * 100) / 100
+          const allocatedFTax = Math.round(billFreightTax * share * 100) / 100
+          if (allocatedF > 0) {
+            r.taxes.push({
+              code: 'freightCharges',
+              name: 'Freight Charges',
+              percentage: 0,
+              value: allocatedF
+            })
+          }
+          r.totalAmountWithTax += allocatedF + allocatedFTax
+          r.taxTotal += allocatedF + allocatedFTax
         })
-        const allocatedSum = rowsDetailed.reduce(
-          (s, r) => s + (r.taxes.find((t) => t.code === 'freightCharges')?.value || 0),
-          0
-        )
-        const drift = Math.round((billFreight - allocatedSum) * 100) / 100
-        if (Math.abs(drift) >= 0.01) {
-          rowsDetailed[0].taxes = rowsDetailed[0].taxes.map((t) =>
-            t.code === 'freightCharges' ? { ...t, value: t.value + drift } : t
+
+        if (billFreight > 0) {
+          const allocatedFSum = rowsDetailed.reduce(
+            (s, r) => s + (r.taxes.find((t) => t.code === 'freightCharges')?.value || 0),
+            0
           )
-          rowsDetailed[0].totalAmountWithTax += drift
-          rowsDetailed[0].taxTotal += drift
+          const fDrift = Math.round((billFreight - allocatedFSum) * 100) / 100
+          if (Math.abs(fDrift) >= 0.01) {
+            const firstRow = rowsDetailed[0]
+            const fc = firstRow.taxes.find((t) => t.code === 'freightCharges')
+            if (fc) fc.value += fDrift
+            else
+              firstRow.taxes.push({
+                code: 'freightCharges',
+                name: 'Freight Charges',
+                percentage: 0,
+                value: fDrift
+              })
+            firstRow.totalAmountWithTax += fDrift
+            firstRow.taxTotal += fDrift
+          }
+        }
+
+        if (billFreightTax > 0) {
+          const expectedTotal =
+            rowsDetailed.reduce(
+              (s, r) =>
+                s +
+                r.base +
+                r.taxes.reduce((a, t) => a + (t.code === 'freightCharges' ? 0 : t.value || 0), 0),
+              0
+            ) +
+            billFreight +
+            billFreightTax
+          const actualTotal = rowsDetailed.reduce((s, r) => s + r.totalAmountWithTax, 0)
+          const totalDrift = Math.round((expectedTotal - actualTotal) * 100) / 100
+          if (Math.abs(totalDrift) >= 0.01) {
+            rowsDetailed[0].totalAmountWithTax += totalDrift
+            rowsDetailed[0].taxTotal += totalDrift
+          }
         }
       }
       let paidDistribution = []
@@ -711,14 +919,14 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           purchaseAmount,
           paymentMethod: isSplit ? 'split' : paymentData.paymentMethod,
           statusOfTransaction: txStatus,
-          paymentType: purchaseBill.paymentType,
+          paymentType: isSplit ? 'partial' : 'full',
           paidAmount: itemPaid,
           pendingAmount: pendingAmount,
           pendingFromOurs: pendingFromOurs,
           taxRate: 0,
           taxAmount: row.taxes.map((t) => ({ ...t })) || [],
           freightCharges: billFreight,
-          freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
+          freightTaxAmount: purchaseBill.freightTaxAmount || [],
           totalAmountWithoutTax: row.totalAmountWithoutTax || 0,
           totalAmountWithTax: row.totalAmountWithTax || 0,
           billNo: purchaseBill.billNumber?.trim() ? purchaseBill.billNumber.trim() : nextBillId,
@@ -786,10 +994,12 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         const price = Number(r.productPrice || 0)
         const qty = Number(r.productQuantity || 0)
         const base = price * qty
-        const taxes = (r.taxAmount || []).map((t) => ({
-          ...t,
-          value: t.percentage > 0 ? (base * t.percentage) / 100 : Number(t.value || 0)
-        }))
+        const taxes = (r.taxAmount || [])
+          .filter((t) => t.code !== 'freightCharges')
+          .map((t) => ({
+            ...t,
+            value: t.percentage > 0 ? (base * t.percentage) / 100 : Number(t.value || 0)
+          }))
         const taxTotal = taxes.reduce((a, t) => a + (t.value || 0), 0)
         const totalAmountWithTax = base + taxTotal
         const totalAmountWithoutTax = base
@@ -807,21 +1017,65 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           : 'completed'
       }
 
-      // Re-apply freight proportionally
-      if (billFreight > 0 && totalBase > 0) {
+      if ((billFreight > 0 || billFreightTax > 0) && totalBase > 0) {
         rowsDetailed.forEach((r) => {
           const share = r.base / totalBase
-          const allocated = Math.round(billFreight * share * 100) / 100
-          r.taxes.push({
-            code: 'freightCharges',
-            name: 'Freight Charges',
-            percentage: 0,
-            value: allocated
-          })
-          r.totalAmountWithTax += allocated
-          r.taxTotal += allocated
+          const allocatedF = Math.round(billFreight * share * 100) / 100
+          const allocatedFTax = Math.round(billFreightTax * share * 100) / 100
+          if (allocatedF > 0) {
+            r.taxes.push({
+              code: 'freightCharges',
+              name: 'Freight Charges',
+              percentage: 0,
+              value: allocatedF
+            })
+          }
+          r.totalAmountWithTax += allocatedF + allocatedFTax
+          r.taxTotal += allocatedF + allocatedFTax
         })
-        totalBillAmount += billFreight
+
+        if (billFreight > 0) {
+          const allocatedFSum = rowsDetailed.reduce(
+            (s, r) => s + (r.taxes.find((t) => t.code === 'freightCharges')?.value || 0),
+            0
+          )
+          const fDrift = Math.round((billFreight - allocatedFSum) * 100) / 100
+          if (Math.abs(fDrift) >= 0.01) {
+            const firstRow = rowsDetailed[0]
+            const fc = firstRow.taxes.find((t) => t.code === 'freightCharges')
+            if (fc) fc.value += fDrift
+            else
+              firstRow.taxes.push({
+                code: 'freightCharges',
+                name: 'Freight Charges',
+                percentage: 0,
+                value: fDrift
+              })
+            firstRow.totalAmountWithTax += fDrift
+            firstRow.taxTotal += fDrift
+          }
+        }
+
+        if (billFreightTax > 0) {
+          const expectedTotal =
+            rowsDetailed.reduce(
+              (s, r) =>
+                s +
+                r.base +
+                r.taxes.reduce((a, t) => a + (t.code === 'freightCharges' ? 0 : t.value || 0), 0),
+              0
+            ) +
+            billFreight +
+            billFreightTax
+          const actualTotal = rowsDetailed.reduce((s, r) => s + r.totalAmountWithTax, 0)
+          const totalDrift = Math.round((expectedTotal - actualTotal) * 100) / 100
+          if (Math.abs(totalDrift) >= 0.01) {
+            rowsDetailed[0].totalAmountWithTax += totalDrift
+            rowsDetailed[0].taxTotal += totalDrift
+          }
+        }
+
+        totalBillAmount += billFreight + billFreightTax
       }
 
       // Determine paid/pending
@@ -878,7 +1132,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           date: existingRow ? existingRow.date : new Date().toISOString(),
           quantity: row.productQuantity,
           purchaseAmount: row.price,
-          paymentType: purchaseBill.paymentType,
+          paymentType: isSplit ? 'partial' : 'full',
           paymentMethod: isSplit ? 'split' : paymentData.paymentMethod, // Use currentMethod
           billNo: purchaseBill.billNumber,
           statusOfTransaction: txStatus, // Use txStatus
@@ -888,7 +1142,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           taxRate: 0,
           taxAmount: row.taxes,
           freightCharges: billFreight,
-          freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
+          freightTaxAmount: purchaseBill.freightTaxAmount || [],
           totalAmountWithoutTax: row.totalAmountWithoutTax || 0,
           totalAmountWithTax: row.totalAmountWithTax || 0,
           dueDate: new Date().setMonth(new Date().getMonth() + 1),
@@ -1119,12 +1373,20 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
                   </div>
                 </div>
                 <button
+                  style={styles.closeBtn}
+                  onClick={() => setShowPurchaseBillModal(false)}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+                >
+                  <X size={16} strokeWidth={2.5} />
+                </button>
+                {/* <button
                   className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-100/50 rounded-full transition-all duration-200"
                   onClick={() => setShowPurchaseBillModal(false)}
                   aria-label="Close modal"
                 >
                   <CircleX size={24} />
-                </button>
+                </button> */}
               </div>
               <form className="space-y-8">
                 {/* Top row */}
@@ -1251,8 +1513,8 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
                   </div>
                 </motion.div>
                 {/* Payment & Freight */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <motion.div className="bg-white rounded-2xl shadow-md border border-gray-200 transition-all duration-300 hover:shadow-lg overflow-auto customScrollbar">
+                <div className="grid grid-cols-1 ">
+                  {/* <motion.div className="bg-white rounded-2xl shadow-md border border-gray-200 transition-all duration-300 hover:shadow-lg overflow-auto customScrollbar">
                     <div className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-indigo-100">
                       <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                         <CreditCard size={16} className="text-indigo-500" />
@@ -1285,18 +1547,6 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
                       >
                         Partial Payment
                       </Checkbox>
-                      {/* <Checkbox
-                        checked={purchaseBill.paymentMethod === 'cash'}
-                        onChange={(_, checked) =>
-                          setPurchaseBill((prev) => ({
-                            ...prev,
-                            paymentMethod: checked ? 'cash' : 'bank'
-                          }))
-                        }
-                        className="text-sm font-medium"
-                      >
-                        Cash Payment
-                      </Checkbox> */}
                     </div>
                     <Animation.Collapse in={purchaseBill.paymentType === 'partial'}>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-white/70 rounded-xl border border-gray-200 shadow-inner">
@@ -1329,7 +1579,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
                         </div>
                       </div>
                     </Animation.Collapse>
-                  </motion.div>
+                  </motion.div> */}
                   <motion.div className="bg-white rounded-2xl shadow-md border border-gray-200 transition-all duration-300 hover:shadow-lg overflow-auto customScrollbar">
                     <div className="p-4 bg-white/60 rounded-xl border border-green-100">
                       <label className="block text-sm font-semibold mb-2 text-gray-700 flex items-center gap-2">
@@ -1584,3 +1834,20 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
   )
 }
 export default PurchaseBill
+
+const styles = {
+  closeBtn: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    background: '#ffffff',
+    border: '1px solid #e2e8f0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: '#64748b',
+    transition: 'all 0.2s',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+  }
+}

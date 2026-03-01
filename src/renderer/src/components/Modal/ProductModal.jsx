@@ -81,7 +81,20 @@ const ProductModal = ({
         parts: JSON.stringify(parsedParts || []),
         saleHSN: existingProduct.saleHSN || '',
         purchaseHSN: existingProduct.purchaseHSN || '',
-        taxRate: existingProduct.taxRate || 0,
+        taxRate: (() => {
+          try {
+            let parsed = existingProduct.taxRate
+            if (typeof parsed === 'string') {
+              parsed = JSON.parse(parsed)
+            }
+            if (Array.isArray(parsed)) {
+              return parsed.map(Number)
+            }
+            return []
+          } catch {
+            return []
+          }
+        })(),
         taxAmount: existingProduct.taxAmount || 0,
         totalAmountWithTax: existingProduct.totalAmountWithTax || 0,
         totalAmountWithoutTax: existingProduct.totalAmountWithoutTax || 0
@@ -97,7 +110,7 @@ const ProductModal = ({
       parts: [],
       saleHSN: '',
       purchaseHSN: '',
-      taxRate: 0,
+      taxRate: [],
       taxAmount: 0,
       totalAmountWithTax: 0,
       totalAmountWithoutTax: 0
@@ -148,8 +161,6 @@ const ProductModal = ({
     async (e) => {
       e.preventDefault()
 
-      debugger
-
       if (isSubmittingProduct) return
       setIsSubmittingProduct(true)
 
@@ -165,8 +176,12 @@ const ProductModal = ({
           return
         }
 
+        const calculatedBase = baseAmount
+        const calculatedTax = totalTax
+        const calculatedGrandTotal = grandTotal
+
         const productData = {
-          productName: product.productName,
+          productName: String(product.productName).toUpperCase(),
           productQuantity: Number(product.productQuantity),
           productPrice: Number(product.productPrice),
           clientId: product.clientId || 0,
@@ -182,9 +197,9 @@ const ProductModal = ({
           saleHSN: product.saleHSN,
           purchaseHSN: product.purchaseHSN,
           taxRate: product.taxRate,
-          taxAmount: product.taxAmount,
-          totalAmountWithTax: product.totalAmountWithTax,
-          totalAmountWithoutTax: product.totalAmountWithoutTax,
+          taxAmount: calculatedTax,
+          totalAmountWithTax: calculatedGrandTotal,
+          totalAmountWithoutTax: calculatedBase,
           pageName: 'Product'
         }
 
@@ -394,6 +409,54 @@ const ProductModal = ({
     if (!value) return value
     return new Intl.NumberFormat('en-IN').format(value)
   }
+
+  // 🔥 Calculate base amount (either parts total or product price)
+  const getBaseAmount = () => {
+    if (product.assetsType === 'Finished Goods' && product.addParts === 1) {
+      return selectedParts.reduce((acc, part) => {
+        const partProduct = products.find((p) => p.id === part.partId)
+        const partQty = quantities[part.partId] || 0
+        return acc + (partProduct?.productPrice || 0) * partQty
+      }, 0)
+    }
+
+    return Number(product.productPrice || 0)
+  }
+
+  // 🔥 Calculate taxes dynamically
+  const calculateTaxes = () => {
+    const base = getBaseAmount()
+
+    if (!Array.isArray(product.taxRate) || product.taxRate.length === 0) {
+      return {
+        taxBreakdown: [],
+        totalTax: 0,
+        grandTotal: base
+      }
+    }
+
+    const selectedTaxes = settings.filter((t) => product.taxRate.includes(t.id))
+
+    const taxBreakdown = selectedTaxes.map((tax) => {
+      const amount = (base * Number(tax.taxValue || 0)) / 100
+      return {
+        name: tax.taxName,
+        rate: tax.taxValue,
+        amount
+      }
+    })
+
+    const totalTax = taxBreakdown.reduce((acc, t) => acc + t.amount, 0)
+
+    return {
+      taxBreakdown,
+      totalTax,
+      grandTotal: base + totalTax
+    }
+  }
+
+  const baseAmount = getBaseAmount()
+  const { taxBreakdown, totalTax, grandTotal } = calculateTaxes()
 
   return (
     <div
@@ -684,7 +747,7 @@ const ProductModal = ({
                   size="md"
                   placeholder="Select Tax"
                   value={Array.isArray(product.taxRate) ? product.taxRate : []}
-                  onChange={(value) => handleOnChangeEvent(value, 'tax')}
+                  onChange={(value) => handleOnChangeEvent(value, 'taxRate')}
                   style={{ width: 300, zIndex: clientModal ? 1 : 999 }}
                   menuStyle={{ zIndex: clientModal ? 1 : 999 }}
                 />
@@ -760,38 +823,46 @@ const ProductModal = ({
                   <tfoot>
                     <tr className="font-semibold bg-gray-100">
                       <td colSpan="2" className="p-2 border border-gray-200 text-right">
-                        Total Cost
+                        Subtotal
                       </td>
                       <td className="p-2 border border-gray-200 text-right">
-                        ₹
-                        {selectedParts
-                          .reduce((acc, part) => {
-                            const partProduct = products.find((p) => p.id === part.partId)
-                            const partQty = quantities[part.partId] || 0
-                            return acc + (partProduct?.productPrice || 0) * partQty
-                          }, 0)
-                          .toFixed(2)}
+                        ₹ {baseAmount.toFixed(2)}
+                      </td>
+                    </tr>
+
+                    {taxBreakdown.map((tax, index) => (
+                      <tr key={index} className="bg-yellow-50">
+                        <td colSpan="2" className="p-2 border border-gray-200 text-right">
+                          {tax.name} ({tax.rate}%)
+                        </td>
+                        <td className="p-2 border border-gray-200 text-right text-yellow-700">
+                          ₹ {tax.amount.toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+
+                    {totalTax > 0 && (
+                      <tr className="bg-yellow-100 font-semibold">
+                        <td colSpan="2" className="p-2 border border-gray-200 text-right">
+                          Total Tax
+                        </td>
+                        <td className="p-2 border border-gray-200 text-right">
+                          ₹ {totalTax.toFixed(2)}
+                        </td>
+                      </tr>
+                    )}
+
+                    <tr className="font-bold bg-blue-100 text-blue-800">
+                      <td colSpan="2" className="p-2 border border-gray-200 text-right">
+                        Grand Total
+                      </td>
+                      <td className="p-2 border border-gray-200 text-right text-lg">
+                        ₹ {grandTotal.toFixed(2)}
                       </td>
                     </tr>
                   </tfoot>
                 </table>
               )}
-
-              <div className="mt-4 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-gray-600">
-                  <strong>Auto-calculated Price:</strong>{' '}
-                  <span className="text-blue-700 font-semibold">
-                    ₹
-                    {selectedParts
-                      .reduce((acc, part) => {
-                        const partProduct = products.find((p) => p.id === part.partId)
-                        const partQty = quantities[part.partId] || 0
-                        return acc + (partProduct?.productPrice || 0) * partQty
-                      }, 0)
-                      .toFixed(2)}
-                  </span>
-                </p>
-              </div>
             </div>
           )}
         </form>

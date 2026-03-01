@@ -23,12 +23,13 @@ import { useDispatch } from 'react-redux'
 import { setAccount } from '../../app/features/electronSlice'
 import { toast } from 'react-toastify'
 import CreateAccountModal from '../Modal/CreateAccountModal'
+import { IoLogoGoogle } from 'react-icons/io'
 
 const PAYMENT_METHODS = {
   googlepay: {
     id: 'googlepay',
     label: 'Google Pay / UPI',
-    icon: <CreditCard size={18} strokeWidth={1.5} />,
+    icon: <IoLogoGoogle size={18} strokeWidth={1.5} />,
     color: '#3b82f6',
     bg: '#eff6ff'
   },
@@ -509,7 +510,7 @@ const PaymentMethod = ({ overflow = false, open, setOpen, onConfirm, grandTotal 
             {/* ── Scrollable Body ── */}
             <div style={styles.bodyScroll} className="hide-scrollbar">
               {/* Receiving Amount Input */}
-              <div>
+              {/* <div>
                 <div style={styles.sectionLabel}>Receiving Amount</div>
                 <div style={styles.amountRow}>
                   <span style={styles.amountPrefix}>₹</span>
@@ -542,7 +543,7 @@ const PaymentMethod = ({ overflow = false, open, setOpen, onConfirm, grandTotal 
                     </motion.div>
                   )}
                 </div>
-              </div>
+              </div> */}
 
               {/* Tabs Switcher */}
               <div style={styles.tabsContainer}>
@@ -782,7 +783,7 @@ const PaymentMethod = ({ overflow = false, open, setOpen, onConfirm, grandTotal 
                                   updateSplitPayment(i, 'accountId', '')
                                 }}
                                 placeholder="Select Method"
-                                searchable={false}
+                                searchable={true}
                                 cleanable={false}
                                 style={{ width: '100%' }}
                               />
@@ -810,7 +811,7 @@ const PaymentMethod = ({ overflow = false, open, setOpen, onConfirm, grandTotal 
                                 ₹
                               </span>
                               <input
-                                type="number"
+                                type="text"
                                 value={p.amount}
                                 placeholder="0"
                                 onChange={(e) =>
@@ -866,6 +867,19 @@ const PaymentMethod = ({ overflow = false, open, setOpen, onConfirm, grandTotal 
                                 onChange={(val) => updateSplitPayment(i, 'accountId', val)}
                                 placeholder="Select receiving GPay Account"
                                 style={{ width: '100%' }}
+                                renderExtraFooter={() => (
+                                  <div className="p-3 border-t border-gray-100 bg-gray-50">
+                                    <button
+                                      className="text-blue-600 text-sm font-bold flex items-center gap-2 w-full hover:text-blue-800"
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        setCreateAccountModal(true)
+                                      }}
+                                    >
+                                      <Plus size={16} /> Create New Account
+                                    </button>
+                                  </div>
+                                )}
                               />
                             </div>
                           )}

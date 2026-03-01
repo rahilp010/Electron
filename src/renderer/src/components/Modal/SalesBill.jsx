@@ -115,7 +115,11 @@ const SalesRow = ({ index, row, products, settings, onChange, onRemove, toThousa
       <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
         <CheckPicker
           data={taxOptions}
-          value={Array.isArray(row.taxAmount) ? row.taxAmount.map((t) => t.code) : []}
+          value={
+            Array.isArray(row.taxAmount)
+              ? row.taxAmount.filter((t) => t.code !== 'freightCharges').map((t) => t.code)
+              : []
+          }
           placeholder="Select Taxes"
           virtualized={true}
           menuMaxHeight={200}
@@ -227,7 +231,12 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           productId: init.productId,
           productQuantity: init.quantity || 1, // FIXED
           productPrice: init.saleAmount || 0, // FIXED
-          taxAmount: Array.isArray(init.taxAmount) ? init.taxAmount : [],
+          taxAmount: (typeof init.taxAmount === 'string'
+            ? JSON.parse(init.taxAmount)
+            : Array.isArray(init.taxAmount)
+              ? init.taxAmount
+              : []
+          ).filter((t) => t.code !== 'freightCharges'),
           description: init.description || ''
         }))
 
@@ -247,7 +256,12 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
               ? relatedTx.reduce((sum, tx) => sum + Number(tx.paidAmount || 0), 0)
               : 0,
           freightCharges: baseTx.freightCharges || 0,
-          freightTaxAmount: Array.isArray(baseTx.freightTaxAmount) ? baseTx.freightTaxAmount : [],
+          freightTaxAmount:
+            typeof baseTx.freightTaxAmount === 'string'
+              ? JSON.parse(baseTx.freightTaxAmount)
+              : Array.isArray(baseTx.freightTaxAmount)
+                ? baseTx.freightTaxAmount
+                : [],
           products: productsList
         }))
       } catch (err) {
@@ -595,30 +609,62 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         return { ...r, price, base, taxes, taxTotal, totalAmountWithTax, totalAmountWithoutTax }
       })
       const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
-      if (billFreight > 0 && totalBase > 0) {
+      if ((billFreight > 0 || billFreightTax > 0) && totalBase > 0) {
         rowsDetailed.forEach((r) => {
           const share = r.base / totalBase
-          const allocated = Math.round(billFreight * share * 100) / 100
-          r.taxes.push({
-            code: 'freightCharges',
-            name: 'Freight Charges',
-            percentage: 0,
-            value: allocated
-          })
-          r.totalAmountWithTax = r.totalAmountWithTax + allocated
-          r.taxTotal = r.taxTotal + allocated
+          const allocatedF = Math.round(billFreight * share * 100) / 100
+          const allocatedFTax = Math.round(billFreightTax * share * 100) / 100
+          if (allocatedF > 0) {
+            r.taxes.push({
+              code: 'freightCharges',
+              name: 'Freight Charges',
+              percentage: 0,
+              value: allocatedF
+            })
+          }
+          r.totalAmountWithTax += allocatedF + allocatedFTax
+          r.taxTotal += allocatedF + allocatedFTax
         })
-        const allocatedSum = rowsDetailed.reduce(
-          (s, r) => s + (r.taxes.find((t) => t.code === 'freightCharges')?.value || 0),
-          0
-        )
-        const drift = Math.round((billFreight - allocatedSum) * 100) / 100
-        if (Math.abs(drift) >= 0.01) {
-          rowsDetailed[0].taxes = rowsDetailed[0].taxes.map((t) =>
-            t.code === 'freightCharges' ? { ...t, value: t.value + drift } : t
+
+        if (billFreight > 0) {
+          const allocatedFSum = rowsDetailed.reduce(
+            (s, r) => s + (r.taxes.find((t) => t.code === 'freightCharges')?.value || 0),
+            0
           )
-          rowsDetailed[0].totalAmountWithTax += drift
-          rowsDetailed[0].taxTotal += drift
+          const fDrift = Math.round((billFreight - allocatedFSum) * 100) / 100
+          if (Math.abs(fDrift) >= 0.01) {
+            const firstRow = rowsDetailed[0]
+            const fc = firstRow.taxes.find((t) => t.code === 'freightCharges')
+            if (fc) fc.value += fDrift
+            else
+              firstRow.taxes.push({
+                code: 'freightCharges',
+                name: 'Freight Charges',
+                percentage: 0,
+                value: fDrift
+              })
+            firstRow.totalAmountWithTax += fDrift
+            firstRow.taxTotal += fDrift
+          }
+        }
+
+        if (billFreightTax > 0) {
+          const expectedTotal =
+            rowsDetailed.reduce(
+              (s, r) =>
+                s +
+                r.base +
+                r.taxes.reduce((a, t) => a + (t.code === 'freightCharges' ? 0 : t.value || 0), 0),
+              0
+            ) +
+            billFreight +
+            billFreightTax
+          const actualTotal = rowsDetailed.reduce((s, r) => s + r.totalAmountWithTax, 0)
+          const totalDrift = Math.round((expectedTotal - actualTotal) * 100) / 100
+          if (Math.abs(totalDrift) >= 0.01) {
+            rowsDetailed[0].totalAmountWithTax += totalDrift
+            rowsDetailed[0].taxTotal += totalDrift
+          }
         }
       }
 
@@ -707,7 +753,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           taxRate: 0,
           taxAmount: row.taxes.map((t) => ({ ...t })) || [],
           freightCharges: billFreight,
-          freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
+          freightTaxAmount: salesBill.freightTaxAmount || [],
           totalAmountWithoutTax: row.totalAmountWithoutTax || 0,
           totalAmountWithTax: row.totalAmountWithTax || 0,
           billNo: salesBill.billNumber?.trim() ? salesBill.billNumber.trim() : nextBillId,
@@ -774,10 +820,12 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         const price = Number(r.productPrice || 0)
         const qty = Number(r.productQuantity || 0)
         const base = price * qty
-        const taxes = (r.taxAmount || []).map((t) => ({
-          ...t,
-          value: t.percentage > 0 ? (base * t.percentage) / 100 : Number(t.value || 0)
-        }))
+        const taxes = (r.taxAmount || [])
+          .filter((t) => t.code !== 'freightCharges')
+          .map((t) => ({
+            ...t,
+            value: t.percentage > 0 ? (base * t.percentage) / 100 : Number(t.value || 0)
+          }))
         const taxTotal = taxes.reduce((a, t) => a + (t.value || 0), 0)
         const totalAmountWithTax = base + taxTotal
         const totalAmountWithoutTax = base
@@ -794,20 +842,65 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           : 'completed'
       }
 
-      if (billFreight > 0 && totalBase > 0) {
+      if ((billFreight > 0 || billFreightTax > 0) && totalBase > 0) {
         rowsDetailed.forEach((r) => {
           const share = r.base / totalBase
-          const allocated = Math.round(billFreight * share * 100) / 100
-          r.taxes.push({
-            code: 'freightCharges',
-            name: 'Freight Charges',
-            percentage: 0,
-            value: allocated
-          })
-          r.totalAmountWithTax += allocated
-          r.taxTotal += allocated
+          const allocatedF = Math.round(billFreight * share * 100) / 100
+          const allocatedFTax = Math.round(billFreightTax * share * 100) / 100
+          if (allocatedF > 0) {
+            r.taxes.push({
+              code: 'freightCharges',
+              name: 'Freight Charges',
+              percentage: 0,
+              value: allocatedF
+            })
+          }
+          r.totalAmountWithTax += allocatedF + allocatedFTax
+          r.taxTotal += allocatedF + allocatedFTax
         })
-        totalBillAmount += billFreight
+
+        if (billFreight > 0) {
+          const allocatedFSum = rowsDetailed.reduce(
+            (s, r) => s + (r.taxes.find((t) => t.code === 'freightCharges')?.value || 0),
+            0
+          )
+          const fDrift = Math.round((billFreight - allocatedFSum) * 100) / 100
+          if (Math.abs(fDrift) >= 0.01) {
+            const firstRow = rowsDetailed[0]
+            const fc = firstRow.taxes.find((t) => t.code === 'freightCharges')
+            if (fc) fc.value += fDrift
+            else
+              firstRow.taxes.push({
+                code: 'freightCharges',
+                name: 'Freight Charges',
+                percentage: 0,
+                value: fDrift
+              })
+            firstRow.totalAmountWithTax += fDrift
+            firstRow.taxTotal += fDrift
+          }
+        }
+
+        if (billFreightTax > 0) {
+          const expectedTotal =
+            rowsDetailed.reduce(
+              (s, r) =>
+                s +
+                r.base +
+                r.taxes.reduce((a, t) => a + (t.code === 'freightCharges' ? 0 : t.value || 0), 0),
+              0
+            ) +
+            billFreight +
+            billFreightTax
+          const actualTotal = rowsDetailed.reduce((s, r) => s + r.totalAmountWithTax, 0)
+          const totalDrift = Math.round((expectedTotal - actualTotal) * 100) / 100
+          if (Math.abs(totalDrift) >= 0.01) {
+            rowsDetailed[0].totalAmountWithTax += totalDrift
+            rowsDetailed[0].taxTotal += totalDrift
+          }
+        }
+
+        totalBillAmount += billFreight + billFreightTax
       }
 
       // Paid/pending logic (unchanged)
@@ -876,7 +969,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
           taxRate: 0,
           taxAmount: row.taxes,
           freightCharges: billFreight,
-          freightTaxAmount: row.taxes.find((t) => t.code === 'freightCharges')?.value || 0,
+          freightTaxAmount: salesBill.freightTaxAmount || [],
           totalAmountWithoutTax: row.totalAmountWithoutTax || 0,
           totalAmountWithTax: row.totalAmountWithTax || 0,
           dueDate: new Date().setMonth(new Date().getMonth() + 1),
@@ -1233,93 +1326,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
                   </div>
                 </motion.div>
                 {/* Payment & Freight */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <motion.div className="bg-white rounded-2xl shadow-md border border-gray-200 transition-all duration-300 hover:shadow-lg overflow-auto customScrollbar">
-                    <div className="flex items-center justify-between p-4 bg-white/60 rounded-xl border border-indigo-100">
-                      <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                        <CreditCard size={16} className="text-indigo-500" />
-                        Payment Status
-                      </span>
-                      <Toggle
-                        size="lg"
-                        checkedChildren="Completed"
-                        unCheckedChildren="Pending"
-                        checked={salesBill.statusOfTransaction === 'completed'}
-                        onChange={(checked) =>
-                          setSalesBill((prev) => {
-                            if (checked) {
-                              // Force full on completed
-                              return {
-                                ...prev,
-                                statusOfTransaction: 'completed',
-                                paymentType: 'full',
-                                paidAmount: grandTotal
-                              }
-                            }
-                            return { ...prev, statusOfTransaction: 'pending' }
-                          })
-                        }
-                        className="data-[checked=true]:bg-green-500"
-                      />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-6 p-4 bg-white/60 rounded-xl border border-gray-100">
-                      <Checkbox
-                        checked={salesBill.paymentType === 'partial'}
-                        onChange={(_, checked) =>
-                          setSalesBill((prev) => ({
-                            ...prev,
-                            paymentType: checked ? 'partial' : 'full'
-                          }))
-                        }
-                        className="text-sm font-medium"
-                      >
-                        Partial Payment
-                      </Checkbox>
-                      {/* <Checkbox
-                        checked={salesBill.paymentMethod === 'cash'}
-                        onChange={(_, checked) =>
-                          setSalesBill((prev) => ({
-                            ...prev,
-                            paymentMethod: checked ? 'cash' : 'bank'
-                          }))
-                        }
-                        className="text-sm font-medium"
-                      >
-                        Cash Payment
-                      </Checkbox> */}
-                    </div>
-                    <Animation.Collapse in={salesBill.paymentType === 'partial'}>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-white/70 rounded-xl border border-gray-200 shadow-inner">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Paid Amount
-                          </label>
-                          <InputNumber
-                            prefix="₹"
-                            value={salesBill.paidAmount}
-                            onChange={(val) =>
-                              setSalesBill((prev) => ({
-                                ...prev,
-                                paidAmount: Number(val) || 0
-                              }))
-                            }
-                            className="w-full [&_.rs-input-number-btn-group]:hidden [&_.rs-input]:h-12 [&_.rs-input]:rounded-xl [&_.rs-input]:shadow-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Pending Amount
-                          </label>
-                          <InputNumber
-                            prefix="₹"
-                            value={Math.max(0, grandTotal - (salesBill.paidAmount || 0))}
-                            disabled
-                            className="w-full [&_.rs-input-number-btn-group]:hidden [&_.rs-input]:h-12 [&_.rs-input]:rounded-xl [&_.rs-input]:shadow-sm bg-gray-100/50"
-                          />
-                        </div>
-                      </div>
-                    </Animation.Collapse>
-                  </motion.div>
+                <div className="grid grid-cols-1 ">
                   <motion.div className="bg-white rounded-2xl shadow-md border border-gray-200 transition-all duration-300 hover:shadow-lg overflow-auto customScrollbar">
                     <div className="p-4 bg-white/60 rounded-xl border border-green-100">
                       <label className="block text-sm font-semibold mb-2 text-gray-700 flex items-center gap-2">
