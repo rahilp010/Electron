@@ -263,7 +263,7 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       const [p, c, s] = await Promise.all([
         window.api.getAllProducts(),
         window.api.getAllClients(),
-        window.api.getSettings()
+        window.api.getTaxes()
       ])
       dispatch(setProducts(p))
       dispatch(setClients(c))
@@ -625,11 +625,20 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
       let paidDistribution = []
       const totalBillAmount = rowsDetailed.reduce((s, r) => s + r.totalAmountWithTax, 0)
 
-      const txStatus = salesBill.statusOfTransaction
-
       const isSplit = paymentData.paymentMethod === 'split'
 
-      if (txStatus !== 'completed') {
+      let txStatus = paymentData.paymentMethod.includes('pending') ? 'pending' : 'completed'
+      if (isSplit) {
+        txStatus = paymentData.splits.map((p) => p.method).includes('pending')
+          ? 'partial'
+          : 'completed'
+      }
+
+      if (txStatus === 'partial') {
+        paidDistribution = paymentData.splits
+          .filter((p) => p.method !== 'pending')
+          .map((p) => Math.round(p.amount * 100) / 100)
+      } else if (txStatus !== 'completed') {
         paidDistribution = rowsDetailed.map(() => 0)
       } else {
         if (salesBill.paymentType === 'full') {
@@ -670,12 +679,18 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         const row = rowsDetailed[i]
         const itemPaid = Number(paidDistribution[i] || 0)
         const saleAmount = row.price
-        const pendingAmount =
-          salesBill.paymentType === 'full' && salesBill.statusOfTransaction === 'completed'
-            ? 0
-            : salesBill.paymentType === 'partial'
-              ? Math.max(0, Math.round((saleAmount - itemPaid) * 100) / 100)
-              : saleAmount
+        let pendingAmount = 0
+        let pendingFromOurs = 0
+        if (txStatus === 'partial') {
+          pendingAmount = Math.max(0, Math.round((row.totalAmountWithTax - itemPaid) * 100) / 100)
+          // pendingFromOurs = Math.max(0, Math.round((row.totalAmountWithTax - itemPaid) * 100) / 100)
+        } else if (txStatus === 'completed') {
+          pendingAmount = 0
+          // pendingFromOurs = 0
+        } else {
+          pendingAmount = row.totalAmountWithTax
+          // pendingFromOurs = row.totalAmountWithTax
+        }
 
         const salesData = {
           clientId: salesBill.clientId,
@@ -769,15 +784,15 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
         return { ...r, price, base, taxes, taxTotal, totalAmountWithTax, totalAmountWithoutTax }
       })
 
-      const txStatus = paymentData?.statusOfTransaction || salesBill.statusOfTransaction
-      const currentMethod =
-        paymentData.paymentMethod === 'split'
-          ? paymentData.splits.map((m) => m)
-          : paymentData.paymentMethod
-
       const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
       let totalBillAmount = totalBase
       const isSplit = paymentData.paymentMethod === 'split'
+      let txStatus = paymentData.paymentMethod.includes('pending') ? 'pending' : 'completed'
+      if (isSplit) {
+        txStatus = paymentData.splits.map((p) => p.method).includes('pending')
+          ? 'partial'
+          : 'completed'
+      }
 
       if (billFreight > 0 && totalBase > 0) {
         rowsDetailed.forEach((r) => {
@@ -835,22 +850,24 @@ const SalesBill = ({ setShowSalesBillModal, existingTransaction, isUpdateExpense
 
         const itemTotal = row.totalAmountWithTax
         const itemPaid =
-          salesBill.paymentType === 'full'
+          txStatus === 'completed'
             ? itemTotal
-            : salesBill.paymentType === 'partial'
+            : txStatus === 'partial'
               ? Math.round((itemTotal / totalBillAmount) * totalPaid * 100) / 100
               : 0
+
         const pending = Math.max(0, itemTotal - itemPaid)
 
         const updatedTxData = {
           id: existingRow ? existingRow.id : undefined,
           clientId: salesBill.clientId,
           productId: row.productId,
+          date: existingRow ? existingRow.date : new Date().toISOString(),
           multipleProducts: rowsDetailed,
           quantity: row.productQuantity,
           saleAmount: row.price,
           paymentType: salesBill.paymentType,
-          paymentMethod: currentMethod,
+          paymentMethod: isSplit ? 'split' : paymentData.paymentMethod,
           billNo: salesBill.billNumber,
           statusOfTransaction: txStatus,
           pendingAmount: pending,

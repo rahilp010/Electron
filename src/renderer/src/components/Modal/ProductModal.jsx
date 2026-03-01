@@ -4,7 +4,7 @@
 /* eslint-disable no-unused-vars */
 /* eslint-disable react/prop-types */
 import { useCallback, useEffect, useState } from 'react'
-import { setProducts, updateProduct } from '../../app/features/electronSlice'
+import { setProducts, setSettings, updateProduct } from '../../app/features/electronSlice'
 import { CircleX } from 'lucide-react'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
@@ -39,12 +39,18 @@ const ProductModal = ({
     dispatch(setProducts(response))
   }
 
+  const fetchTaxes = async () => {
+    const response = await window.api?.getTaxes()
+    dispatch(setSettings(response))
+  }
+
   const [clientModal, setClientModal] = useState(false)
   const [quantities, setQuantities] = useState({})
   const [selectedParts, setSelectedParts] = useState([])
   const [baseQuantities, setBaseQuantities] = useState({})
   const products = useSelector((state) => state.electron.products.data || [])
   const clients = useSelector((state) => state.electron.clients.data || [])
+  const settings = useSelector((state) => state.electron.settings.data || [])
   const safeProduct = existingProduct || {}
 
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false)
@@ -104,6 +110,7 @@ const ProductModal = ({
   // Initialize component
   useEffect(() => {
     fetchProducts()
+    fetchTaxes()
   }, [])
 
   useEffect(() => {
@@ -667,13 +674,12 @@ const ProductModal = ({
                   Tax
                 </label>
                 <CheckPicker
-                  data={[
-                    { label: 'IGST 18', value: 'i-18' },
-                    { label: 'IGST 28', value: 'i-28' },
-                    { label: 'SGST 9', value: 's-9' },
-                    { label: 'CGST 9', value: 'c-9' },
-                    { label: 'Fright Changed', value: 0 }
-                  ]}
+                  data={settings.map((t) => ({
+                    label: `${t.taxName} (${t.taxValue}%)`,
+                    value: t.id,
+                    rate: t.taxValue,
+                    name: t.taxName
+                  }))}
                   searchable={false}
                   size="md"
                   placeholder="Select Tax"

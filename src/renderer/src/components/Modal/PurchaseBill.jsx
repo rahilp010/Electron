@@ -212,8 +212,6 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         }))
       }
     }
-
-    fetchNextBillId()
   }, [])
 
   /* ========= Prefill for Update ========= */
@@ -278,7 +276,7 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
       const [p, c, s] = await Promise.all([
         window.api.getAllProducts(),
         window.api.getAllClients(),
-        window.api.getSettings()
+        window.api.getTaxes()
       ])
       dispatch(setProducts(p))
       dispatch(setClients(c))
@@ -638,11 +636,20 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
       let paidDistribution = []
       const totalBillAmount = rowsDetailed.reduce((s, r) => s + r.totalAmountWithTax, 0)
 
-      const txStatus = purchaseBill.statusOfTransaction
-
       const isSplit = paymentData.paymentMethod === 'split'
 
-      if (txStatus !== 'completed') {
+      let txStatus = paymentData.paymentMethod.includes('pending') ? 'pending' : 'completed'
+      if (isSplit) {
+        txStatus = paymentData.splits.map((p) => p.method).includes('pending')
+          ? 'partial'
+          : 'completed'
+      }
+
+      if (txStatus === 'partial') {
+        paidDistribution = paymentData.splits
+          .filter((p) => p.method !== 'pending')
+          .map((p) => Math.round(p.amount * 100) / 100)
+      } else if (txStatus !== 'completed') {
         paidDistribution = rowsDetailed.map(() => 0)
       } else {
         if (purchaseBill.paymentType === 'full') {
@@ -683,18 +690,18 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         const row = rowsDetailed[i]
         const itemPaid = Number(paidDistribution[i] || 0)
         const purchaseAmount = row.price
-        const pendingAmount =
-          purchaseBill.paymentType === 'full'
-            ? 0
-            : purchaseBill.paymentType === 'partial'
-              ? Math.max(0, Math.round((purchaseAmount - itemPaid) * 100) / 100)
-              : purchaseAmount
-        const pendingFromOurs =
-          purchaseBill.paymentType === 'full' && purchaseBill.statusOfTransaction === 'completed'
-            ? 0
-            : purchaseBill.paymentType === 'partial'
-              ? Math.max(0, Math.round((purchaseAmount - itemPaid) * 100) / 100)
-              : row.totalAmountWithTax
+        let pendingAmount = 0
+        let pendingFromOurs = 0
+        if (txStatus === 'partial') {
+          // pendingAmount = Math.max(0, Math.round((purchaseAmount - itemPaid) * 100) / 100)
+          pendingFromOurs = Math.max(0, Math.round((row.totalAmountWithTax - itemPaid) * 100) / 100)
+        } else if (txStatus === 'completed') {
+          // pendingAmount = 0
+          pendingFromOurs = 0
+        } else {
+          // pendingAmount = purchaseAmount
+          pendingFromOurs = row.totalAmountWithTax
+        }
 
         const purchaseData = {
           clientId: purchaseBill.clientId,
@@ -789,15 +796,16 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
         return { ...r, price, base, taxes, taxTotal, totalAmountWithTax, totalAmountWithoutTax }
       })
 
-      const txStatus = paymentData?.statusOfTransaction || purchaseBill.statusOfTransaction
-      const currentMethod =
-        paymentData.paymentMethod === 'split'
-          ? paymentData.splits.map((m) => m)
-          : paymentData.paymentMethod
-
       const totalBase = rowsDetailed.reduce((s, r) => s + r.base, 0)
       let totalBillAmount = totalBase
       const isSplit = paymentData.paymentMethod === 'split'
+
+      let txStatus = paymentData.paymentMethod.includes('pending') ? 'pending' : 'completed'
+      if (isSplit) {
+        txStatus = paymentData.splits.map((p) => p.method).includes('pending')
+          ? 'partial'
+          : 'completed'
+      }
 
       // Re-apply freight proportionally
       if (billFreight > 0 && totalBase > 0) {
@@ -855,9 +863,9 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
 
         const itemTotal = row.totalAmountWithTax
         const itemPaid =
-          purchaseBill.paymentType === 'full'
+          txStatus === 'completed'
             ? itemTotal
-            : purchaseBill.paymentType === 'partial'
+            : txStatus === 'partial'
               ? Math.round((itemTotal / totalBillAmount) * totalPaid * 100) / 100
               : 0
 
@@ -867,10 +875,11 @@ const PurchaseBill = ({ setShowPurchaseBillModal, existingTransaction, isUpdateE
           id: existingRow ? existingRow.id : undefined,
           clientId: purchaseBill.clientId,
           productId: row.productId,
+          date: existingRow ? existingRow.date : new Date().toISOString(),
           quantity: row.productQuantity,
           purchaseAmount: row.price,
           paymentType: purchaseBill.paymentType,
-          paymentMethod: currentMethod, // Use currentMethod
+          paymentMethod: isSplit ? 'split' : paymentData.paymentMethod, // Use currentMethod
           billNo: purchaseBill.billNumber,
           statusOfTransaction: txStatus, // Use txStatus
           pendingAmount: 0,

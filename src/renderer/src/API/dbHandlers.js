@@ -891,6 +891,7 @@ ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
           paymentMethod=?, paymentType=?, statusOfTransaction=?,
           billNo=?, description=?, taxAmount=?,
           totalAmountWithTax=?, totalAmountWithoutTax=?,
+          date=?, dueDate=?, methodType=?, payments=?,
           updatedAt=CURRENT_TIMESTAMP
         WHERE id=?
       `
@@ -910,6 +911,10 @@ ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
         JSON.stringify(data.taxAmount || []),
         data.totalAmountWithTax,
         data.totalAmountWithoutTax,
+        data.date,
+        data.dueDate,
+        data.methodType || 'Payment',
+        JSON.stringify(data.payments || []),
         id
       )
 
@@ -1073,7 +1078,6 @@ function rollbackSaleEffects(oldSale) {
     totalAmountWithTax,
     paidAmount = 0,
     payments,
-    paymentMethod,
     billNo
   } = oldSale
 
@@ -1328,6 +1332,7 @@ ipcMain.handle('updateSales', (event, { id, ...data }) => {
           paymentMethod=?, paymentType=?, statusOfTransaction=?,
           billNo=?, description=?, taxAmount=?,
           totalAmountWithTax=?, totalAmountWithoutTax=?,
+          date=?, dueDate=?, methodType=?, payments=?,
           updatedAt=CURRENT_TIMESTAMP
         WHERE id=?
       `
@@ -1347,6 +1352,10 @@ ipcMain.handle('updateSales', (event, { id, ...data }) => {
         JSON.stringify(data.taxAmount || []),
         data.totalAmountWithTax,
         data.totalAmountWithoutTax,
+        data.date,
+        data.dueDate,
+        data.methodType || 'Receipt',
+        JSON.stringify(data.payments || []),
         id
       )
 
@@ -2181,65 +2190,6 @@ ipcMain.handle('deleteSettings', async (event, id) => {
   db.prepare(`DELETE FROM settings WHERE id = ?`).run(id)
 })
 
-function ensureFile() {
-  if (!fs.existsSync(USER_DATA)) fs.mkdirSync(USER_DATA, { recursive: true })
-  if (!fs.existsSync(FILE_PATH)) fs.writeFileSync(FILE_PATH, JSON.stringify([]))
-}
-
-function readBindings() {
-  ensureFile()
-  try {
-    const raw = fs.readFileSync(FILE_PATH, 'utf8')
-    return JSON.parse(raw || '[]')
-  } catch (err) {
-    console.error('Failed to read keyBindings:', err)
-    return []
-  }
-}
-
-function writeBindings(list) {
-  ensureFile()
-  try {
-    fs.writeFileSync(FILE_PATH, JSON.stringify(list, null, 2), 'utf8')
-  } catch (err) {
-    console.error('Failed to write keyBindings:', err)
-  }
-}
-
-// ✅ Get all key bindings
-ipcMain.handle('getKeyBindings', async () => {
-  return readBindings()
-})
-
-// ✅ Create new key binding
-ipcMain.handle('createKeyBinding', async (event, data) => {
-  const list = readBindings()
-  const record = { id: Date.now(), ...data }
-  list.push(record)
-  writeBindings(list)
-  return record
-})
-
-// ✅ Update key binding
-ipcMain.handle('updateKeyBinding', async (event, data) => {
-  const list = readBindings()
-  const idx = list.findIndex((r) => String(r.id) === String(data.id))
-  if (idx !== -1) {
-    list[idx] = { ...list[idx], ...data }
-    writeBindings(list)
-    return list[idx]
-  } else {
-    throw new Error('Key binding not found')
-  }
-})
-
-// ✅ Delete key binding
-ipcMain.handle('deleteKeyBinding', async (event, id) => {
-  const list = readBindings()
-  const updated = list.filter((r) => String(r.id) !== String(id))
-  writeBindings(updated)
-  return { success: true }
-})
 
 // --- Restore Backup ---
 ipcMain.handle('restoreBackup', async (_, backupFilePath) => {
@@ -2417,6 +2367,85 @@ ipcMain.handle('getPendingPayments', () => {
     console.error('Pending Payments Error:', error)
     return { success: false, message: 'Failed to load pending payments' }
   }
+})
+
+ipcMain.handle('getKeyBindings', () => {
+  return db.prepare('SELECT * FROM keyBindings ORDER BY createdAt DESC').all()
+})
+
+ipcMain.handle('createKeyBinding', (event, data) => {
+  const stmt = db.prepare(`
+    INSERT INTO keyBindings 
+    (name, description, key, modifiers, action, value, enabled)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `)
+
+  const result = stmt.run(
+    data.name,
+    data.description,
+    data.key,
+    JSON.stringify(data.modifiers || []),
+    data.action,
+    data.value,
+    data.enabled ? 1 : 0
+  )
+
+  return db.prepare('SELECT * FROM keyBindings WHERE id = ?').get(result.lastInsertRowid)
+})
+
+ipcMain.handle('updateKeyBinding', (event, data) => {
+  db.prepare(
+    `
+    UPDATE keyBindings
+    SET name = ?,
+        description = ?,
+        key = ?,
+        modifiers = ?,
+        action = ?,
+        value = ?,
+        enabled = ?,
+        updatedAt = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `
+  ).run(
+    data.name,
+    data.description,
+    data.key,
+    JSON.stringify(data.modifiers || []),
+    data.action,
+    data.value,
+    data.enabled ? 1 : 0,
+    data.id
+  )
+
+  return db.prepare('SELECT * FROM keyBindings WHERE id = ?').get(data.id)
+})
+
+ipcMain.handle('deleteKeyBinding', (event, id) => {
+  db.prepare(`DELETE FROM keyBindings WHERE id = ?`).run(id)
+  return { success: true }
+})
+
+ipcMain.handle('getTaxes', () => {
+  return db.prepare('SELECT * FROM taxes ORDER BY createdAt DESC').all()
+})
+
+ipcMain.handle('createTax', (event, data) => {
+  const result = db
+    .prepare(
+      `
+    INSERT INTO taxes (taxName, taxValue)
+    VALUES (?, ?)
+  `
+    )
+    .run(data.taxName, data.taxValue)
+
+  return db.prepare('SELECT * FROM taxes WHERE id = ?').get(result.lastInsertRowid)
+})
+
+ipcMain.handle('deleteTax', (event, id) => {
+  db.prepare('DELETE FROM taxes WHERE id = ?').run(id)
+  return { success: true }
 })
 
 export default db

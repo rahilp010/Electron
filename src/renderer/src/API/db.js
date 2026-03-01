@@ -242,4 +242,33 @@ db.prepare(
 `
 ).run()
 
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS keyBindings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    key TEXT NOT NULL,
+    modifiers TEXT DEFAULT '[]',
+    action TEXT CHECK (action IN ('navigate','callback','custom')) DEFAULT 'navigate',
+    value TEXT,
+    enabled INTEGER DEFAULT 1 CHECK (enabled IN (0,1)),
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`
+).run()
+
+db.prepare(
+  `
+  CREATE TABLE IF NOT EXISTS taxes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    taxName TEXT NOT NULL,
+    taxValue REAL NOT NULL,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`
+).run()
+
 export default db

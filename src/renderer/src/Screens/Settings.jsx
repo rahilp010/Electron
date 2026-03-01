@@ -19,6 +19,7 @@ import {
 const KeyBindingsSection = () => {
   const dispatch = useDispatch()
   const keyBindings = useSelector((state) => state.electron.keyBindings?.data || [])
+
   const [isAddingKey, setIsAddingKey] = useState(false)
   const [editingKey, setEditingKey] = useState(null)
   const [keyForm, setKeyForm] = useState({
@@ -31,19 +32,48 @@ const KeyBindingsSection = () => {
     enabled: true
   })
 
+  const safeParseModifiers = (value) => {
+    try {
+      if (!value) return []
+      if (Array.isArray(value)) return value
+
+      // if valid JSON
+      if (typeof value === 'string' && value.startsWith('[')) {
+        return JSON.parse(value)
+      }
+
+      // fallback for old bad data like "ctrl,shift"
+      if (typeof value === 'string') {
+        return value.split(',').map((v) => v.trim())
+      }
+
+      return []
+    } catch {
+      return []
+    }
+  }
+
+  // ✅ FETCH
   const fetchKeyBindings = async () => {
     try {
       const response = await window.api.getKeyBindings()
-      dispatch(setKeyBindings(response))
+
+      const parsed = response.map((b) => ({
+        ...b,
+        modifiers: safeParseModifiers(b.modifiers),
+        enabled: Boolean(b.enabled)
+      }))
+
+      dispatch(setKeyBindings(parsed))
     } catch (error) {
       console.error('Failed to fetch key bindings:', error)
     }
   }
-
   useEffect(() => {
     fetchKeyBindings()
   }, [])
 
+  // ✅ SAVE / UPDATE
   const handleSaveKeyBinding = async (e) => {
     e.preventDefault()
 
@@ -54,11 +84,22 @@ const KeyBindingsSection = () => {
 
     try {
       if (editingKey) {
-        const updated = await window.api.updateKeyBinding({ id: editingKey, ...keyForm })
+        const updated = await window.api.updateKeyBinding({
+          id: editingKey,
+          ...keyForm
+        })
+
+        updated.modifiers = safeParseModifiers(updated.modifiers)
+        updated.enabled = Boolean(updated.enabled)
+
         dispatch(updateKeyBinding(updated))
         toast.success('Key binding updated successfully')
       } else {
         const created = await window.api.createKeyBinding(keyForm)
+
+        created.modifiers = safeParseModifiers(created.modifiers)
+        created.enabled = Boolean(created.enabled)
+
         dispatch(setKeyBindings([...keyBindings, created]))
         toast.success('Key binding added successfully')
       }
@@ -70,15 +111,16 @@ const KeyBindingsSection = () => {
     }
   }
 
+  // ✅ DELETE
   const handleDeleteKeyBinding = async (id) => {
-    if (window.confirm('Are you sure you want to delete this key binding?')) {
-      try {
-        await window.api.deleteKeyBinding(id)
-        dispatch(deleteKeyBinding(id))
-        toast.success('Key binding deleted successfully')
-      } catch (error) {
-        toast.error('Failed to delete key binding', error)
-      }
+    if (!window.confirm('Delete this shortcut?')) return
+
+    try {
+      await window.api.deleteKeyBinding(id)
+      dispatch(deleteKeyBinding(id))
+      toast.success('Key binding deleted successfully')
+    } catch (error) {
+      toast.error('Failed to delete key binding')
     }
   }
 
@@ -87,10 +129,10 @@ const KeyBindingsSection = () => {
       name: binding.name,
       description: binding.description || '',
       key: binding.key,
-      modifiers: binding.modifiers || [],
+      modifiers: binding?.modifiers || [],
       action: binding.action,
       value: binding.value,
-      enabled: binding.enabled
+      enabled: binding?.enabled
     })
     setEditingKey(binding.id)
     setIsAddingKey(true)
@@ -125,8 +167,12 @@ const KeyBindingsSection = () => {
     { label: 'Purchase', value: '/purchase' },
     { label: 'Products', value: '/products' },
     { label: 'Clients', value: '/clients' },
-    { label: 'Ledger', value: '/ledger' },
-    { label: 'Settings', value: '/settings' }
+    { label: 'Client Ledger', value: '/ledger' },
+    { label: 'Bank Ledger', value: '/bankLedger' },
+    { label: 'Bank Managment', value: '/bankManagment' },
+    { label: 'Pending Payment', value: '/pendingPayment' },
+    { label: 'Pending Collection', value: '/pendingCollection' },
+    { label: 'Reports', value: '/reports' }
   ]
 
   return (
@@ -336,14 +382,15 @@ const KeyBindingsSection = () => {
                   <p className="text-sm text-gray-600 mb-3">{binding.description}</p>
                 )}
                 <div className="flex items-center gap-2">
-                  {binding.modifiers?.map((mod) => (
-                    <React.Fragment key={mod}>
-                      <kbd className="px-3 py-1.5 bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg text-xs font-mono font-semibold shadow">
-                        {mod.charAt(0).toUpperCase() + mod.slice(1)}
-                      </kbd>
-                      <span className="text-gray-400 font-bold text-sm">+</span>
-                    </React.Fragment>
-                  ))}
+                  {Array.isArray(binding.modifiers) &&
+                    binding.modifiers.map((mod) => (
+                      <React.Fragment key={mod}>
+                        <kbd className="px-3 py-1.5 bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg text-xs font-mono font-semibold shadow">
+                          {mod.charAt(0).toUpperCase() + mod.slice(1)}
+                        </kbd>
+                        <span className="text-gray-400 font-bold text-sm">+</span>
+                      </React.Fragment>
+                    ))}
                   <kbd className="px-3 py-1.5 bg-gradient-to-br from-blue-500 to-cyan-500 text-white rounded-lg text-xs font-mono font-semibold shadow uppercase">
                     {binding.key}
                   </kbd>
@@ -394,6 +441,29 @@ const Settings = () => {
   const [taxName, setTaxName] = useState('')
   const [taxValue, setTaxValue] = useState('')
   const [isAddingTax, setIsAddingTax] = useState(false)
+  const [systemInfo, setSystemInfo] = useState({
+    lastBackup: null,
+    nextBackup: null,
+    backupTakenToday: false,
+    version: '',
+    totalProducts: 0,
+    totalClients: 0,
+    totalAccounts: 0,
+    totalTransactions: 0
+  })
+
+  const fetchSystemInfo = async () => {
+    try {
+      const data = await window.api.getSystemInfo()
+      setSystemInfo(data)
+    } catch (err) {
+      console.error('Failed to load system info:', err)
+    }
+  }
+
+  useEffect(() => {
+    fetchSystemInfo()
+  }, [])
 
   const menuItems = [
     {
@@ -423,16 +493,16 @@ const Settings = () => {
   ]
 
   const fetchSettings = async () => {
-    const response = await window.api.getSettings()
+    const response = await window.api.getTaxes()
     dispatch(setSettings(response))
   }
-
-  const dispatch = useDispatch()
-  const settings = useSelector((state) => state.electron.settings.data || [])
 
   useEffect(() => {
     fetchSettings()
   }, [])
+
+  const dispatch = useDispatch()
+  const settings = useSelector((state) => state.electron.settings.data || [])
 
   const handleCheckUpdate = () => {
     setShowModal(true)
@@ -441,31 +511,43 @@ const Settings = () => {
   const handleSubmitTax = async (e) => {
     e.preventDefault()
 
-    const settingsData = {
-      taxName,
-      taxValue
-    }
-
     if (!taxName || !taxValue) {
       toast.error('Please fill all fields')
       return
     }
 
-    const createSettings = await window.api.createSettings(settingsData)
-    dispatch(setSettings(createSettings))
-    toast.success('Tax added successfully')
-    setTaxName('')
-    setTaxValue('')
-    setIsAddingTax(false)
+    try {
+      const created = await window.api.createTax({
+        taxName,
+        taxValue
+      })
+
+      dispatch(setSettings([...settings, created]))
+
+      toast.success('Tax added successfully')
+      setTaxName('')
+      setTaxValue('')
+      setIsAddingTax(false)
+    } catch (error) {
+      console.log(error)
+      toast.error('Failed to add tax')
+    }
   }
 
   const handleDeleteTax = async (id) => {
-    const deleteSettings = await window.api.deleteSettings(id)
-    dispatch(setSettings(deleteSettings))
-    toast.success('Tax deleted successfully')
-    fetchSettings()
-  }
+    try {
+      await window.api.deleteTax(id)
 
+      const updated = settings.filter((tax) => tax.id !== id)
+      dispatch(setSettings(updated))
+
+      toast.success('Tax deleted successfully')
+    } catch (error) {
+      console.log(error)
+
+      toast.error('Failed to delete tax')
+    }
+  }
   const handleManualBackup = async () => {
     const result = await window.api.manualBackup()
     if (result.success) toast.success(result.message)
@@ -505,7 +587,9 @@ const Settings = () => {
                 <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
                   Electron
                 </p>
-                <p className="text-lg font-light text-gray-500 mb-5">v1.2.0</p>
+                <p className="text-lg font-light text-gray-500 mb-5">
+                  v{systemInfo?.version || '1.0.0'}
+                </p>
 
                 <p className="text-gray-600 mb-8 leading-relaxed">
                   Thanks for choosing our application! If you run into any problems, feel free to

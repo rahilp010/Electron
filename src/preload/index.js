@@ -74,6 +74,9 @@ contextBridge.exposeInMainWorld('api', {
   createKeyBinding: (data) => ipcRenderer.invoke('createKeyBinding', data),
   updateKeyBinding: (data) => ipcRenderer.invoke('updateKeyBinding', data),
   deleteKeyBinding: (id) => ipcRenderer.invoke('deleteKeyBinding', id),
+  getTaxes: () => ipcRenderer.invoke('getTaxes'),
+  createTax: (data) => ipcRenderer.invoke('createTax', data),
+  deleteTax: (id) => ipcRenderer.invoke('deleteTax', id),
 
   // Backup methods
   restoreBackup: (backupFilePath) => ipcRenderer.invoke('restoreBackup', backupFilePath),
