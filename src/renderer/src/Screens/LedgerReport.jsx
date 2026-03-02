@@ -5,7 +5,7 @@
 /* eslint-disable react/no-unknown-property */
 /* eslint-disable react/display-name */
 import React, { useEffect, useState, useCallback, useMemo, memo, useRef } from 'react'
-import { FileUp, Import, Users, Search, Printer } from 'lucide-react'
+import { FileUp, Import, Users, Search, Printer, ChevronUp, ChevronDown } from 'lucide-react'
 import Loader from '../components/Loader'
 import 'rsuite/dist/rsuite-no-reset.min.css'
 import { setClients, setTransactions } from '../app/features/electronSlice'
@@ -22,11 +22,11 @@ import AccountLedger from '../components/Modal/AccountLedger'
 
 // Constants
 const TABLE_HEADERS = [
-  { key: 'accountName', label: 'Account Name', width: 'w-[350px]' },
-  { key: 'accountType', label: 'Account Type', width: 'w-[200px]' },
-  { key: 'gstNo', label: 'GST No', width: 'w-[200px]' },
-  { key: 'businessAddress', label: 'Business Address', width: 'w-[250px]' },
-  { key: 'pendingAmount', label: 'Pending Amount', width: 'w-[250px]' }
+  { key: 'accountName', label: 'Account Name', width: 'w-[350px]', sortable: true },
+  { key: 'accountType', label: 'Account Type', width: 'w-[200px]', sortable: true },
+  { key: 'gstNo', label: 'GST No', width: 'w-[200px]', sortable: true },
+  { key: 'businessAddress', label: 'Business Address', width: 'w-[250px]', sortable: true },
+  { key: 'pendingAmount', label: 'Pending Amount', width: 'w-[250px]', sortable: true }
 ]
 
 const ACCOUNT_TYPES = [
@@ -168,6 +168,16 @@ const LedgerReport = () => {
   const [visibleCount, setVisibleCount] = useState(30)
   const tableContainerRef = useRef(null)
   const [ledgerData, setLedgerData] = useState([])
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+
+  const handleSort = useCallback((key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, direction: 'asc' }
+    })
+  }, [])
 
   const clients = useSelector((state) => state.electron.clients?.data || [])
   const transactions = useSelector((state) => state.electron.transaction?.data || [])
@@ -184,7 +194,7 @@ const LedgerReport = () => {
   const filteredData = useMemo(() => {
     const query = searchQuery?.toLowerCase()
 
-    return clients.filter((client) => {
+    const filtered = clients.filter((client) => {
       const matchesSearch =
         !query ||
         [
@@ -207,7 +217,44 @@ const LedgerReport = () => {
 
       return matchesSearch && matchesType && matchesClient && matchesDate
     })
-  }, [searchQuery, accountTypeFilter, clientFilter, dateRange, clients])
+
+    const sortFn = (a, b) => {
+      if (!sortConfig.key) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+
+      let valA, valB
+      switch (sortConfig.key) {
+        case 'accountName':
+          valA = (a.clientName || '').toLowerCase()
+          valB = (b.clientName || '').toLowerCase()
+          break
+        case 'accountType':
+          valA = (a.accountType || '').toLowerCase()
+          valB = (b.accountType || '').toLowerCase()
+          break
+        case 'gstNo':
+          valA = (a.gstNo || '').toLowerCase()
+          valB = (b.gstNo || '').toLowerCase()
+          break
+        case 'businessAddress':
+          valA = (a.address || '').toLowerCase()
+          valB = (b.address || '').toLowerCase()
+          break
+        case 'pendingAmount':
+          valA = Number(a.pendingAmount) || 0
+          valB = Number(b.pendingAmount) || 0
+          break
+        default:
+          valA = new Date(a.createdAt).getTime()
+          valB = new Date(b.createdAt).getTime()
+      }
+
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    }
+
+    return filtered.sort(sortFn)
+  }, [searchQuery, accountTypeFilter, clientFilter, dateRange, clients, sortConfig])
 
   const loadMore = useCallback(() => {
     if (visibleCount < filteredData.length) {
@@ -594,16 +641,41 @@ const LedgerReport = () => {
               <table className="min-w-max border-collapse text-sm">
                 <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-20">
                   <tr className="text-gray-700 border-b border-gray-200">
-                    {TABLE_HEADERS.map((header) => (
-                      <th
-                        key={header.key}
-                        className={`px-6 py-4 border-r border-gray-200 ${header.width} ${
-                          header.sticky ? 'sticky left-0 top-0 z-5 bg-gray-100' : ''
-                        } font-semibold text-left`}
-                      >
-                        {header.label}
-                      </th>
-                    ))}
+                    {TABLE_HEADERS.map((header) => {
+                      const isActive = sortConfig.key === header.key
+                      const arrow =
+                        isActive && header.sortable ? (
+                          sortConfig.direction === 'asc' ? (
+                            <ChevronUp size={14} className="inline-block ml-1" />
+                          ) : (
+                            <ChevronDown size={14} className="inline-block ml-1" />
+                          )
+                        ) : (
+                          ''
+                        )
+
+                      return (
+                        <th
+                          key={header.key}
+                          className={`px-6 py-4 border-r border-gray-200 ${header.width} ${
+                            header.sticky ? 'sticky left-0 top-0 z-5 bg-gray-100' : ''
+                          } font-semibold text-left ${header.sortable ? 'cursor-pointer select-none' : ''}`}
+                          onClick={() => header.sortable && handleSort(header.key)}
+                          title={header.sortable ? 'Click to sort' : ''}
+                        >
+                          {header.label}
+                          {header.sortable && (
+                            <span
+                              className={`text-xs transition-all duration-200 ${
+                                isActive ? 'opacity-100' : 'opacity-30'
+                              }`}
+                            >
+                              {arrow}
+                            </span>
+                          )}
+                        </th>
+                      )
+                    })}
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-100">

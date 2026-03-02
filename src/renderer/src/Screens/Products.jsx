@@ -265,8 +265,31 @@ const Products = () => {
     // ✅ Sorting logic
     if (sortConfig.key) {
       filtered.sort((a, b) => {
-        const aVal = a[sortConfig.key] || 0
-        const bVal = b[sortConfig.key] || 0
+        const getSortVal = (item, key) => {
+          switch (key) {
+            case 'totalWorth':
+              return (item.productPrice || 0) * (item.productQuantity || 0)
+            case 'date':
+              return new Date(item.createdAt).getTime()
+            case 'client':
+              return getClientName(item.clientId, clients).toLowerCase()
+            case 'product':
+              return (item.productName || '').toLowerCase()
+            case 'price':
+              return Number(item.productPrice) || 0
+            case 'quantity':
+              return Number(item.productQuantity) || 0
+            case 'assetsType':
+              return (item.assetsType || '').toLowerCase()
+            default: {
+              const val = item[key]
+              return typeof val === 'string' ? val.toLowerCase() : Number(val) || 0
+            }
+          }
+        }
+
+        const aVal = getSortVal(a, sortConfig.key)
+        const bVal = getSortVal(b, sortConfig.key)
 
         if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
         if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1

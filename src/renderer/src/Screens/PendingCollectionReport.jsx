@@ -19,7 +19,9 @@ import {
   Search,
   Users,
   X,
-  Printer
+  Printer,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react'
 import { clientApi } from '../API/Api'
 import { setClients } from '../app/features/electronSlice'
@@ -28,12 +30,18 @@ import { IoLogoWhatsapp } from 'react-icons/io5'
 
 // Constants
 const TABLE_HEADERS = [
-  { key: 'date', label: 'Date', width: 'w-[170px]', icon: Calendar },
-  // { key: 'bank', label: 'Bank', width: 'w-[200px]', icon: Building2 },
-  { key: 'accountName', label: 'Account Name', width: 'w-[250px]', icon: CreditCard },
-  { key: 'credit', label: 'Pending', width: 'w-[200px]', icon: TrendingUp },
-  { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
-  { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText }
+  { key: 'date', label: 'Date', width: 'w-[170px]', icon: Calendar, sortable: true },
+  // { key: 'bank', label: 'Bank', width: 'w-[200px]', icon: Building2, sortable: true },
+  {
+    key: 'accountName',
+    label: 'Account Name',
+    width: 'w-[250px]',
+    icon: CreditCard,
+    sortable: true
+  },
+  { key: 'credit', label: 'Pending', width: 'w-[200px]', icon: TrendingUp, sortable: true },
+  { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3, sortable: true },
+  { key: 'description', label: 'Description', width: 'w-[350px]', icon: FileText, sortable: true }
 ]
 
 const TABLE_HEADERS_PRINT = [
@@ -203,6 +211,16 @@ const PendingCollectionReport = ({ client, onClose }) => {
   const [showSideBar, setShowSideBar] = useState(false)
   const [sidebarSearch, setSidebarSearch] = useState('')
   const [selectedClient, setSelectedClient] = useState(client || null)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+
+  const handleSort = useCallback((key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, direction: 'asc' }
+    })
+  }, [])
 
   const clients = useSelector((state) => state.electron.clients.data || [])
 
@@ -222,7 +240,6 @@ const PendingCollectionReport = ({ client, onClose }) => {
     return clients.filter((client) => client.clientName?.toLowerCase().includes(query))
   }, [clients, sidebarSearch])
 
-  // Memoized filtered data
   const filteredData = useMemo(() => {
     let receipts = pendingData || []
 
@@ -231,8 +248,40 @@ const PendingCollectionReport = ({ client, onClose }) => {
       receipts = receipts.filter((r) => String(r.clientId) === String(selectedClient.id))
     }
 
-    return receipts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  }, [pendingData, selectedClient?.id])
+    const sortFn = (a, b) => {
+      if (!sortConfig.key) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+
+      let valA, valB
+      switch (sortConfig.key) {
+        case 'date':
+          valA = new Date(a.createdAt).getTime()
+          valB = new Date(b.createdAt).getTime()
+          break
+        case 'accountName':
+          valA = getClientName(a.clientId).toLowerCase()
+          valB = getClientName(b.clientId).toLowerCase()
+          break
+        case 'credit':
+        case 'balance':
+          valA = Number(a.pendingAmount) || 0
+          valB = Number(b.pendingAmount) || 0
+          break
+        case 'description':
+          valA = (a.description || '').toLowerCase()
+          valB = (b.description || '').toLowerCase()
+          break
+        default:
+          valA = new Date(a.createdAt).getTime()
+          valB = new Date(b.createdAt).getTime()
+      }
+
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    }
+
+    return [...receipts].sort(sortFn)
+  }, [pendingData, selectedClient?.id, sortConfig, getClientName])
 
   // Memoized running balance calculation
   const balances = useMemo(() => {
@@ -641,7 +690,6 @@ margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
 `
   }
 
-
   // Updated handler for printing PDF using iframe to avoid popup blockers
   const handlePrintPDF = useCallback(() => {
     // Aggregate by accountName if no specific client selected
@@ -955,14 +1003,37 @@ margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
                 <tr className="text-gray-700">
                   {TABLE_HEADERS.map((header) => {
                     const Icon = header.icon
+                    const isActive = sortConfig.key === header.key
+                    const arrow =
+                      isActive && header.sortable ? (
+                        sortConfig.direction === 'asc' ? (
+                          <ChevronUp size={14} />
+                        ) : (
+                          <ChevronDown size={14} />
+                        )
+                      ) : (
+                        ''
+                      )
+
                     return (
                       <th
                         key={header.key}
-                        className={`px-6 py-4 border-r border-gray-200 ${header.width} font-semibold text-left`}
+                        className={`px-6 py-4 border-r border-gray-200 ${header.width} font-semibold text-left ${header.sortable ? 'cursor-pointer select-none' : ''}`}
+                        onClick={() => header.sortable && handleSort(header.key)}
+                        title={header.sortable ? 'Click to sort' : ''}
                       >
                         <div className="flex items-center gap-2">
                           <Icon size={16} className="text-gray-500" />
-                          {header.label}
+                          <span>{header.label}</span>
+                          {header.sortable && (
+                            <span
+                              className={`text-xs transition-all duration-200 ${
+                                isActive ? 'opacity-100' : 'opacity-30'
+                              }`}
+                            >
+                              {arrow}
+                            </span>
+                          )}
                         </div>
                       </th>
                     )

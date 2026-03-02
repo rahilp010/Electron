@@ -81,7 +81,7 @@ ipcMain.handle('getAllProducts', async () => {
   return db.prepare('SELECT * FROM products ORDER BY createdAt DESC').all()
 })
 
-ipcMain.handle('createProduct', (event, product = {}) => {
+const handleCreateProduct = (product = {}) => {
   const {
     productName = '',
     productPrice = 0,
@@ -96,14 +96,15 @@ ipcMain.handle('createProduct', (event, product = {}) => {
     taxAmount = 0,
     totalAmountWithTax = 0,
     totalAmountWithoutTax = 0,
-    pageName = ''
+    pageName = '',
+    createdAt = product.createdAt
   } = product
 
   const partsStr = typeof parts === 'string' ? parts : JSON.stringify(parts)
   const parsedParts = parseParts(partsStr)
 
   const tx = db.transaction(() => {
-    let finalPrice = toInt(productPrice, 0)
+    let finalPrice = parseFloat(productPrice, 0)
 
     // 🔹 Auto-calculate price for Finished Goods
     if (assetsType === 'Finished Goods' && toInt(addParts) === 1 && parsedParts.length > 0) {
@@ -120,8 +121,8 @@ ipcMain.handle('createProduct', (event, product = {}) => {
       .prepare(
         `
     INSERT INTO products 
-    (productName, productPrice, productQuantity, clientId, assetsType, addParts, parts, saleHSN, purchaseHSN, taxRate, taxAmount, totalAmountWithTax, totalAmountWithoutTax, pageName)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (productName, productPrice, productQuantity, clientId, assetsType, addParts, parts, saleHSN, purchaseHSN, taxRate, taxAmount, totalAmountWithTax, totalAmountWithoutTax, pageName, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `
       )
       .run(
@@ -138,7 +139,8 @@ ipcMain.handle('createProduct', (event, product = {}) => {
         taxAmount,
         totalAmountWithTax,
         totalAmountWithoutTax,
-        pageName
+        pageName,
+        createdAt
       )
 
     // 🔹 Deduct sub-part stock for Finished Goods
@@ -157,6 +159,10 @@ ipcMain.handle('createProduct', (event, product = {}) => {
   })
 
   return tx()
+}
+
+ipcMain.handle('createProduct', (event, product = {}) => {
+  return handleCreateProduct(product)
 })
 
 ipcMain.handle('updateProduct', (event, product) => {
@@ -293,46 +299,48 @@ ipcMain.handle('getAllClients', () => {
   return db.prepare('SELECT * FROM clients ORDER BY createdAt DESC').all()
 })
 
-ipcMain.handle('createClient', (event, client) => {
+const handleCreateClient = (client) => {
   try {
     const {
-      clientName,
-      phoneNo,
-      gstNo,
-      address,
-      accountType,
+      clientName = '',
+      phoneNo = '',
+      gstNo = '',
+      address = '',
+      accountType = '',
       openingBalance = 0,
-      pageName,
-      isEmployee,
-      salary,
-      salaryHistory,
+      pageName = '',
+      isEmployee = false,
+      salary = 0,
+      salaryHistory = [],
       pendingAmount = 0,
       paidAmount = 0,
-      pendingFromOurs = 0
-    } = client
+      pendingFromOurs = 0,
+      createdAt = client.createdAt || new Date().toISOString()
+    } = client || {}
 
     // 1️⃣ Insert Client
     const clientResult = db
       .prepare(
         `
         INSERT INTO clients 
-        (clientName, phoneNo, gstNo, address, accountType, pageName, isEmployee, salary, salaryHistory, pendingAmount, paidAmount, pendingFromOurs)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (clientName, phoneNo, gstNo, address, accountType, pageName, isEmployee, salary, salaryHistory, pendingAmount, paidAmount, pendingFromOurs, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       )
       .run(
-        clientName,
-        phoneNo,
-        gstNo,
-        address,
-        accountType,
-        pageName,
+        clientName || '',
+        phoneNo || '',
+        gstNo || '',
+        address || '',
+        accountType || '',
+        pageName || '',
         isEmployee ? 1 : 0,
-        salary || 0,
-        salaryHistory || [],
-        pendingAmount,
-        paidAmount,
-        pendingFromOurs
+        Number(salary) || 0,
+        JSON.stringify(salaryHistory || []),
+        Number(pendingAmount) || 0,
+        Number(paidAmount) || 0,
+        Number(pendingFromOurs) || 0,
+        createdAt
       )
 
     const clientId = clientResult.lastInsertRowid
@@ -351,11 +359,11 @@ ipcMain.handle('createClient', (event, client) => {
       )
       .run(
         clientId,
-        clientName,
-        openingBalance,
-        openingBalance,
+        clientName || '',
+        Number(openingBalance) || 0,
+        Number(openingBalance) || 0,
         accountNumber,
-        accountType,
+        accountType || '',
         'Client',
         'active'
       )
@@ -399,6 +407,10 @@ ipcMain.handle('createClient', (event, client) => {
     console.error('Error creating client:', error)
     return { success: false, message: 'Failed to create client' }
   }
+}
+
+ipcMain.handle('createClient', (event, client) => {
+  return handleCreateClient(client)
 })
 
 ipcMain.handle('updateClient', (event, client) => {
@@ -793,32 +805,33 @@ ipcMain.handle('getAllPurchases', (event, page = 1) => {
   }
 })
 
-ipcMain.handle('createPurchase', (event, data) => {
+const handleCreatePurchase = (data) => {
   try {
     const transaction = db.transaction(() => {
       const {
-        clientId,
-        productId,
-        quantity,
-        purchaseAmount,
+        clientId = 0,
+        productId = 0,
+        quantity = 0,
+        purchaseAmount = 0,
         paidAmount = 0,
-        paymentType,
-        paymentMethod,
+        paymentType = '',
+        paymentMethod = '',
         pendingAmount = 0,
-        pendingFromOurs,
-        statusOfTransaction,
-        billNo,
-        description,
-        date,
+        pendingFromOurs = 0,
+        statusOfTransaction = '',
+        billNo = '',
+        description = '',
+        date = null,
         dueDate = null,
-        payments,
-        taxAmount,
+        payments = [],
+        taxAmount = [],
         freightCharges = 0,
-        freightTaxAmount = 0,
-        totalAmountWithTax,
-        totalAmountWithoutTax,
-        methodType = 'Payment'
-      } = data
+        freightTaxAmount = [],
+        totalAmountWithTax = 0,
+        totalAmountWithoutTax = 0,
+        methodType = 'Payment',
+        createdAt = data.createdAt || new Date().toISOString()
+      } = data || {}
 
       if (!clientId || !productId || !quantity || !purchaseAmount) {
         throw new Error('Missing required fields')
@@ -854,33 +867,34 @@ ipcMain.handle('createPurchase', (event, data) => {
           paymentMethod, paymentType, statusOfTransaction,
           billNo, description, date, dueDate, methodType,
           taxAmount, freightCharges, freightTaxAmount, 
-          totalAmountWithTax, totalAmountWithoutTax, payments
+          totalAmountWithTax, totalAmountWithoutTax, payments, createdAt
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
         )
         .run(
-          Number(clientId),
-          Number(productId),
+          Number(clientId) || 0,
+          Number(productId) || 0,
           qty,
-          Number(purchaseAmount),
+          Number(purchaseAmount) || 0,
           paid,
-          pendingAmount,
-          Number(pendingFromOurs || 0),
-          paymentMethod,
-          paymentType,
+          pending,
+          Number(pendingFromOurs) || 0,
+          paymentMethod || '',
+          paymentType || '',
           finalStatus || 'pending',
-          billNo,
+          billNo || '',
           description || '',
           date ? new Date(date).toISOString() : null,
           dueDate ? new Date(dueDate).toISOString() : null,
           methodType || 'Payment',
           JSON.stringify(taxAmount || []),
-          Number(freightCharges || 0),
+          Number(freightCharges) || 0,
           JSON.stringify(freightTaxAmount || []),
-          Number(totalAmountWithTax || 0),
-          Number(totalAmountWithoutTax || 0),
-          JSON.stringify(payments || [])
+          Number(totalAmountWithTax) || 0,
+          Number(totalAmountWithoutTax) || 0,
+          JSON.stringify(payments || []),
+          createdAt
         )
 
       const purchaseId = purchaseResult.lastInsertRowid
@@ -896,6 +910,10 @@ ipcMain.handle('createPurchase', (event, data) => {
     console.error('createPurchase error:', error)
     return { success: false, message: error.message }
   }
+}
+
+ipcMain.handle('createPurchase', (event, data) => {
+  return handleCreatePurchase(data)
 })
 
 ipcMain.handle('updatePurchase', (event, { id, ...data }) => {
@@ -1238,32 +1256,33 @@ ipcMain.handle('getAllSales', (event, page = 1) => {
   }
 })
 
-ipcMain.handle('createSales', (event, data) => {
+const handleCreateSales = (data) => {
   try {
     const transaction = db.transaction(() => {
       const {
-        clientId,
-        productId,
-        quantity,
-        saleAmount,
+        clientId = 0,
+        productId = 0,
+        quantity = 0,
+        saleAmount = 0,
         paidAmount = 0,
-        paymentType,
-        paymentMethod,
+        paymentType = '',
+        paymentMethod = '',
         pendingAmount = 0,
-        pendingFromOurs,
-        statusOfTransaction,
-        billNo,
-        description,
-        date,
+        pendingFromOurs = 0,
+        statusOfTransaction = '',
+        billNo = '',
+        description = '',
+        date = null,
         dueDate = null,
-        payments,
-        taxAmount,
+        payments = [],
+        taxAmount = [],
         freightCharges = 0,
-        freightTaxAmount = 0,
-        totalAmountWithTax,
-        totalAmountWithoutTax,
-        methodType = 'Receipt'
-      } = data
+        freightTaxAmount = [],
+        totalAmountWithTax = 0,
+        totalAmountWithoutTax = 0,
+        methodType = 'Receipt',
+        createdAt = data.createdAt || new Date().toISOString()
+      } = data || {}
 
       if (!clientId || !productId || !quantity || !saleAmount) {
         throw new Error('Missing required fields')
@@ -1290,7 +1309,7 @@ ipcMain.handle('createSales', (event, data) => {
         }
       }
 
-      // const paymentMethodAccordingToPayment = payments[0].paymentMethod
+      // const paymentMethodAccordingToPayment = payments[0]?.paymentMethod
 
       const saleResult = db
         .prepare(
@@ -1300,33 +1319,34 @@ ipcMain.handle('createSales', (event, data) => {
           paidAmount, pendingAmount, pendingFromOurs,
           paymentMethod, paymentType, statusOfTransaction,
           billNo, description, date, dueDate, methodType,
-          taxAmount, freightCharges, freightTaxAmount, totalAmountWithTax, totalAmountWithoutTax, payments
+          taxAmount, freightCharges, freightTaxAmount, totalAmountWithTax, totalAmountWithoutTax, payments, createdAt
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
         )
         .run(
-          clientId,
-          productId,
+          Number(clientId) || 0,
+          Number(productId) || 0,
           qty,
-          saleAmount,
+          Number(saleAmount) || 0,
           paid,
-          pendingAmount,
-          pendingFromOurs,
-          paymentMethod,
-          paymentType,
-          finalStatus,
-          billNo,
+          pending,
+          Number(pendingFromOurs) || 0,
+          paymentMethod || '',
+          paymentType || '',
+          finalStatus || 'pending',
+          billNo || '',
           description || '',
-          date,
-          dueDate,
-          methodType,
+          date ? new Date(date).toISOString() : null,
+          dueDate ? new Date(dueDate).toISOString() : null,
+          methodType || 'Receipt',
           JSON.stringify(taxAmount || []),
-          Number(freightCharges || 0),
+          Number(freightCharges) || 0,
           JSON.stringify(freightTaxAmount || []),
-          totalAmountWithTax,
-          totalAmountWithoutTax,
-          JSON.stringify(payments || [])
+          Number(totalAmountWithTax) || 0,
+          Number(totalAmountWithoutTax) || 0,
+          JSON.stringify(payments || []),
+          createdAt
         )
 
       const saleId = saleResult.lastInsertRowid
@@ -1342,6 +1362,10 @@ ipcMain.handle('createSales', (event, data) => {
     console.error('createSales error:', error)
     return { success: false, message: error.message }
   }
+}
+
+ipcMain.handle('createSales', (event, data) => {
+  return handleCreateSales(data)
 })
 
 ipcMain.handle('updateSales', (event, { id, ...data }) => {
@@ -1424,114 +1448,127 @@ ipcMain.handle('deleteSales', (event, id) => {
   }
 })
 
+const parseExcelDate = (excelValue) => {
+  if (!excelValue) return undefined
+
+  // SCENARIO 1: It's an Excel Serial Number (e.g., 45977)
+  if (typeof excelValue === 'number') {
+    // 25569 is the offset between Excel's epoch (1900) and JS's epoch (1970)
+    const dateObj = new Date(Math.round((excelValue - 25569) * 86400 * 1000))
+    if (!isNaN(dateObj.getTime())) return dateObj.toISOString()
+  }
+
+  // SCENARIO 2: The library already converted it to a JS Date
+  if (excelValue instanceof Date) {
+    if (!isNaN(excelValue.getTime())) return excelValue.toISOString()
+  }
+
+  // SCENARIO 3: It's a string like "16/11/2025" or "16-11-2025"
+  if (typeof excelValue === 'string') {
+    // Standardize the string by replacing dashes with slashes
+    const cleanStr = excelValue.replace(/-/g, '/').trim()
+    const parts = cleanStr.split('/')
+
+    if (parts.length >= 3) {
+      const day = parts[0]
+      const month = parts[1]
+      // Grab just the year in case there is a time attached (e.g., "2025 10:30")
+      const year = parts[2].split(' ')[0]
+
+      const dateObj = new Date(`${year}-${month}-${day}T00:00:00.000Z`)
+      if (!isNaN(dateObj.getTime())) return dateObj.toISOString()
+    }
+  }
+
+  // If it fails all checks, log it so you know what's breaking it
+  console.log('FAILED TO PARSE DATE VALUE:', excelValue)
+  return undefined
+}
+
 // -------- Excel Import --------
 ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
   try {
-    const workbook = XLSX.readFile(filePath)
+    const workbook = XLSX.readFile(filePath, { cellDates: true })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
-    const rows = XLSX.utils.sheet_to_json(sheet)
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+
+    console.log('FIRST ROW DATA:', rows[0])
 
     let stmt
     let count = 0
 
     if (tableName === 'clients') {
-      stmt = db.prepare(`
-        INSERT INTO clients (clientName, phoneNo, pendingAmount, paidAmount, pendingFromOurs, accountType)
-        VALUES (@clientName, @phoneNo, @pendingAmount, @paidAmount, @pendingFromOurs, @accountType)
-      `)
-
-      const insertMany = db.transaction((rows) => {
-        for (const row of rows) {
-          stmt.run({
-            clientName: row.clientName || '',
-            phoneNo: String(row.phoneNo).split('.')[0] || '',
-            pendingAmount: row.pendingAmount || 0,
-            paidAmount: row.paidAmount || 0,
-            pendingFromOurs: row.pendingFromOurs || 0,
-            accountType: row.accountType || ''
-          })
-          count++
-        }
-      })
-      insertMany(rows)
+      for (const row of rows) {
+        const formattedDate = parseExcelDate(row.createdAt)
+        handleCreateClient({
+          ...row,
+          phoneNo: String(row.phoneNo).split('.')[0] || '',
+          pendingAmount: row.pendingAmount || 0,
+          paidAmount: row.paidAmount || 0,
+          pendingFromOurs: row.pendingFromOurs || 0,
+          accountType: row.accountType || '',
+          createdAt: formattedDate
+        })
+        count++
+      }
     } else if (tableName === 'products') {
-      stmt = db.prepare(`
-    INSERT INTO products (
-      productName,
-      productQuantity,
-      productPrice,
-      taxRate,
-      taxAmount,
-      totalAmountWithoutTax,
-      totalAmountWithTax,
-      assetsType,
-      saleHSN,
-      purchaseHSN
-    )
-    VALUES (
-      @productName,
-      @productQuantity,
-      @productPrice,
-      @taxRate,
-      @taxAmount,
-      @totalAmountWithoutTax,
-      @totalAmountWithTax,
-      @assetsType,
-      @saleHSN,
-      @purchaseHSN
-    )
-  `)
-      const insertMany = db.transaction((rows) => {
-        for (const row of rows) {
-          const quantity = Number(row.productQuantity) || 0
-          const price = Number(row.productPrice) || 0
-          const taxRate = Number(row.taxRate) || 0
+      for (const row of rows) {
+        const formattedDate = parseExcelDate(row.createdAt)
 
-          const totalWithoutTax = quantity * price
-          const taxAmount = totalWithoutTax * (taxRate / 100)
-          const totalWithTax = totalWithoutTax + taxAmount
+        console.log(formattedDate)
+        const quantity = Number(row.productQuantity) || 0
+        const price = Number(row.productPrice) || 0
+        const taxRate = Number(row.taxRate) || 0
 
-          stmt.run({
-            productName: row.productName || '',
-            productQuantity: quantity,
-            productPrice: price,
-            taxRate: taxRate,
-            taxAmount: taxAmount,
-            totalAmountWithoutTax: totalWithoutTax,
-            totalAmountWithTax: totalWithTax,
-            assetsType: row.assetsType || 'Raw Material',
-            saleHSN: row.saleHSN || null,
-            purchaseHSN: row.purchaseHSN || null
-          })
+        const totalWithoutTax = quantity * price
+        const taxAmount = totalWithoutTax * (taxRate / 100)
+        const totalWithTax = totalWithoutTax + taxAmount
 
-          count++
-        }
-      })
-
-      insertMany(rows)
-    } else if (tableName === 'transactions') {
-      stmt = db.prepare(`
-        INSERT INTO transactions (clientId, productId, quantity, saleAmount, statusOfTransaction, paymentType, pendingAmount, paidAmount, transactionType)
-        VALUES (@clientId, @productId, @quantity, @saleAmount, @statusOfTransaction, @paymentType, @pendingAmount, @paidAmount, @transactionType)
-      `)
-
-      const insertMany = db.transaction((rows) => {
-        for (const row of rows) {
-          stmt.run({
-            clientId: row.clientId || 0,
-            productId: row.productId || 0,
-            quantity: row.quantity || 0,
-            saleAmount: row.saleAmount || 0,
-            statusOfTransaction: row.statusOfTransaction || '',
-            paymentType: row.paymentType || '',
-            pendingAmount: row.pendingAmount || 0,
-            paidAmount: row.paidAmount || 0,
-            transactionType: row.transactionType || ''
-          })
-          count++
-        }
-      })
-      insertMany(rows)
+        handleCreateProduct({
+          ...row,
+          productQuantity: quantity,
+          productPrice: Number(price.toFixed(2)),
+          taxRate,
+          taxAmount,
+          totalAmountWithoutTax: Number(totalWithoutTax.toFixed(2)),
+          totalAmountWithTax: Number(totalWithTax.toFixed(2)),
+          assetsType: row.assetsType || 'Raw Material',
+          createdAt: formattedDate
+        })
+        count++
+      }
+    } else if (tableName === 'purchase') {
+      for (const row of rows) {
+        const formattedDate = parseExcelDate(row.createdAt)
+        handleCreatePurchase({
+          ...row,
+          quantity: Number(row.quantity) || 0,
+          purchaseAmount: Number(row.purchaseAmount) || 0,
+          paidAmount: Number(row.paidAmount) || 0,
+          pendingAmount: Number(row.pendingAmount) || 0,
+          pendingFromOurs: Number(row.pendingFromOurs) || 0,
+          totalAmountWithTax: Number(row.totalAmountWithTax) || 0,
+          totalAmountWithoutTax: Number(row.totalAmountWithoutTax) || 0,
+          createdAt: formattedDate
+        })
+        count++
+      }
+    } else if (tableName === 'sales') {
+      for (const row of rows) {
+        const formattedDate = parseExcelDate(row.createdAt)
+        handleCreateSales({
+          ...row,
+          quantity: Number(row.quantity) || 0,
+          saleAmount: Number(row.saleAmount) || 0,
+          paidAmount: Number(row.paidAmount) || 0,
+          pendingAmount: Number(row.pendingAmount) || 0,
+          pendingFromOurs: Number(row.pendingFromOurs) || 0,
+          totalAmountWithTax: Number(row.totalAmountWithTax) || 0,
+          totalAmountWithoutTax: Number(row.totalAmountWithoutTax) || 0,
+          createdAt: formattedDate
+        })
+        count++
+      }
     }
 
     return { success: true, tableName, count }

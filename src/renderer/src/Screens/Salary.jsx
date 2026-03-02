@@ -11,7 +11,9 @@ import {
   Phone,
   MoreHorizontal,
   History,
-  MapPinHouse
+  MapPinHouse,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react'
 import Loader from '../components/Loader'
 import { useDispatch, useSelector } from 'react-redux'
@@ -25,11 +27,11 @@ import { RiLockPasswordLine } from 'react-icons/ri'
 
 // Constants
 const TABLE_HEADERS = [
-  { key: 'clientName', label: 'Employee', width: 'w-[300px]', icon: User },
-  { key: 'phoneNo', label: 'Phone No', width: 'w-[200px]', icon: Phone },
-  { key: 'paidAmount', label: 'Amount', width: 'w-[250px]', icon: Receipt },
-  { key: 'address', label: 'Address', width: 'w-[250px]', icon: MapPinHouse },
-  { key: 'accountType', label: 'Account Type', width: 'w-[200px]', icon: Info },
+  { key: 'clientName', label: 'Employee', width: 'w-[300px]', icon: User, sortable: true },
+  { key: 'phoneNo', label: 'Phone No', width: 'w-[200px]', icon: Phone, sortable: true },
+  { key: 'salary', label: 'Amount', width: 'w-[250px]', icon: Receipt, sortable: true },
+  { key: 'address', label: 'Address', width: 'w-[250px]', icon: MapPinHouse, sortable: true },
+  { key: 'accountType', label: 'Account Type', width: 'w-[200px]', icon: Info, sortable: true },
   { key: 'action', label: 'Action', width: 'w-[150px]', icon: MoreHorizontal }
 ]
 
@@ -356,6 +358,16 @@ const Salary = () => {
   const [isVerifying, setIsVerifying] = useState(false)
   const inputRefs = useRef([])
   const [salaryVisible, setSalaryVisible] = useState(false)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+
+  const handleSort = useCallback((key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, direction: 'asc' }
+    })
+  }, [])
 
   const clients = useSelector((state) => state.electron.clients.data || [])
   const transactions = useSelector((state) => state.electron.transaction.data || [])
@@ -429,7 +441,7 @@ const Salary = () => {
     if (!Array.isArray(clients)) return []
     const q = searchQuery.trim().toLowerCase()
 
-    return clients.filter((data) => {
+    const filtered = clients.filter((data) => {
       if (data.isEmployee !== 1) return false // ensure employee only
 
       // Search filter
@@ -455,7 +467,45 @@ const Salary = () => {
 
       return matchesSearch && matchesClient && matchesDate && matchesAccountType
     })
-  }, [clients, searchQuery, clientFilter, accountTypeFilter])
+
+    const sortFn = (a, b) => {
+      if (!sortConfig.key)
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+
+      let valA, valB
+      switch (sortConfig.key) {
+        case 'clientName':
+          valA = (a.clientName || '').toLowerCase()
+          valB = (b.clientName || '').toLowerCase()
+          break
+        case 'phoneNo':
+          valA = (a.phoneNo || '').toLowerCase()
+          valB = (b.phoneNo || '').toLowerCase()
+          break
+        case 'salary':
+          valA = Number(a.salary) || 0
+          valB = Number(b.salary) || 0
+          break
+        case 'address':
+          valA = (a.address || '').toLowerCase()
+          valB = (b.address || '').toLowerCase()
+          break
+        case 'accountType':
+          valA = (a.accountType || '').toLowerCase()
+          valB = (b.accountType || '').toLowerCase()
+          break
+        default:
+          valA = new Date(a.createdAt || 0).getTime()
+          valB = new Date(b.createdAt || 0).getTime()
+      }
+
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    }
+
+    return filtered.sort(sortFn)
+  }, [clients, searchQuery, clientFilter, accountTypeFilter, sortConfig])
 
   // Visible slice (pagination)
   const visibleData = useMemo(
@@ -600,14 +650,37 @@ const Salary = () => {
               <tr className="text-sm sticky top-0 z-20 bg-gradient-to-r from-gray-50 to-gray-100">
                 {TABLE_HEADERS.map((header) => {
                   const IconTable = header.icon
+                  const isActive = sortConfig.key === header.key
+                  const arrow =
+                    isActive && header.sortable ? (
+                      sortConfig.direction === 'asc' ? (
+                        <ChevronUp size={14} className="inline-block" />
+                      ) : (
+                        <ChevronDown size={14} className="inline-block" />
+                      )
+                    ) : (
+                      ''
+                    )
+
                   return (
                     <th
                       key={header.key}
-                      className={`px-4 py-3 border-b border-gray-300 ${header.width} text-center`}
+                      className={`px-4 py-3 border-b border-gray-300 ${header.width} text-center ${header.sortable ? 'cursor-pointer select-none' : ''}`}
+                      onClick={() => header.sortable && handleSort(header.key)}
+                      title={header.sortable ? 'Click to sort' : ''}
                     >
                       <div className="flex items-center justify-center gap-2">
                         <IconTable size={16} className="text-gray-500" />
-                        {header.label}
+                        <span>{header.label}</span>
+                        {header.sortable && (
+                          <span
+                            className={`text-xs transition-all duration-200 ${
+                              isActive ? 'opacity-100' : 'opacity-30'
+                            }`}
+                          >
+                            {arrow}
+                          </span>
+                        )}
                       </div>
                     </th>
                   )

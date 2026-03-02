@@ -20,7 +20,8 @@ import {
   Phone,
   MoreHorizontal,
   PenLine,
-  ChevronDown
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react'
 import Loader from '../components/Loader'
 import SearchIcon from '@mui/icons-material/Search'
@@ -48,15 +49,27 @@ import SalesBill from '../components/Modal/SalesBill'
 // Constants
 const TABLE_HEADERS = [
   // { key: 'id', label: 'ID', width: 'w-[80px]', sticky: true },
-  { key: 'date', label: 'Date', width: 'w-[150px]', icon: Calendar1 },
-  { key: 'clientName', label: 'Client Name', width: 'w-[300px]', icon: User },
-  { key: 'productName', label: 'Product Name', width: 'w-[250px]', icon: Box },
-  { key: 'quantity', label: 'Quantity', width: 'w-[150px]', icon: Box },
-  // { key: 'sellingPrice', label: 'Selling Price', width: 'w-[170px]', conditional: true },
-  { key: 'totalAmount', label: 'Total Amount', width: 'w-[200px]', icon: IndianRupee },
-  { key: 'pendingAmount', label: 'Pending Amount', width: 'w-[200px]', icon: TrendingUp },
-  { key: 'paidAmount', label: 'Paid Amount', width: 'w-[200px]', icon: Receipt },
-  { key: 'paymentStatus', label: 'Payment Status', width: 'w-[170px]', icon: Info },
+  { key: 'date', label: 'Date', width: 'w-[150px]', icon: Calendar1, sortable: true },
+  { key: 'clientName', label: 'Client Name', width: 'w-[300px]', icon: User, sortable: true },
+  { key: 'productName', label: 'Product Name', width: 'w-[250px]', icon: Box, sortable: true },
+  { key: 'quantity', label: 'Quantity', width: 'w-[150px]', icon: Box, sortable: true },
+  // { key: 'sellingPrice', label: 'Selling Price', width: 'w-[170px]', conditional: true, sortable: true },
+  {
+    key: 'totalAmount',
+    label: 'Total Amount',
+    width: 'w-[200px]',
+    icon: IndianRupee,
+    sortable: true
+  },
+  {
+    key: 'pendingAmount',
+    label: 'Pending Amount',
+    width: 'w-[200px]',
+    icon: TrendingUp,
+    sortable: true
+  },
+  { key: 'paidAmount', label: 'Paid Amount', width: 'w-[200px]', icon: Receipt, sortable: true },
+  { key: 'paymentStatus', label: 'Payment Status', width: 'w-[170px]', icon: Info, sortable: true },
   { key: 'action', label: 'Action', width: 'w-[150px]', icon: MoreHorizontal }
 ]
 
@@ -516,18 +529,20 @@ const generatePrintHTML = (
           month: 'short',
           year: 'numeric'
         })
-      case 'clientName':
+      case 'clientName': {
         const name =
           typeof getClientName !== 'undefined'
             ? getClientName(row.clientId, clients)
             : row.clientName || 'N/A'
         return `<div class="text-wrap-cell">${name}</div>`
-      case 'productName':
+      }
+      case 'productName': {
         const prod =
           typeof getProductName !== 'undefined'
             ? getProductName(row.productId, products)
             : row.productName || 'N/A'
         return `<div class="text-wrap-cell">${prod}</div>`
+      }
       case 'quantity':
         return row.quantity || 0
       case 'totalAmount':
@@ -846,6 +861,7 @@ const Transaction = () => {
   const [statusFilter, setStatusFilter] = useState('')
   const [importFile, setImportFile] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState(new Set())
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const [visibleCount, setVisibleCount] = useState(30)
   const tableContainerRef = useRef(null)
 
@@ -994,12 +1010,62 @@ const Transaction = () => {
       grouped[billNo].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     })
 
-    // Sort groups by the latest date in each group (descending)
+    // Sort groups based on sortConfig
     const sortedBillNos = Object.keys(grouped).sort((a, b) => {
       const groupA = grouped[a]
       const groupB = grouped[b]
-      const latestA = new Date(groupA[0].createdAt)
-      const latestB = new Date(groupB[0].createdAt)
+
+      const firstA = groupA[0]
+      const firstB = groupB[0]
+
+      const getVal = (groupItems, item, key) => {
+        switch (key) {
+          case 'date':
+            return new Date(item.createdAt).getTime()
+          case 'clientName':
+            return getClientName(item.clientId, clients).toLowerCase()
+          case 'productName':
+            if (groupItems.length > 1) return 'multiple products'
+            return getProductName(item.productId, products).toLowerCase()
+          case 'quantity':
+            return groupItems.reduce((sum, i) => sum + (i.quantity || 0), 0)
+          case 'totalAmount':
+            return groupItems.reduce((sum, i) => sum + (i.saleAmount || 0), 0)
+          case 'pendingAmount':
+            return groupItems.reduce((sum, i) => {
+              if (i.statusOfTransaction === 'pending') {
+                return (
+                  sum + (i.paymentType === 'partial' ? i.pendingAmount || 0 : i.purchaseAmount || 0)
+                )
+              }
+              return sum
+            }, 0)
+          case 'paidAmount':
+            return groupItems.reduce((sum, i) => sum + (i.paidAmount || 0), 0)
+          case 'paymentStatus': {
+            const statusCountsA = groupItems.reduce((acc, i) => {
+              acc[i.statusOfTransaction] = (acc[i.statusOfTransaction] || 0) + 1
+              return acc
+            }, {})
+            return Object.keys(statusCountsA).length === 1 ? Object.keys(statusCountsA)[0] : 'mixed'
+          }
+          default:
+            return new Date(item.createdAt).getTime() // Default fallback on date
+        }
+      }
+
+      if (sortConfig.key) {
+        const valA = getVal(groupA, firstA, sortConfig.key)
+        const valB = getVal(groupB, firstB, sortConfig.key)
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1
+        return 0
+      }
+
+      // Default sorting: Latest date first
+      const latestA = new Date(firstA.createdAt).getTime()
+      const latestB = new Date(firstB.createdAt).getTime()
       return latestB - latestA
     })
 
@@ -1021,6 +1087,16 @@ const Transaction = () => {
       }
       return newSet
     })
+  }, [])
+
+  const handleSort = useCallback((key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, direction: 'asc' }
+    })
+    setVisibleCount(30)
   }, [])
 
   const renderedGroups = useMemo(() => {
@@ -1441,14 +1517,39 @@ const Transaction = () => {
                   <tr className="text-sm sticky top-0 z-20 bg-gradient-to-r from-gray-50 to-gray-100">
                     {visibleHeaders.map((header) => {
                       const IconTable = header.icon
+                      const isActive = sortConfig.key === header.key
+                      const arrow =
+                        isActive && header.sortable ? (
+                          sortConfig.direction === 'asc' ? (
+                            <ChevronUp size={14} />
+                          ) : (
+                            <ChevronDown size={14} />
+                          )
+                        ) : (
+                          ''
+                        )
+
                       return (
                         <th
                           key={header.key}
-                          className={`px-4 py-3 border-b border-gray-300 text-center ${header.width} ${header.sticky} bg-transparent`}
+                          className={`px-4 py-3 border-b border-gray-300 text-center ${header.width} ${
+                            header.sticky
+                          } bg-transparent ${header.sortable ? 'cursor-pointer select-none' : ''}`}
+                          onClick={() => header.sortable && handleSort(header.key)}
+                          title={header.sortable ? 'Click to sort' : ''}
                         >
                           <div className="flex items-center justify-center gap-2">
                             {IconTable && <IconTable size={16} className="text-gray-500" />}
-                            {header.label}
+                            <span>{header.label}</span>
+                            {header.sortable && (
+                              <span
+                                className={`text-xs transition-all duration-200 ${
+                                  isActive ? 'opacity-100' : 'opacity-30'
+                                }`}
+                              >
+                                {arrow}
+                              </span>
+                            )}
                           </div>
                         </th>
                       )

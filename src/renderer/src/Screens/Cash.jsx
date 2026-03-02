@@ -42,19 +42,21 @@ import {
   CreditCard,
   Banknote,
   BarChart3,
-  User
+  User,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react'
 
 // Constants
 const TABLE_HEADERS = [
   // { key: 'srNo', label: 'ID', width: 'w-[100px]', icon: FileText, sticky: true },
-  { key: 'date', label: 'Date', width: 'w-[150px]', icon: Calendar },
-  { key: 'cash', label: 'Cash', width: 'w-[200px]', icon: Building2 },
-  { key: 'party', label: 'Party', width: 'w-[250px]', icon: User },
-  { key: 'debit', label: 'Debit', width: 'w-[200px]', icon: TrendingDown },
-  { key: 'credit', label: 'Credit', width: 'w-[200px]', icon: TrendingUp },
-  { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3 },
-  { key: 'description', label: 'Description', width: 'w-[450px]', icon: FileText },
+  { key: 'date', label: 'Date', width: 'w-[150px]', icon: Calendar, sortable: true },
+  { key: 'cash', label: 'Cash', width: 'w-[200px]', icon: Building2, sortable: true },
+  { key: 'party', label: 'Party', width: 'w-[250px]', icon: User, sortable: true },
+  { key: 'debit', label: 'Debit', width: 'w-[200px]', icon: TrendingDown, sortable: true },
+  { key: 'credit', label: 'Credit', width: 'w-[200px]', icon: TrendingUp, sortable: true },
+  { key: 'balance', label: 'Balance', width: 'w-[200px]', icon: BarChart3, sortable: true },
+  { key: 'description', label: 'Description', width: 'w-[450px]', icon: FileText, sortable: true },
   { key: 'actions', label: 'Actions', width: 'w-[100px]', icon: Edit }
 ]
 
@@ -214,6 +216,16 @@ const Cash = () => {
   const [isUpdatingReceipt, setIsUpdatingReceipt] = useState(false)
   const [selectedReceiptId, setSelectedReceiptId] = useState(null)
   const [importFile, setImportFile] = useState(false)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+
+  const handleSort = useCallback((key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, direction: 'asc' }
+    })
+  }, [])
 
   // Form state
   const [cashReceipt, setCashReceipt] = useState({
@@ -316,20 +328,62 @@ const Cash = () => {
     }
   }, [isUpdatingReceipt])
 
-  // Running balance calculation
-  const balances = useMemo(() => {
-    const receipts = [...recentReceipts].reverse()
+  // Running balance calculation & sorting
+  const sortedReceipts = useMemo(() => {
+    const chronological = [...recentReceipts].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    )
     let balance = 0
-    const calculatedBalances = []
-
-    receipts.forEach((receipt, idx) => {
-      const amount = getAmount(receipt.type, receipt.amount)
-      balance += amount
-      calculatedBalances[receipts.length - 1 - idx] = balance
+    const withBalances = chronological.map((receipt) => {
+      balance += getAmount(receipt.type, receipt.amount)
+      return { ...receipt, currentBalance: balance }
     })
 
-    return calculatedBalances
-  }, [recentReceipts])
+    const sortFn = (a, b) => {
+      if (!sortConfig.key) return new Date(b.date).getTime() - new Date(a.date).getTime()
+
+      let valA, valB
+      switch (sortConfig.key) {
+        case 'date':
+          valA = new Date(a.date).getTime()
+          valB = new Date(b.date).getTime()
+          break
+        case 'cash':
+          valA = (a.cash || '').toLowerCase()
+          valB = (b.cash || '').toLowerCase()
+          break
+        case 'party':
+          valA = (clients.find((c) => c.id === a.clientId)?.clientName || '').toLowerCase()
+          valB = (clients.find((c) => c.id === b.clientId)?.clientName || '').toLowerCase()
+          break
+        case 'debit':
+          valA = a.type === 'Payment' || a.type === 'Salary' ? Number(a.amount) || 0 : 0
+          valB = b.type === 'Payment' || b.type === 'Salary' ? Number(b.amount) || 0 : 0
+          break
+        case 'credit':
+          valA = a.type === 'Receipt' ? Number(a.amount) || 0 : 0
+          valB = b.type === 'Receipt' ? Number(b.amount) || 0 : 0
+          break
+        case 'balance':
+          valA = a.currentBalance
+          valB = b.currentBalance
+          break
+        case 'description':
+          valA = (a.description || '').toLowerCase()
+          valB = (b.description || '').toLowerCase()
+          break
+        default:
+          valA = new Date(a.date).getTime()
+          valB = new Date(b.date).getTime()
+      }
+
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    }
+
+    return withBalances.sort(sortFn)
+  }, [recentReceipts, sortConfig, clients])
 
   // Form validation
   const validateForm = useCallback(() => {
@@ -881,35 +935,58 @@ const Cash = () => {
           <table className="min-w-max table-fixed">
             <thead className="bg-gray-100 text-gray-600 text-sm uppercase font-semibold sticky top-0 z-20 shadow-sm">
               <tr>
-                {TABLE_HEADERS.map((header) => (
-                  <th
-                    key={header.key}
-                    className={`px-6 py-3 text-left ${header.width} whitespace-nowrap`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <header.icon size={14} />
-                      {header.label}
-                    </div>
-                  </th>
-                ))}
+                {TABLE_HEADERS.map((header) => {
+                  const isActive = sortConfig.key === header.key
+                  const arrow =
+                    isActive && header.sortable ? (
+                      sortConfig.direction === 'asc' ? (
+                        <ChevronUp size={14} className="inline-block" />
+                      ) : (
+                        <ChevronDown size={14} className="inline-block" />
+                      )
+                    ) : (
+                      ''
+                    )
+
+                  return (
+                    <th
+                      key={header.key}
+                      className={`px-6 py-3 text-left ${header.width} whitespace-nowrap ${header.sortable ? 'cursor-pointer select-none' : ''}`}
+                      onClick={() => header.sortable && handleSort(header.key)}
+                      title={header.sortable ? 'Click to sort' : ''}
+                    >
+                      <div className="flex items-center gap-2">
+                        <header.icon size={14} />
+                        <span>{header.label}</span>
+                        {header.sortable && (
+                          <span
+                            className={`text-xs transition-all duration-200 ${
+                              isActive ? 'opacity-100' : 'opacity-30'
+                            }`}
+                          >
+                            {arrow}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody className="text-sm">
-              {recentReceipts.length > 0 ? (
-                [...recentReceipts]
-                  .sort((a, b) => new Date(b.date) - new Date(a.date))
-                  .map((receipt, index) => (
-                    <ReceiptRow
-                      key={receipt.id}
-                      receipt={receipt}
-                      index={index}
-                      balance={balances[index]}
-                      clients={clients}
-                      onEdit={handleUpdateReceipt}
-                      onDelete={handleDeleteReceipt}
-                      isSelected={selectedReceiptId === receipt.id}
-                    />
-                  ))
+              {sortedReceipts.length > 0 ? (
+                sortedReceipts.map((receipt, index) => (
+                  <ReceiptRow
+                    key={receipt.id}
+                    receipt={receipt}
+                    index={index}
+                    balance={receipt.currentBalance}
+                    clients={clients}
+                    onEdit={handleUpdateReceipt}
+                    onDelete={handleDeleteReceipt}
+                    isSelected={selectedReceiptId === receipt.id}
+                  />
+                ))
               ) : (
                 <tr>
                   <td
