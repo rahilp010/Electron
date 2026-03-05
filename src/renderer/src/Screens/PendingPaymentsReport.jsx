@@ -25,6 +25,7 @@ import { clientApi, transactionApi } from '../API/Api'
 import { setClients, setTransactions } from '../app/features/electronSlice'
 import Navbar from '../components/UI/Navbar'
 import { IoLogoWhatsapp } from 'react-icons/io5'
+import Loader from '../components/Loader'
 
 // Constants
 const TABLE_HEADERS = [
@@ -830,12 +831,7 @@ margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
                 >
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200
-                        ${
-                          selectedClient?.id === client.id
-                            ? 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600 backdrop-blur-sm'
-                            : 'bg-gradient-to-br from-blue-400 to-indigo-500 text-white group-hover:from-blue-500 group-hover:to-indigo-600'
-                        }`}
+                      className={`w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300`}
                     >
                       {getInitials(client.clientName)}
                     </div>
@@ -1036,14 +1032,7 @@ margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
           </div>
         </div>
 
-        {showLoader && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 shadow-2xl">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading transactions...</p>
-            </div>
-          </div>
-        )}
+        {showLoader && <Loader />}
 
         {/* Custom CSS for animations */}
         <style jsx>{`

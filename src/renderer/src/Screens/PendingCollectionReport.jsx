@@ -27,6 +27,7 @@ import { clientApi } from '../API/Api'
 import { setClients } from '../app/features/electronSlice'
 import Navbar from '../components/UI/Navbar'
 import { IoLogoWhatsapp } from 'react-icons/io5'
+import Loader from '../components/Loader'
 
 // Constants
 const TABLE_HEADERS = [
@@ -48,11 +49,6 @@ const TABLE_HEADERS_PRINT = [
   { key: 'date', label: 'Date' },
   { key: 'accountName', label: 'Account Name' },
   { key: 'credit', label: 'Pending Amount' }
-]
-
-const LEDGER_TYPES = [
-  { label: 'Bank', value: 'Bank', icon: Building2, color: 'blue' },
-  { label: 'Cash', value: 'Cash', icon: Banknote, color: 'blue' }
 ]
 
 // Utility functions
@@ -843,8 +839,10 @@ margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
                   role="button"
                   aria-label={`Select client ${client.clientName}`}
                 >
-                  <div className="flex items-center gap-3 px-6">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 border border-indigo-200 rounded-xl flex items-center justify-center text-indigo-700 text-sm font-semibold shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md group-hover:border-indigo-300`}
+                    >
                       {getInitials(client.clientName)}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -909,7 +907,7 @@ margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
         </div>
 
         {/* Statistics Cards */}
-        <div className="border border-gray-200 shadow-lg px-2 py-5 rounded-2xl my-4 flex overflow-x-auto bg-gradient-to-r from-white to-gray-50 no-print">
+        <div className="border border-gray-200 shadow-lg px-2 py-5 rounded-2xl my-4 flex overflow-x-auto bg-gradient-to-r from-white to-gray-50 no-print customScrollbar">
           <div className="border-r w-52 flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg">
@@ -1073,14 +1071,7 @@ margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border);
           </div>
         </div>
 
-        {showLoader && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 shadow-2xl">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading transactions...</p>
-            </div>
-          </div>
-        )}
+        {showLoader && <Loader />}
 
         {/* Custom CSS for animations */}
         <style jsx>{`

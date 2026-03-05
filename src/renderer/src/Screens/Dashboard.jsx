@@ -13,7 +13,6 @@ import { useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { setKeyBindings } from '../app/features/electronSlice'
 import { useEffect, useState } from 'react'
-import { IoReceipt } from 'react-icons/io5'
 // import WhatsAppQRModal from '../components/Modal/whatsappQRModal'
 
 const Dashboard = () => {

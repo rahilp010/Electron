@@ -842,12 +842,6 @@ const handleCreatePurchase = (data) => {
       const paid = Number(paidAmount)
       let pending = Number(pendingAmount || 0)
 
-      if (paymentType === 'full') {
-        pending = 0
-      } else {
-        pending = Math.max(0, total - paid)
-      }
-
       let finalStatus = statusOfTransaction
 
       if (!finalStatus) {
@@ -1293,12 +1287,6 @@ const handleCreateSales = (data) => {
       const paid = Number(paidAmount)
       let pending = Number(pendingAmount || 0)
 
-      if (paymentType === 'full') {
-        pending = 0
-      } else {
-        pending = Math.max(0, total - paid)
-      }
-
       let finalStatus = statusOfTransaction
 
       if (!finalStatus) {
@@ -1492,8 +1480,6 @@ ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
 
-    console.log('FIRST ROW DATA:', rows[0])
-
     let stmt
     let count = 0
 
@@ -1515,7 +1501,6 @@ ipcMain.handle('importExcel', async (_event, filePath, tableName) => {
       for (const row of rows) {
         const formattedDate = parseExcelDate(row.createdAt)
 
-        console.log(formattedDate)
         const quantity = Number(row.productQuantity) || 0
         const price = Number(row.productPrice) || 0
         const taxRate = Number(row.taxRate) || 0
